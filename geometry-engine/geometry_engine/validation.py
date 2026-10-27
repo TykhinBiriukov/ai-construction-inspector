@@ -69,7 +69,7 @@ class SessionValidationService:
         try:
             seen = set()
             from contextlib import closing
-            with closing(self._index_lines(root, scene, capture_format)) as source:
+            with closing(self.iter_index_lines(root, scene, capture_format)) as source:
                 for line_number, line in enumerate(source, 1):
                     if not line.strip():
                         continue
@@ -88,7 +88,7 @@ class SessionValidationService:
                         metadata = read_object(metadata_path)
                         if metadata.get("frame_id") != frame_id:
                             raise ValueError("frame_id differs from metadata")
-                        issues.extend(self._check_frame(root, metadata_path.parent, metadata))
+                        issues.extend(self.check_frame_metadata(root, metadata_path.parent, metadata))
                     except (OSError, ValueError) as error:
                         issues.append(str(error))
                     if issues:
@@ -108,7 +108,7 @@ class SessionValidationService:
         return self._save(session, report)
 
     @staticmethod
-    def _index_lines(root: Path, scene: dict, capture_format: bool):
+    def iter_index_lines(root: Path, scene: dict, capture_format: bool):
         if not capture_format:
             index = session_file(root, root, scene.get("frame_index"))
             with index.open(encoding="utf-8") as source:
@@ -126,7 +126,7 @@ class SessionValidationService:
                 yield json.dumps({"frame_id": frame.name, "metadata": (relative / frame.name / "metadata.json").as_posix()})
 
     @staticmethod
-    def _check_frame(root: Path, base: Path, metadata: dict) -> list[str]:
+    def check_frame_metadata(root: Path, base: Path, metadata: dict) -> list[str]:
         issues = []
         for name in ("rgb", "depth", "confidence"):
             asset = metadata.get(name)

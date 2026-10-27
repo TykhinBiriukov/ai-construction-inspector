@@ -158,10 +158,10 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(list(self.settings.data_dir.iterdir()), [])
 
-    def test_only_one_business_endpoint_exists(self):
+    def test_session_stage_endpoints_are_exposed(self):
         with self.client() as client:
             paths = client.get("/openapi.json").json()["paths"]
-        self.assertEqual(set(paths), {"/sessions/extract"})
+        self.assertEqual(set(paths), {"/sessions/extract", "/sessions/segment"})
 
 
 if __name__ == "__main__":

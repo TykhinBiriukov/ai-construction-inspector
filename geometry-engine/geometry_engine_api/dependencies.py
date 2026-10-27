@@ -1,13 +1,16 @@
 """FastAPI dependency providers."""
 
 from typing import Annotated
+import os
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 import httpx
 from supabase import Client, ClientOptions, create_client
 
 from .services.archive import ArchiveService, ArchiveServiceError, Settings, validate_url
 from geometry_engine.validation import SessionValidationService
+from geometry_engine.sam_backend import Sam3Backend
+from geometry_engine.segmentation import SegmentationService
 
 
 def get_validation_service() -> SessionValidationService:
@@ -16,6 +19,18 @@ def get_validation_service() -> SessionValidationService:
 
 def get_settings() -> Settings:
     return Settings.from_env()
+
+
+def get_sam_backend(settings: Annotated[Settings, Depends(get_settings)]) -> Sam3Backend:
+    # get_settings loads .env; this dependency needs no Supabase connection.
+    api_key = os.getenv("MODEL_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Set MODEL_API_KEY in geometry-engine/.env to use Meta SAM")
+    return Sam3Backend(api_key=api_key)
+
+
+def get_segmentation_service(backend: Annotated[Sam3Backend, Depends(get_sam_backend)]) -> SegmentationService:
+    return SegmentationService(backend)
 
 
 def get_supabase_client(settings: Annotated[Settings, Depends(get_settings)]):

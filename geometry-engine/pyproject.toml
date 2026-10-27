@@ -7,11 +7,12 @@ name = "geometry-engine"
 version = "0.1.0"
 description = "Triangle mesh preprocessing for AI Construction Inspector"
 requires-python = ">=3.11"
-dependencies = ["numpy==2.4.3", "scipy==1.17.1"]
+dependencies = ["numpy==2.4.3", "scipy==1.17.1", "Pillow==12.1.1"]
 
 [project.optional-dependencies]
-arkitscenes = ["Pillow==12.1.1", "matplotlib==3.10.8"]
+arkitscenes = ["matplotlib==3.10.8"]
 server = ["fastapi==0.162.0", "uvicorn==0.54.0", "httpx==0.28.1", "supabase==2.33.0", "python-dotenv==1.2.4"]
+segmentation = ["httpx==0.28.1", "python-dotenv==1.2.4", "meta-sam-parser==0.1.0"]
 
 [project.scripts]
 geometry-engine = "geometry_engine.cli:main"

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import numpy as np
+from PIL import Image
 
 from geometry_engine.mesh import write_mesh
 from geometry_engine_api.app import create_app
@@ -27,14 +28,15 @@ class SessionValidationTests(unittest.TestCase):
         self.frame.mkdir(parents=True)
         self.scene = {"mesh": "mesh.ply", "frame_index": "frames.jsonl", "frame_count": 1,
                       "coordinate_system": {"length_unit": "meter"}}
-        self.metadata = {"frame_id": "000001", "rgb": {"path": "rgb.png"},
+        self.metadata = {"frame_id": "000001", "timestamp_s": 1., "rgb": {"path": "rgb.png", "width": 256, "height": 192},
                          "intrinsics": {"fx": 200, "fy": 200, "cx": 128, "cy": 96, "width": 256, "height": 192},
                          "pose": {"T_world_from_camera": np.eye(4).tolist()}}
         self.save_json(self.root / "scene.json", self.scene)
         self.save_json(self.frame / "metadata.json", self.metadata)
         self.entry = {"frame_id": "000001", "metadata": "frames/000001/metadata.json"}
         (self.root / "frames.jsonl").write_text(json.dumps(self.entry) + "\n", encoding="utf-8")
-        (self.frame / "rgb.png").write_bytes(b"image-placeholder")
+        yy, xx = np.mgrid[:192, :256]
+        Image.fromarray(np.uint8(40 + ((xx//4 + yy//4) % 2)*160)).save(self.frame / "rgb.png")
         write_mesh(self.root / "mesh.ply", np.array([[0., 0, 0], [1., 0, 0], [0., 1, 0]]),
                    np.full((3, 4), 255, dtype=np.uint8), np.array([[0, 1, 2]]))
         self.service = SessionValidationService()
@@ -141,6 +143,8 @@ class SessionValidationTests(unittest.TestCase):
         self.assertTrue((self.session / "mesh_preprocessing" / "mesh.ply").is_file())
         self.assertTrue((self.session / "mesh_preprocessing" / "report.json").is_file())
         self.assertTrue((self.session / "validation" / "report.json").is_file())
+        self.assertEqual(result["selected_frames"]["selected_count"], 1)
+        self.assertTrue((self.session / "selected_frames" / "selected_frames.json").is_file())
         self.assertEqual(before, {path: path.read_bytes() for path in self.root.rglob("*") if path.is_file()})
 
     def test_runner_rejects_output_inside_original(self):
