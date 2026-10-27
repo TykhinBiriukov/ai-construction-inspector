@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geometry-engine"
+version = "0.1.0"
+description = "Triangle mesh preprocessing for AI Construction Inspector"
+requires-python = ">=3.11"
+dependencies = ["numpy==2.4.3", "scipy==1.17.1"]
+
+[project.optional-dependencies]
+arkitscenes = ["Pillow==12.1.1", "matplotlib==3.10.8"]
+
+[project.scripts]
+geometry-engine = "geometry_engine.cli:main"
+
+[tool.setuptools]
+packages = ["geometry_engine"]

@@ -1,0 +1,7 @@
+# Geometry Engine
+numpy==2.4.3
+scipy==1.17.1
+
+# ARKitScenes image checks and visualization
+Pillow==12.1.1
+matplotlib==3.10.8
