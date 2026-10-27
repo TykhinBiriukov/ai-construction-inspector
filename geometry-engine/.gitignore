@@ -2,6 +2,9 @@ data/
 __pycache__/
 .venv/
 myenv/
+.env
+.env.*
+!.env.example
 *.egg-info/
 build/
 dist/

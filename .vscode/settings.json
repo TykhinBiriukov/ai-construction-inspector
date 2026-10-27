@@ -1,0 +1,15 @@
+{
+    "workbench.colorTheme": "Dark+",
+    "editor.fontFamily": "Consolas, 'Courier New', monospace",
+    "editor.fontSize": 16,
+    "editor.lineHeight": 26,
+    "editor.fontLigatures": false,
+    "editor.semanticHighlighting.enabled": true,
+    "editor.bracketPairColorization.enabled": false,
+    "editor.minimap.enabled": false,
+    "editor.tokenColorCustomizations": {
+        "[Default Dark+]": {
+            "comments": "#A0B995"
+        }
+    }
+}

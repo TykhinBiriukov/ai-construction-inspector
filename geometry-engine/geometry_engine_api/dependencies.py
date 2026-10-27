@@ -1,7 +1,36 @@
 """FastAPI dependency providers."""
 
-from .services.archive import ArchiveService, Settings
+from typing import Annotated
+
+from fastapi import Depends
+import httpx
+from supabase import Client, ClientOptions, create_client
+
+from .services.archive import ArchiveService, ArchiveServiceError, Settings, validate_url
 
 
-def get_archive_service() -> ArchiveService:
-    return ArchiveService(Settings.from_env())
+def get_settings() -> Settings:
+    return Settings.from_env()
+
+
+def get_supabase_client(settings: Annotated[Settings, Depends(get_settings)]):
+    if not settings.supabase_url or not settings.supabase_secret_key or not settings.storage_bucket:
+        raise ArchiveServiceError("invalid_request", "Set SUPABASE_URL, SUPABASE_SECRET_KEY and SUPABASE_STORAGE_BUCKET")
+    try:
+        validate_url(settings.supabase_url)
+    except ValueError:
+        raise ArchiveServiceError("invalid_request", "Invalid SUPABASE_URL") from None
+    with httpx.Client(timeout=30, trust_env=False) as http_client:
+        client = create_client(
+            settings.supabase_url,
+            settings.supabase_secret_key,
+            options=ClientOptions(httpx_client=http_client, auto_refresh_token=False, persist_session=False),
+        )
+        yield client
+
+
+def get_archive_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+    client: Annotated[Client, Depends(get_supabase_client)],
+) -> ArchiveService:
+    return ArchiveService(settings, client)

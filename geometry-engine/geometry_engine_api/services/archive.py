@@ -1,6 +1,6 @@
 """Download and unpack a session archive; no geometry processing or HTTP routes."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import os
 import stat
@@ -9,12 +9,17 @@ from urllib.parse import urlsplit
 import zipfile
 
 import httpx
+from dotenv import load_dotenv
+from storage3.exceptions import StorageApiError
+from supabase import Client
 
 
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
-    storage_url: str = ""
+    supabase_url: str = ""
+    supabase_secret_key: str = field(default="", repr=False)
+    storage_bucket: str = "inspection-captures"
     max_download_bytes: int = 1024**3
     max_extract_bytes: int = 3 * 1024**3
     max_members: int = 50_000
@@ -23,9 +28,12 @@ class Settings:
     @classmethod
     def from_env(cls):
         default = Path(__file__).resolve().parents[2] / "data"
+        load_dotenv(default.parent / ".env")
         return cls(
             data_dir=Path(os.getenv("GEOMETRY_DATA_DIR", str(default))).resolve(),
-            storage_url=os.getenv("GEOMETRY_STORAGE_URL", "").strip(),
+            supabase_url=os.getenv("SUPABASE_URL", "").strip(),
+            supabase_secret_key=os.getenv("SUPABASE_SECRET_KEY", "").strip(),
+            storage_bucket=os.getenv("SUPABASE_STORAGE_BUCKET", "inspection-captures").strip(),
         )
 
 
@@ -124,8 +132,9 @@ class ArchiveServiceError(Exception):
 
 
 class ArchiveService:
-    def __init__(self, settings: Settings, *, download_fn=download_archive):
+    def __init__(self, settings: Settings, client: Client, *, download_fn=download_archive):
         self.settings = settings
+        self.client = client
         self.download = download_fn
 
     def extract(self, session_id: str) -> ExtractionResult:
@@ -134,15 +143,6 @@ class ArchiveService:
 
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", session_id):
             raise ArchiveServiceError("invalid_request", "Invalid session_id")
-        try:
-            if not self.settings.storage_url:
-                raise ValueError("Set GEOMETRY_STORAGE_URL to your storage base URL")
-            validate_url(self.settings.storage_url)
-            base = urlsplit(self.settings.storage_url)
-            archive_url = base._replace(path=base.path.rstrip("/") + "/" + session_id).geturl()
-            validate_url(archive_url)
-        except ValueError as error:
-            raise ArchiveServiceError("invalid_request", str(error)) from None
         root = self.settings.data_dir.resolve()
         destination = root / session_id
         if destination.exists():
@@ -151,8 +151,13 @@ class ArchiveService:
         with TemporaryDirectory(prefix=".extract-", dir=root) as temporary:
             work = Path(temporary)
             try:
+                # SDK authorizes access to the private file; stream it to disk to bound memory use.
+                signed = self.client.storage.from_(self.settings.storage_bucket).create_signed_url(
+                    f"{session_id}.zip", int(self.settings.download_deadline_s) + 60,
+                )
+                archive_url = signed["signedURL"]
                 self.download(archive_url, work / "archive.zip", self.settings)
-            except (httpx.HTTPError, TimeoutError, ValueError):
+            except (StorageApiError, httpx.HTTPError, TimeoutError, ValueError):
                 raise ArchiveServiceError("download_failed", "Could not download archive") from None
             try:
                 content = extract_archive(work / "archive.zip", work / "content", self.settings)
