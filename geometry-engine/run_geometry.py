@@ -11,14 +11,17 @@ def run_session(directory, output=None):
     root = Path(directory).resolve()
     if not root.is_dir():
         raise ValueError(f"Session directory does not exist: {root}")
+    original = (root / "original").resolve()
+    destination = Path(output).resolve() if output is not None else root / "mesh_preprocessing"
+    if destination.is_relative_to(original):
+        raise ValueError("Output must not be inside original; source data is read-only")
     print(f"Validating: {root}", flush=True)
     validation = SessionValidationService().validate(root)
     if validation["status"] == "invalid":
         raise ValueError("Session validation failed: " + "; ".join(validation["errors"]))
     frames = validation["frames"]
     print(f"Validation: {validation['status']}; usable frames: {frames['usable']}/{frames['total']}", flush=True)
-    destination = Path(output).resolve() if output is not None else root / "mesh_preprocessing"
-    mesh = session_file(root, root, validation["mesh"]["path"])
+    mesh = session_file(original, original, validation["mesh"]["path"])
     print(f"Preprocessing mesh: {mesh}", flush=True)
     preprocessing = preprocess_mesh(mesh, destination, unit="meter")
     print(f"Mesh: {preprocessing['status']}", flush=True)

@@ -29,11 +29,17 @@ def read_object(path: Path) -> dict:
 
 class SessionValidationService:
     def validate(self, directory) -> dict:
-        root = Path(directory).resolve()
+        session = Path(directory).resolve()
+        if not session.is_dir():
+            raise ValueError(f"Session directory does not exist: {session}")
+        root = (session / "original").resolve()
         report = {
             "status": "invalid", "errors": [], "mesh": None,
             "frames": {"total": 0, "usable": 0, "incomplete": 0, "issues": []},
         }
+        if not root.is_relative_to(session):
+            report["errors"].append("original directory must stay inside the session")
+            return self._save(session, report)
         try:
             capture_format = not (root / "scene.json").is_file() and (root / "capture.json").is_file()
             manifest = "capture.json" if capture_format else "scene.json"
@@ -48,7 +54,7 @@ class SessionValidationService:
                 report["errors"].append("Scene coordinates must be in meters")
         except (OSError, ValueError) as error:
             report["errors"].append(f"{manifest}: {error}")
-            return self._save(root, report)
+            return self._save(session, report)
 
         try:
             mesh_path = session_file(root, root, scene.get("mesh"))
@@ -99,7 +105,7 @@ class SessionValidationService:
 
         if not report["errors"]:
             report["status"] = "valid_with_warnings" if report["frames"]["incomplete"] else "valid"
-        return self._save(root, report)
+        return self._save(session, report)
 
     @staticmethod
     def _index_lines(root: Path, scene: dict, capture_format: bool):
@@ -175,8 +181,10 @@ class SessionValidationService:
         return issues
 
     @staticmethod
-    def _save(root: Path, report: dict) -> dict:
-        (root / "session-validation.json").write_text(
+    def _save(session: Path, report: dict) -> dict:
+        output = session / "validation"
+        output.mkdir(exist_ok=True)
+        (output / "report.json").write_text(
             json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8",
         )
         return report

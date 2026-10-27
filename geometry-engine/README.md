@@ -30,6 +30,17 @@ python run_geometry.py
 
 По умолчанию используются `data/syntethic_data` и новая папка результата `data/syntethic_data/mesh_preprocessing`. Поддерживаются входные форматы `capture.json` (контракт телефона v1) и `scene.json` с `frames.jsonl` (structured). Исходные файлы не преобразуются. Если проверка не прошла, preprocessing не запускается.
 
+Каждая сессия хранится по этапам. Исходные файлы находятся в `original/` и после получения не изменяются. Этапы сохраняют только свои результаты, не копируя всю сессию:
+
+```text
+data/{session_id}/
+├── original/               # capture.json или scene.json, mesh.ply, frames/
+├── validation/report.json  # Результат проверки
+└── mesh_preprocessing/     # Обработанный mesh, индексы и report.json
+```
+
+`--session` указывает на папку сессии, а не на `original`. Вывод preprocessing внутрь `original` запрещён. Будущий отбор кадров будет сохранять только список в `selected_frames/`; этот этап пока не реализован.
+
 Другую сессию и новую папку результата можно указать явно:
 
 ```powershell
@@ -42,7 +53,7 @@ python run_geometry.py --session data/structured/47333462 --output data/structur
 
 ```powershell
 cd geometry-engine
-python -m geometry_engine --mesh data/structured/47333462/mesh.ply --output data/structured/47333462/mesh_preprocessing-v2
+python -m geometry_engine --mesh data/structured/47333462/original/mesh.ply --output data/structured/47333462/mesh_preprocessing-v2
 ```
 
 Пути ко входному mesh и новой папке результата задаются явно. Основной пакет не выбирает сцену или кадры, не требует `scene.json` и не создаёт проверочные изображения. Координаты должны быть в метрах; автоматического изменения масштаба нет. Существующая папка результата не перезаписывается.
@@ -88,7 +99,7 @@ python -m unittest discover -s tests -v
 
 ## HTTP API
 
-Один endpoint: `POST /sessions/extract`. Тонкий API-слой передаёт `session_id` сервису через FastAPI `Depends`. Клиент Supabase также передаётся через DI. Сервис получает временную ссылку через SDK, скачивает ZIP частями на диск и распаковывает его в `data/{session_id}`. Имя ZIP-файла в бакете: `{session_id}.zip`. Например, `session_id: "test"` загружает `test.zip` в папку `data/test`. Preprocessing mesh на этом шаге не запускается.
+Один endpoint: `POST /sessions/extract`. Тонкий API-слой передаёт `session_id` сервису через FastAPI `Depends`. Клиент Supabase также передаётся через DI. Сервис получает временную ссылку через SDK, скачивает ZIP частями на диск и распаковывает его в `data/{session_id}/original`. Имя ZIP-файла в бакете: `{session_id}.zip`. Например, `session_id: "test"` загружает `test.zip` в папку `data/test/original`. В ZIP по-прежнему лежат сами исходные файлы без обёртки `original/` — её создаёт сервер. Preprocessing mesh на этом шаге не запускается.
 
 ```text
 geometry_engine_api/
@@ -122,9 +133,9 @@ python main.py
 }
 ```
 
-После распаковки `SessionValidationService` через DI проверяет `scene.json`, единицы измерения (метры), читаемость mesh, индекс кадров, наличие файлов RGB и указанных depth/confidence, параметры камеры и матрицу её положения. Для пригодного кадра обязательны RGB, intrinsics и pose; depth и confidence могут отсутствовать. Проверка не декодирует изображения и не проверяет совмещение камеры с mesh.
+После распаковки `SessionValidationService` через DI читает входные данные из `original/`: `capture.json` либо `scene.json` с индексом кадров. Проверяет единицы измерения (метры), читаемость mesh, наличие файлов RGB и указанных depth/confidence, размеры бинарных буферов, параметры камеры и матрицу её положения. Для пригодного кадра обязательны RGB, intrinsics и pose; depth и confidence могут отсутствовать. Проверка не декодирует изображения и не проверяет совмещение камеры с mesh.
 
-Отчёт сохраняется в `session-validation.json`. Ответ `201` содержит `session_id`, путь `directory` и `validation`. Неполные кадры отмечаются в отчёте; сцена допускается к дальнейшей работе, если есть пригодные кадры и нет ошибок сцены или mesh. При ошибке валидации возвращается `422` с отчётом; распакованные файлы сохраняются для диагностики. Preprocessing автоматически не запускается.
+Отчёт сохраняется в `data/{session_id}/validation/report.json`. Ответ `201` содержит `session_id`, путь `directory` к корню сессии и `validation`. Неполные кадры отмечаются в отчёте; сцена допускается к дальнейшей работе, если есть пригодные кадры и нет ошибок сцены или mesh. При ошибке валидации возвращается `422` с отчётом; распакованные файлы сохраняются для диагностики. Preprocessing автоматически не запускается.
 
 Файлы остаются после завершения запроса. Существующая папка с таким `session_id` не перезаписывается: возвращается `409`. При ошибке скачивания или распаковки незавершённая сессия не публикуется.
 

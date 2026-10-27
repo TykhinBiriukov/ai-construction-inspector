@@ -159,12 +159,14 @@ class ArchiveService:
                 self.download(archive_url, work / "archive.zip", self.settings)
             except (StorageApiError, httpx.HTTPError, TimeoutError, ValueError):
                 raise ArchiveServiceError("download_failed", "Could not download archive") from None
+            staged_session = work / "session"
+            staged_session.mkdir()
             try:
-                content = extract_archive(work / "archive.zip", work / "content", self.settings)
+                extract_archive(work / "archive.zip", staged_session / "original", self.settings)
             except (ArchiveError, zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
                 raise ArchiveServiceError("invalid_archive", str(error)) from None
             try:
-                content.rename(destination)
+                staged_session.rename(destination)
             except OSError:
                 if destination.exists():
                     raise ArchiveServiceError("session_exists", "Session folder already exists") from None

@@ -66,8 +66,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         destination = self.settings.data_dir / "scan-001"
         self.assertEqual(response.json(), {"session_id": "scan-001", "directory": str(destination.resolve()), "validation": {"status": "valid"}})
-        self.assertEqual((destination / "mesh.ply").read_bytes(), b"original mesh")
-        self.assertEqual((destination / "frames/000001/rgb.png").read_bytes(), b"image")
+        self.assertEqual((destination / "original/mesh.ply").read_bytes(), b"original mesh")
+        self.assertEqual((destination / "original/frames/000001/rgb.png").read_bytes(), b"image")
+        self.assertEqual([p.name for p in destination.iterdir()], ["original"])
         self.assertFalse((destination / "prepared").exists())
         self.assertEqual([p.name for p in self.settings.data_dir.iterdir()], ["scan-001"])
         self.assertEqual(self.requests[0].url.path, "/storage/v1/object/sign/inspection-captures/scan-001.zip")
@@ -92,12 +93,12 @@ class ApiTests(unittest.TestCase):
         with self.client() as client:
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 201)
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 409)
-        self.assertEqual((self.settings.data_dir / "scan-001/mesh.ply").read_bytes(), b"original mesh")
+        self.assertEqual((self.settings.data_dir / "scan-001/original/mesh.ply").read_bytes(), b"original mesh")
 
     def test_archive_service_does_not_require_or_process_a_mesh(self):
         with self.client(self.archive({"notes.txt": b"plain archive"})) as client:
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 201)
-        self.assertEqual((self.settings.data_dir / "scan-001/notes.txt").read_bytes(), b"plain archive")
+        self.assertEqual((self.settings.data_dir / "scan-001/original/notes.txt").read_bytes(), b"plain archive")
 
     def test_unconfigured_storage_is_rejected(self):
         app = create_app()
