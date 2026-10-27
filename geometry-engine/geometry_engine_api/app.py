@@ -6,8 +6,15 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from .dependencies import get_archive_service, get_validation_service, get_segmentation_service, get_settings
+from .dependencies import (
+    get_archive_service,
+    get_mesh_segmentation_service,
+    get_validation_service,
+    get_segmentation_service,
+    get_settings,
+)
 from .services.archive import ArchiveService, ArchiveServiceError, Settings
+from geometry_engine.mesh_segmentation import MeshSegmentationService
 from geometry_engine.sam_backend import Sam3UnavailableError
 from geometry_engine.segmentation import SegmentationService
 from geometry_engine.validation import SessionValidationService
@@ -33,6 +40,16 @@ class SegmentResponse(BaseModel):
     session_id: str
     directory: str
     segmentation: dict
+
+
+class SegmentMeshRequest(ExtractRequest):
+    max_frames: Annotated[int, Field(strict=True, ge=1)] | None = None
+
+
+class SegmentMeshResponse(BaseModel):
+    session_id: str
+    directory: str
+    mesh_segmentation: dict
 
 
 def create_app():
@@ -83,6 +100,26 @@ def create_app():
         except OSError:
             raise HTTPException(status_code=500, detail="Could not read or write segmentation files") from None
         return SegmentResponse(session_id=payload.session_id, directory=str(directory / "segmentation"), segmentation=report)
+
+    @app.post("/sessions/segment-mesh", response_model=SegmentMeshResponse, status_code=201)
+    def segment_mesh(
+        payload: SegmentMeshRequest,
+        service: Annotated[MeshSegmentationService, Depends(get_mesh_segmentation_service)],
+        settings: Annotated[Settings, Depends(get_settings)],
+    ):
+        root = settings.data_dir.resolve()
+        directory = (root / payload.session_id).resolve()
+        if directory.parent != root:
+            raise HTTPException(status_code=422, detail="Session directory must stay inside GEOMETRY_DATA_DIR")
+        try:
+            report = service.segment(directory, max_frames=payload.max_frames)
+        except FileExistsError:
+            raise HTTPException(status_code=409, detail="Mesh segmentation already exists; use the CLI with a new --output directory") from None
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        except OSError:
+            raise HTTPException(status_code=500, detail="Could not read or write mesh segmentation files") from None
+        return SegmentMeshResponse(session_id=payload.session_id, directory=str(directory / "mesh_segmentation"), mesh_segmentation=report)
 
     return app
 

@@ -11,6 +11,7 @@ from .services.archive import ArchiveService, ArchiveServiceError, Settings, val
 from geometry_engine.validation import SessionValidationService
 from geometry_engine.sam_backend import Sam3Backend
 from geometry_engine.segmentation import SegmentationService
+from geometry_engine.mesh_segmentation import MeshSegmentationService
 
 
 def get_validation_service() -> SessionValidationService:
@@ -31,6 +32,10 @@ def get_sam_backend(settings: Annotated[Settings, Depends(get_settings)]) -> Sam
 
 def get_segmentation_service(backend: Annotated[Sam3Backend, Depends(get_sam_backend)]) -> SegmentationService:
     return SegmentationService(backend)
+
+
+def get_mesh_segmentation_service() -> MeshSegmentationService:
+    return MeshSegmentationService()
 
 
 def get_supabase_client(settings: Annotated[Settings, Depends(get_settings)]):
