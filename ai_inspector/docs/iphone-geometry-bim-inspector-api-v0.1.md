@@ -1,8 +1,10 @@
-# iPhone → AI Inspector → Geometry Service + BIM / Display API — v0.1, редакция 4, на согласование
+# iPhone → AI Inspector → Geometry Service + BIM / Display API — v0.1, редакция 5, на согласование
 
 Дата: 2026-10-27. **PROPOSED / НЕ СОГЛАСОВАНО МЕЖДУ ВСЕМИ УЧАСТНИКАМИ.** Документ задаёт предлагаемый интерфейс; наличие работающей реализации не подтверждено. Редакция 4 отражает уточнение владельца Inspector: session_id создаёт Inspector; iPhone сохраняет весь набор RGB-D в S3 и возвращает Inspector ссылку после завершения capture; Inspector запускает Geometry Service по этой ссылке. Прямой связи телефона с Geometry Service нет.
 
 Архитектурный контекст runtime взят из обсуждений «Design agent orchestrator» и «Open design orchestrator chat»; актуальный транспорт capture уточнён владельцем Inspector в этом чате. Детали Geometry Builder, iOS и BIM-провайдера согласуются с их владельцами.
+
+Мобильные уточнения редакции 5: новые кадры используют frame.json 0.2, поддерживается RGB-only без LiDAR, добавлены точные ответы upload-plans. Это предложение со стороны iOS; принятие серверными реализациями ещё требуется подтвердить. Лимиты остаются конфигурацией будущей интеграции. PNG остаётся текущим display API; интерактивная 3D-модель обсуждается отдельно и этой редакцией не объявляется согласованной.
 
 ## 1. Границы и ответственность
 
@@ -32,9 +34,9 @@ flowchart LR
 
 ## 2. Реализованное и предлагаемое
 
-По исходному документу у iOS есть локальная сессия/файлы, UUID, SHA-256, синтетические данные и код ARKit; сеть, auth и реальная геометрическая корректность ещё не подтверждены. Репозиторий приложения и ios/AIInspector/Observation.swift здесь отсутствуют. Session ID теперь нужно принимать от I: это изменение локальной/сетевой интеграции приложения.
+По исходному документу у iOS есть локальная сессия/файлы, UUID, SHA-256, синтетические данные и код ARKit; сеть, auth и реальная геометрическая корректность ещё не подтверждены. Приложение находится в ios/, исходная схема — ios/AIInspector/Observation.swift. Локальная мобильная реализация уже поддерживает RGB-only и новые кадры 0.2; это не подтверждение серверной интеграции. Session ID теперь нужно принимать от I: это изменение локальной/сетевой интеграции приложения.
 
-Формат **frame.json 0.1** и бинарные соглашения ниже сохраняются. Новый capture manifest, S3 upload plan, handoff I → G, WebSocket и серверные renders требуют реализации. Локальная демоинструкция не считается ответом живого AI.
+Новые кадры используют **frame.json 0.2**; старые RGB-D кадры 0.1 остаются допустимыми. Бинарные соглашения RGB-D не меняются. Новый capture manifest, S3 upload plan, handoff I → G, WebSocket и серверные renders требуют реализации. Локальная демоинструкция не считается ответом живого AI.
 
 ## 3. Идентификаторы, доступ и версии
 
@@ -43,14 +45,14 @@ flowchart LR
 - Клиент создаёт UUID segment_id, observation_id, response_id, completion_id и upload request_id. Runtime создаёт geometry_job_id, operation_key и view_id. ID комнаты/элементов относятся к закреплённой версии BIM.
 - Настройки телефона: inspector_base_url и bim_base_url. Доступ S3 приходит через ограниченные presigned HTTPS операции. **geometry_base_url и токен G телефону не выдаются.** Backend I имеет собственный geometry_base_url и service identity.
 - API I/B — HTTPS, события I — WSS; Authorization: Bearer с audience/project/device scopes. Service credentials I/G/B не попадают на телефон. Presigned S3 URLs — краткоживущие разрешения на конкретные операции/объекты, отдельно от API bearer token.
-- JSON UTF-8, даты UTC RFC 3339. timestamp_s ARKit — монотонное время, не UTC. schema_version="0.1"; неизвестная версия → 422. Изменение единиц/осей/смысла существующих полей требует согласования версии. Контракт пока не выпущен; номер редакции документа не равен версии frame.json.
+- JSON UTF-8, даты UTC RFC 3339. timestamp_s ARKit — монотонное время, не UTC. API envelopes и capture_manifest_v1: schema_version="0.1". frame.json: новые кадры schema_version="0.2"; legacy RGB-D 0.1 также принимается. Неизвестная версия соответствующего документа → 422. Изменение единиц/осей/смысла существующих полей требует согласования версии. Контракт пока не выпущен; номер редакции документа не равен версии frame.json.
 - Frame hashes — lowercase SHA-256 от точных байтов. Manifest и его S3 object version также фиксируются. Истёкший URL можно перевыпустить; логическая ссылка и исходные байты не меняются. S3 ETag не используется вместо SHA-256.
 - Capture state, состояние обработки, task revision, display manifest revision, view revision и geometry/tool revisions раздельны. Успешный upload, completion receipt или render не означает успешную инспекцию.
 - Один пишущий телефон на capture session. Project/session/device scopes проверяются на каждом API и при выдаче S3 доступа. Prefix сам по себе не является авторизацией.
 
 ## 4. Жизненный цикл
 
-1. Пользователь выбирает инспекцию/комнату. I создаёт session_id, закрепляет конфигурацию и назначает session телефону. Сессия хранится на I даже при отключённом телефоне.
+1. В рамках выбранной пользователем инспекции/комнаты AI Inspector инициирует съёмку. I создаёт session_id, закрепляет конфигурацию и назначает session телефону. Сессия хранится на I даже при отключённом телефоне.
 2. Телефон получает assignment, сохраняет session_id и подтверждает начало. Каждый запуск/сброс ARKit создаёт новый segment_id внутри той же открытой capture session.
 3. Телефон сохраняет кадры локально и загружает их в выделенный S3 prefix. Во время съёмки I/B могут обновлять цель, но измеренное покрытие ещё не показывается.
 4. Пользователь заканчивает capture. Телефон фиксирует непустой inventory, дожидается загрузки файлов и последним загружает manifest. Затем отправляет I completion_id и ссылку на точную версию manifest. При отключении сети это сообщение остаётся в локальной очереди.
@@ -327,6 +329,66 @@ projects/{project_id}/sessions/{session_id}/manifests/{completion_id}.json
 
 I формирует object_key сам, проверяет assignment, состояние session, разрешённые filenames/размеры и hashes. Возвращает items со status=upload_required | already_uploaded, object_key, ожидаемыми sha/size, upload_url, expires_at и точными headers; для already_uploaded дополнительно version_id, URL=null. Presigned параметры — временные credentials, не часть логической идентичности файла.
 
+Пример ответа 201/200, когда файл нужно загрузить (URL, размер и hash условные; URL не рабочий):
+
+```json
+{
+  "schema_version": "0.1",
+  "request_id": "UPLOAD_REQUEST_UUID",
+  "session_id": "SESSION_UUID",
+  "kind": "observation_files",
+  "completion_id": null,
+  "items": [
+    {
+      "observation_id": "OBSERVATION_UUID",
+      "name": "rgb.jpg",
+      "status": "upload_required",
+      "object_key": "projects/demo-building/sessions/SESSION_UUID/observations/OBSERVATION_UUID/rgb.jpg",
+      "media_type": "image/jpeg",
+      "byte_length": 123456,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "version_id": null,
+      "upload_url": "https://capture-example.s3.eu-central-1.amazonaws.com/OBJECT_KEY?PRESIGNED_QUERY_PLACEHOLDER",
+      "expires_at": "2026-10-27T10:15:00Z",
+      "headers": {
+        "Content-Type": "image/jpeg",
+        "If-None-Match": "*",
+        "x-amz-checksum-sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      }
+    }
+  ]
+}
+```
+
+После проверки уже загруженного объекта I возвращает:
+
+```json
+{
+  "schema_version": "0.1",
+  "request_id": "UPLOAD_REQUEST_UUID",
+  "session_id": "SESSION_UUID",
+  "kind": "observation_files",
+  "completion_id": null,
+  "items": [
+    {
+      "observation_id": "OBSERVATION_UUID",
+      "name": "rgb.jpg",
+      "status": "already_uploaded",
+      "object_key": "projects/demo-building/sessions/SESSION_UUID/observations/OBSERVATION_UUID/rgb.jpg",
+      "media_type": "image/jpeg",
+      "byte_length": 123456,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "version_id": "RGB_VERSION_ID",
+      "upload_url": null,
+      "expires_at": null,
+      "headers": {}
+    }
+  ]
+}
+```
+
+Ответ содержит по одному item на каждый запрошенный объект; сопоставление по observation_id + name, а не позиции массива. Некорректный запрос отклоняется целиком стандартной ошибкой API, без частичного плана. Для kind=capture_manifest envelope содержит completion_id из запроса, item.observation_id=null, item.name="capture-manifest.json", media_type="application/json", object_key заканчивается на manifests/{completion_id}.json. Остальные поля и правила статусов те же. Для upload_required version_id=null до успешного PUT; для already_uploaded version_id обязателен, upload_url/expires_at=null, headers={}. Телефон отправляет указанные headers без API Bearer токена; успешный PUT без version-id требует сверки через I, а не фиктивной квитанции.
+
 Для upload_required обязательные headers включают Content-Type, If-None-Match: * и x-amz-checksum-sha256 (base64 байтов SHA-256, при том что JSON sha256 — hex). Используется одиночный PutObject на файл; S3 multipart upload не требуется для обычного RGB-D файла и является отдельным расширением для больших файлов. При успешном PUT телефон сохраняет x-amz-version-id. S3 receipt не является принятой инспекцией.
 
 Точный повтор upload request_id/body возвращает ту же логическую операцию и свежие URL при необходимости; другой body того же request_id — 409. Истёкший URL обновляется через I без смены object key/hash. При 412 Object exists или timeout после PUT I устанавливает version_id из сохранённой квитанции либо HEAD текущего write-once объекта, затем сверяет checksum/size: совпадение → already_uploaded, несовпадение → 409 file_conflict. Данные под тем же observation_id не заменяются другими байтами. Неподписанные overwrite/delete операции запрещены политикой доступа. I использует сохранённый S3 checksum или пересчитывает содержимое, а не доверяет одному сообщению телефона. См. [проверку целостности S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html).
@@ -368,7 +430,7 @@ Segment не регистрируется в G. Приложение созда�
 }
 ```
 
-Каждый observation входит один раз и ссылается на объявленный segment; имена/ключи/versions принадлежат тому же prefix и observation. frame.json, rgb, depth обязательны; confidence — согласно frame.json. Manifest перечисляет точный inventory без дубликатов; observation_count совпадает с длиной списка. Hash frame.json считается по исходным сохранённым байтам, без пересериализации. Новый manifest не меняет файлы наблюдений.
+Каждый observation входит один раз и ссылается на объявленный segment; имена/ключи/versions принадлежат тому же prefix и observation. frame.json и rgb обязательны. depth обязателен только если frame.depth != null; confidence — только если frame.confidence != null. При RGB-only оба файла отсутствуют, их нельзя заменять пустыми файлами или синтетическими измерениями. Manifest перечисляет точный inventory без дубликатов; observation_count совпадает с длиной списка. Hash frame.json считается по исходным сохранённым байтам, без пересериализации. Новый manifest не меняет файлы наблюдений.
 
 Необязательный excluded_observations — список `{observation_id, reason}` для ранее заявленных локальных записей, которые явно не включены в передаваемый набор; по умолчанию пуст. ID принадлежит этой session и не повторяется среди observations; причина непустая. I сохраняет исключения и учитывает их при достаточности evidence: исключённая запись не считается обработанной или подтверждающей выполнение задания.
 
@@ -382,7 +444,7 @@ Segment не регистрируется в G. Приложение созда�
 |---|---|---|---|
 | `metadata` | `frame.json` | `application/json` | Да |
 | `rgb` | `rgb.jpg` | `image/jpeg` | Да |
-| `depth` | `depth.f32` | `application/octet-stream` | Да |
+| `depth` | `depth.f32` | `application/octet-stream` | Только если metadata.depth != null |
 | `confidence` | `confidence.u8` | `application/octet-stream` | Только если metadata.confidence != null |
 
 Один набор получается из **одного ARFrame**. Независимо снятое фото нельзя соединять с произвольным кадром depth.
@@ -390,14 +452,14 @@ Segment не регистрируется в G. Приложение созда�
 - RGB: JPEG исходного `capturedImage`, без поворота, crop, изменения размера и EXIF-поворота. Поворот экранного превью не меняет файлы и intrinsics.
 - Depth: несглаженный `sceneDepth`, float32 little-endian, метры, row-major, без padding строк; ровно `width × height × 4` байт. Значения NaN/Infinity/≤0 сохраняются как есть, но исключаются из геометрии.
 - Confidence: uint8 row-major, то же разрешение, ровно `width × height` байт; 0/1/2 = low/medium/high. Если нет карты — `confidence: null`, файл отсутствует.
-- Нет depth/нормального tracking — клиент не формирует реальное геометрическое наблюдение. У синтетического кадра `tracking_state: synthetic`, `depth_source: synthetic_plane`.
+- Без normal tracking реальный кадр не сохраняется. На устройстве с поддержкой sceneDepth клиент ждёт карту глубины. На устройстве без LiDAR сохраняется RGB-only наблюдение: фото, K_rgb, T_world_camera и время из одного ARFrame; это визуальное evidence, а не измерение поверхности. У синтетического кадра `tracking_state: synthetic`, `depth_source: synthetic_plane`.
 - SHA-256 — lowercase hex от точных байтов файла. `byte_length` — точный размер файла. Имена файлов фиксированы, без произвольных путей.
 
 Пример metadata, соответствует именам полей текущего Swift-кода:
 
 ```json
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "observation_id": "OBSERVATION_UUID",
   "frame_id": "OBSERVATION_UUID",
   "session_id": "SESSION_UUID",
@@ -422,7 +484,11 @@ Segment не регистрируется в G. Приложение созда�
 }
 ```
 
-Размеры, intrinsics и поза в примере условные, не результаты измерения. Geometry Service проверяет JPEG dimensions, бинарные размеры, хеши, форму/конечность матриц, положительные focal lengths, валидность rigid transform и принадлежность segment/session. Для v0.1 `frame_id == observation_id`. `instruction_id` — контекст съёмки, а не доказательство принадлежности пикселей конкретному BIM-объекту. I проверяет принадлежность instruction_id сессии по истории заданий. Поздний кадр со старой инструкцией может оставаться evidence, но не подтверждает выполнение новой версии задания. G читает исходные файлы из S3 и не обращается к телефону.
+Размеры, intrinsics и поза в примере условные, не результаты измерения. Geometry Service проверяет JPEG dimensions, бинарные размеры, хеши, форму/конечность матриц, положительные focal lengths, валидность rigid transform и принадлежность segment/session. Для frame.json 0.1/0.2 `frame_id == observation_id`. `instruction_id` — контекст съёмки, а не доказательство принадлежности пикселей конкретному BIM-объекту. I проверяет принадлежность instruction_id сессии по истории заданий. Поздний кадр со старой инструкцией может оставаться evidence, но не подтверждает выполнение новой версии задания. G читает исходные файлы из S3 и не обращается к телефону.
+
+Для RGB-only в frame.json 0.2 `depth_source="none"`, а `depth`, `depth_size`, `depth_unit`, `depth_to_rgb_mapping`, `confidence` — явные JSON null. Остальные поля кадра сохраняют тот же смысл. capture_origin=device и input_mode=live_capture не означают наличие LiDAR. Новые RGB-D кадры тоже имеют версию 0.2; в них поля глубины заполнены как раньше. Legacy 0.1 допускается только с обязательной глубиной по прежней схеме.
+
+I принимает и хранит RGB-only как визуальные наблюдения. Приём источника не означает пригодность для реконструкции. До запуска G runtime проверяет поддержку фактического набора: если G требует depth, ему не передаются RGB-only как измерения. Без пригодных RGB-D данных I запрашивает досъёмку с LiDAR либо использует согласованный визуальный инструмент; итог геометрической проверки остаётся needs_more_data/unknown. Для смешанного набора фактически использованные и исключённые observations должны быть явно перечислены в результате G. Конкретную поддержку RGB-only в G необходимо подтвердить его владельцу; этот текст не объявляет алгоритм реализованным.
 
 ### 5.5 Телефон завершает capture: ссылка → Inspector
 
@@ -795,7 +861,7 @@ I хранит принятые completion/job/tool/display операции и 
 
 **Редакция 4 по последнему уточнению владельца заменяет транспорт capture:** session_id создаёт I; iPhone → S3 → completion со ссылкой в I → job от I в G → чтение G из S3. Удалены телефонные G session/segment/observation/uploads endpoints, G durable receipt для телефона, G observation.accepted и протокол I → G seal. Новый источник истины о принятом полном наборе — Inspector и его pinned S3 manifest. Во время съёмки measured coverage не обещается.
 
-Формат frame.json 0.1 и бинарные соглашения сохраняются; HTTP multipart телефона к G заменён загрузкой объектов S3. Старое observations_submitted заменено capture_recorded с явным смыслом локального прогресса. Изменены session creation, completion, geometry jobs и source ownership. Это несовместимое изменение транспорта для уже выпущенного клиента; до реализации всем участникам нужно выбрать одну редакцию. Предлагаемая schema_version=0.1 относится к ещё не выпущенному контракту, а не является заявлением совместимости со старыми endpoints.
+В редакции 4 сохранялся frame.json 0.1; редакция 5 предлагает frame.json 0.2 с nullable depth и legacy-чтением 0.1. Бинарные соглашения RGB-D сохраняются; HTTP multipart телефона к G заменён загрузкой объектов S3. Старое observations_submitted заменено capture_recorded с явным смыслом локального прогресса. Изменены session creation, completion, geometry jobs и source ownership. Это несовместимое изменение транспорта для уже выпущенного клиента; до реализации всем участникам нужно выбрать одну редакцию. Предлагаемая schema_version=0.1 относится к ещё не выпущенному контракту, а не является заявлением совместимости со старыми endpoints.
 
 Редакция основана на последнем обсуждении Inspector в этом чате и «Open design orchestrator chat» для server-render/WebSocket. Исходное вложение — историческая версия; эта копия в репозитории является текущим предложением. Провайдер BIM и детальные schemas tools/Compare — отдельные зависимости.
 
