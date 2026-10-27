@@ -11,9 +11,10 @@ dependencies = ["numpy==2.4.3", "scipy==1.17.1"]
 
 [project.optional-dependencies]
 arkitscenes = ["Pillow==12.1.1", "matplotlib==3.10.8"]
+server = ["fastapi==0.162.0", "uvicorn==0.54.0", "httpx==0.28.1"]
 
 [project.scripts]
 geometry-engine = "geometry_engine.cli:main"
 
 [tool.setuptools]
-packages = ["geometry_engine"]
+packages = ["geometry_engine", "geometry_engine_api", "geometry_engine_api.services"]

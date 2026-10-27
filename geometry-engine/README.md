@@ -70,6 +70,36 @@ python -m unittest discover -s tests -v
 
 Проверено на Windows с Python 3.14.3. Для новых зависимостей требуется Python 3.11 или новее. Основной пакет использует NumPy и SciPy; только проверочные инструменты изображений требуют Pillow и Matplotlib.
 
+## HTTP API
+
+Один endpoint: `POST /sessions/extract`. Тонкий API-слой передаёт `session_id` сервису через FastAPI `Depends`. Сервис скачивает ZIP по адресу `{GEOMETRY_STORAGE_URL}/{session_id}` и распаковывает его в `data/{session_id}`. Имя файла в хранилище совпадает с `session_id`; расширение автоматически не добавляется. Preprocessing mesh на этом шаге не запускается.
+
+```text
+geometry_engine_api/
+├── app.py                  # Endpoint и модели запроса/ответа
+├── dependencies.py         # DI: создание сервиса
+└── services/archive.py     # Загрузка и распаковка
+```
+
+Из папки `geometry-engine`, с активным `myenv`:
+
+```powershell
+$env:GEOMETRY_STORAGE_URL = "https://your-storage.example/scans"
+python -m uvicorn geometry_engine_api.app:app --host 127.0.0.1 --port 8000
+```
+
+Тело запроса:
+
+```json
+{
+  "session_id": "scan-001"
+}
+```
+
+Ответ `201` содержит `session_id` и путь `directory` к сохранённой папке. Файлы остаются после завершения запроса. Существующая папка с таким `session_id` не перезаписывается: возвращается `409`. При ошибке скачивания или распаковки незавершённая сессия не публикуется.
+
+По умолчанию используется `geometry-engine/data`; другой корень можно задать через `GEOMETRY_DATA_DIR`. `GEOMETRY_STORAGE_URL` задаёт общий URL папки в хранилище. Сервис ограничивает размер загрузки и распаковки и проверяет пути внутри ZIP. Содержимое архива пока не проверяется как mesh или frames — это отдельный следующий шаг.
+
 ## Следующий этап
 
 Автоматическая сегментация RGB с SAM, перенос масок на видимые треугольники mesh, объединение наблюдений объектов и определение плоскостей и наблюдаемых границ. Эти этапы ещё не реализованы.

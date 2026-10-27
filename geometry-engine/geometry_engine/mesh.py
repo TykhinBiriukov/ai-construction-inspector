@@ -40,7 +40,14 @@ def read_mesh(path):
                     face_property=tokens[1:]
         if not format_seen or element_order!=["vertex","face"] or vertex_count is None or face_count is None or face_property!=["list","uchar","int","vertex_indices"]:
             raise ValueError("Expected vertex records followed by triangle face records")
-        data=np.fromfile(handle,dtype=properties,count=vertex_count)
+        vertex_dtype=np.dtype(properties)
+        body_start=handle.tell()
+        handle.seek(0,2)
+        remaining=handle.tell()-body_start
+        handle.seek(body_start)
+        if vertex_count<0 or face_count<0 or vertex_count*vertex_dtype.itemsize+face_count*13!=remaining:
+            raise ValueError("PLY declared counts do not match its body length")
+        data=np.fromfile(handle,dtype=vertex_dtype,count=vertex_count)
         records=np.fromfile(handle,dtype=[("count","u1"),("indices","<i4",3)],count=face_count)
         if len(data)!=vertex_count or len(records)!=face_count or handle.read(1):raise ValueError("Unexpected PLY length")
         if not np.all(records["count"]==3):raise ValueError("Only triangles are supported")

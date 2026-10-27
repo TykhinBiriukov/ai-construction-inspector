@@ -5,3 +5,8 @@ scipy==1.17.1
 # ARKitScenes image checks and visualization
 Pillow==12.1.1
 matplotlib==3.10.8
+
+# HTTP service
+fastapi==0.162.0
+uvicorn==0.54.0
+httpx==0.28.1
