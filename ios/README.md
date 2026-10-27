@@ -20,7 +20,7 @@ Verified 2026-10-27: Debug builds succeed for both generic iOS Simulator (arm64/
 
 ## Not implemented / not validated
 
-- No network upload, authentication, orchestrator polling, server analysis, completion endpoint or voice yet. Saved observations await a future uploader; the UI never counts them as uploaded.
+- No network upload to Geometry Service, authentication, AI Inspector polling, server analysis, completion endpoint or voice yet. Saved observations await a future uploader; the UI never counts them as uploaded.
 - No real BIM file import yet; the displayed room is generated geometry with stable node names. No scan-to-BIM alignment, coverage or reconstruction on the phone.
 - No automatic continuous capture or session-finalization UI. Current prototype reopens the most recent session per source, starting a fresh segment as needed.
 - No physical-device capture/reprojection validation yet. Build success does not establish RGB-depth registration or measurement accuracy.
@@ -51,4 +51,4 @@ xcodebuild -project ios/AIInspector.xcodeproj -scheme AIInspector -sdk iphonesim
 The Foundation checks cover SIMD column-to-row serialization, local reopen, instruction links, byte preservation including invalid depth, missing confidence, partial writes, invalid segments, truncated buffers, corruption and separation of synthetic/device sessions. They use dummy JPEG bytes to exercise storage only; they do not test camera encoding or UI.
 
 ARKit reference: [Apple scene depth sample](https://developer.apple.com/documentation/arkit/displaying-a-point-cloud-using-scene-depth).
-The local bundle format is defined by `AIInspector/Observation.swift`. The proposed [mobile ↔ orchestrator API contract](../docs/mobile-orchestrator-contract-v0.1.md) specifies endpoints, upload formats, instructions, retries and the team review checklist. It is pending agreement; no backend integration is claimed.
+The local bundle format is defined by `AIInspector/Observation.swift`. The proposed [iPhone ↔ Geometry Service + AI Inspector API contract](../docs/mobile-orchestrator-contract-v0.1.md) specifies two direct client connections, service-to-service communication, upload formats, instructions, retries and the team review checklist. The topology is confirmed; endpoint and coordination details are pending agreement. No backend integration is claimed. The document keeps its original filename so previously shared links remain valid.
