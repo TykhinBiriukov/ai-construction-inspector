@@ -51,4 +51,4 @@ xcodebuild -project ios/AIInspector.xcodeproj -scheme AIInspector -sdk iphonesim
 The Foundation checks cover SIMD column-to-row serialization, local reopen, instruction links, byte preservation including invalid depth, missing confidence, partial writes, invalid segments, truncated buffers, corruption and separation of synthetic/device sessions. They use dummy JPEG bytes to exercise storage only; they do not test camera encoding or UI.
 
 ARKit reference: [Apple scene depth sample](https://developer.apple.com/documentation/arkit/displaying-a-point-cloud-using-scene-depth).
-The local bundle format is defined by `AIInspector/Observation.swift`. Orchestrator endpoints and compatibility with the geometry backend still need team agreement; no backend integration is claimed.
+The local bundle format is defined by `AIInspector/Observation.swift`. The proposed [mobile ↔ orchestrator API contract](../docs/mobile-orchestrator-contract-v0.1.md) specifies endpoints, upload formats, instructions, retries and the team review checklist. It is pending agreement; no backend integration is claimed.
