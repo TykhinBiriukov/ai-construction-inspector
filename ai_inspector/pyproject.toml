@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-inspector-backend"
+version = "0.1.0"
+description = "Persistent BIM intake and iPhone capture-session handoff"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.135.3,<0.136",
+    "pydantic>=2.13,<3",
+    "python-multipart>=0.0.32,<0.1",
+    "uvicorn>=0.44,<0.45",
+    "httpx>=0.28.1,<0.29",
+    "boto3>=1.43.119,<2",
+    "python-dotenv>=1.0,<2",
+    "websockets>=16,<17",
+]
+
+[project.optional-dependencies]
+test = ["httpx>=0.28.1,<0.29"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
