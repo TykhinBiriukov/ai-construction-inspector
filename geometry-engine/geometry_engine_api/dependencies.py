@@ -7,6 +7,11 @@ import httpx
 from supabase import Client, ClientOptions, create_client
 
 from .services.archive import ArchiveService, ArchiveServiceError, Settings, validate_url
+from geometry_engine.validation import SessionValidationService
+
+
+def get_validation_service() -> SessionValidationService:
+    return SessionValidationService()
 
 
 def get_settings() -> Settings:

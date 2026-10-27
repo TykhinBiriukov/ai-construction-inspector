@@ -2,12 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from .dependencies import get_archive_service
+from .dependencies import get_archive_service, get_validation_service
 from .services.archive import ArchiveService, ArchiveServiceError
+from geometry_engine.validation import SessionValidationService
 
 
 class ExtractRequest(BaseModel):
@@ -18,6 +19,7 @@ class ExtractRequest(BaseModel):
 class ExtractResponse(BaseModel):
     session_id: str
     directory: str
+    validation: dict
 
 
 def create_app():
@@ -29,9 +31,16 @@ def create_app():
         return JSONResponse(status_code=statuses.get(error.code, 422), content={"detail": str(error)})
 
     @app.post("/sessions/extract", response_model=ExtractResponse, status_code=201)
-    def extract(payload: ExtractRequest, service: Annotated[ArchiveService, Depends(get_archive_service)]):
+    def extract(
+        payload: ExtractRequest,
+        service: Annotated[ArchiveService, Depends(get_archive_service)],
+        validator: Annotated[SessionValidationService, Depends(get_validation_service)],
+    ):
         result = service.extract(payload.session_id)
-        return ExtractResponse(session_id=result.session_id, directory=str(result.directory))
+        validation = validator.validate(result.directory)
+        if validation["status"] == "invalid":
+            raise HTTPException(status_code=422, detail={"session_id": result.session_id, "validation": validation})
+        return ExtractResponse(session_id=result.session_id, directory=str(result.directory), validation=validation)
 
     return app
 
