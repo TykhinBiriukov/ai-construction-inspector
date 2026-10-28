@@ -2,6 +2,8 @@
 
 Current developer handoff:
 
+- [Cloudflare + Supabase deployment](docs/cloudflare-deployment.md) — permanent HTTPS, no Mac required
+
 - [iPhone API and connection guide](docs/ios-integration.md)
 - [Operator / web application guide](docs/web-integration.md)
 - [Single-ZIP capture format and upload examples](docs/zip-capture.md)
@@ -23,8 +25,10 @@ This backend receives an opaque BIM file and an inspection prompt, stores an
 inspection, creates a capture session, and lets the assigned iPhone retrieve and
 acknowledge its session ID. After capture, it receives a Supabase snapshot reference
 or versioned S3 manifest, verifies the source, and queues a durable Geometry job.
-SQLite persists state, retry receipts, completions and the delivery queue;
-original BIM bytes are stored by SHA-256 in a local BIM intake adapter.
+SQLite persists local development state. With `INSPECTOR_DATABASE_URL`, PostgreSQL
+persists state, retry receipts, completions and the delivery queue. Reference BIM
+bytes use the local adapter by default or private Supabase Storage when
+`INSPECTOR_BIM_STORAGE=supabase`.
 The backend consumes Geometry callbacks and polls exact job state as a recovery
 path. A verified terminal response completes the geometry-only case; the separate
 inspection-analysis result stays null. Mock results are explicitly labelled.

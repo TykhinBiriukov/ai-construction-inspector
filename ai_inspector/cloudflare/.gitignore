@@ -1,0 +1,7 @@
+.venv*/
+.dev.vars*
+.env*
+.wrangler/
+python_modules/
+src/ai_inspector/
+node_modules/

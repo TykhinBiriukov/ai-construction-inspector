@@ -15,16 +15,7 @@ def canonical_json(value: dict) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-class Database:
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with self.connection() as connection:
-            version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4):
-                raise RuntimeError("Unsupported database schema version")
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.executescript("""
+SCHEMA_SQL = """
                 CREATE TABLE IF NOT EXISTS inspections (
                     inspection_id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,
@@ -114,7 +105,18 @@ class Database:
                     data TEXT NOT NULL,
                     PRIMARY KEY(source, event_id)
                 );
-            """)
+            """
+
+class Database:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with self.connection() as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version not in (0, 1, 2, 3, 4):
+                raise RuntimeError("Unsupported database schema version")
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.executescript(SCHEMA_SQL)
             connection.execute("BEGIN IMMEDIATE")
             try:
                 columns = {row["name"] for row in connection.execute("PRAGMA table_info(sessions)")}

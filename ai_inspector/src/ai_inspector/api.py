@@ -82,12 +82,15 @@ def validation_error(errors: list[dict]) -> APIError:
     )
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, service=None, background_worker=True, static_ui=True, websocket_poll_interval=0.25) -> FastAPI:
     settings = settings or Settings.from_env()
-    service = InspectorService(settings)
+    service = service or InspectorService(settings)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
+        if not background_worker:
+            yield
+            return
         stop = threading.Event()
         thread = threading.Thread(target=service.capture.run, args=(stop,), name="capture-worker", daemon=True)
         application.state.capture_worker = thread
@@ -190,7 +193,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def operator_ui():
         return FileResponse(Path(__file__).parent / "web" / "index.html")
 
-    app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "web"), name="operator-ui")
+    if static_ui:
+        app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "web"), name="operator-ui")
 
     @app.get("/v1/operator/overview", tags=["operations"])
     def operator_overview(
@@ -202,7 +206,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with service.database.connection() as connection:
             rows = connection.execute(
                 "SELECT assignment_order, data FROM sessions WHERE project_id=? "
-                "AND (? IS NULL OR assignment_order<?) ORDER BY assignment_order DESC LIMIT ?",
+                "AND (CAST(? AS BIGINT) IS NULL OR assignment_order<?) ORDER BY assignment_order DESC LIMIT ?",
                 (principal.project_id, before, before, limit + 1),
             ).fetchall()
             inspections = connection.execute(
@@ -411,7 +415,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await websocket.close(code=4408, reason="Heartbeat timeout")
                     break
                 try:
-                    raw = await asyncio.wait_for(websocket.receive_text(), 0.25)
+                    raw = await asyncio.wait_for(websocket.receive_text(), websocket_poll_interval)
                 except asyncio.TimeoutError:
                     continue
                 if len(raw) > 4096:

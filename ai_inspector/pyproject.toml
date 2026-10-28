@@ -16,6 +16,7 @@ dependencies = [
     "boto3>=1.43.119,<2",
     "python-dotenv>=1.0,<2",
     "websockets>=16,<17",
+    "psycopg[binary]==3.3.6",
 ]
 
 [project.optional-dependencies]

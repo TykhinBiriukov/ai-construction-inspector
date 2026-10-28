@@ -31,10 +31,22 @@ def require_role(principal: Principal, role: str) -> None:
 
 
 class InspectorService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, database=None, bim_store=None) -> None:
         self.settings = settings
-        self.database = Database(settings.data_dir / "inspector.sqlite3")
-        self.bim_store = LocalBIMStore(settings.data_dir, settings.max_bim_bytes)
+        if database is not None:
+            self.database = database
+        elif settings.database_url:
+            from .postgres_storage import PostgresDatabase
+            self.database = PostgresDatabase(settings.database_url)
+        else:
+            self.database = Database(settings.data_dir / "inspector.sqlite3")
+        if bim_store is not None:
+            self.bim_store = bim_store
+        elif settings.bim_storage == "supabase":
+            from .supabase_bim import SupabaseBIMStore
+            self.bim_store = SupabaseBIMStore(settings)
+        else:
+            self.bim_store = LocalBIMStore(settings.data_dir, settings.max_bim_bytes)
         from .workflow import CaptureWorkflow
         self.capture = CaptureWorkflow(self)
         from .session_folders import SupabaseSessionFolders
@@ -110,7 +122,7 @@ class InspectorService:
                 }
                 self.bim_store.publish(model)
                 connection.execute(
-                    "INSERT INTO inspections VALUES (?, ?, ?)",
+                    "INSERT INTO inspections(inspection_id, project_id, data) VALUES (?, ?, ?)",
                     (inspection_id, request.project_id, canonical_json(inspection)),
                 )
                 self.database.save_receipt(connection, scope, str(request.request_id), body, inspection)
@@ -206,7 +218,7 @@ class InspectorService:
                     "policy_version": self.settings.policy_version, "prompt": request.prompt,
                     "created_at": utc_now(), "bim_model": None, "inspection_kind": "capture_only",
                 }
-                connection.execute("INSERT INTO inspections VALUES (?, ?, ?)",
+                connection.execute("INSERT INTO inspections(inspection_id, project_id, data) VALUES (?, ?, ?)",
                                    (inspection["inspection_id"], principal.project_id, canonical_json(inspection)))
                 session = self._new_session(connection, principal, inspection, request)
                 self.database.save_receipt(connection, scope, str(request.request_id), body, session)

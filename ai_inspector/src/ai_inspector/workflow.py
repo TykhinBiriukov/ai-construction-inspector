@@ -161,13 +161,14 @@ class CaptureWorkflow:
             (status, canonical_json(error) if error else None, work["work_id"], work["lease_token"]),
         )
 
-    def process_next(self, client: httpx.Client | None = None) -> bool:
+    def process_next(self, client: httpx.Client | None = None, *, heartbeat_enabled=True) -> bool:
         work = self._claim()
         if work is None:
             return False
         stop_heartbeat = threading.Event()
         heartbeat = threading.Thread(target=self._renew_lease, args=(work, stop_heartbeat), daemon=True)
-        heartbeat.start()
+        if heartbeat_enabled:
+            heartbeat.start()
         try:
             if work["kind"] == "validate":
                 self._validate(work)
@@ -185,7 +186,8 @@ class CaptureWorkflow:
             self._record_error(work, APIError(503, "worker_unavailable", "Worker operation will be retried", retryable=True))
         finally:
             stop_heartbeat.set()
-            heartbeat.join(1)
+            if heartbeat_enabled:
+                heartbeat.join(1)
         return True
 
     def _renew_lease(self, work: dict, stop: threading.Event) -> None:

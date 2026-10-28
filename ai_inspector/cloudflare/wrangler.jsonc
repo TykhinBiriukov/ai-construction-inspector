@@ -1,0 +1,40 @@
+{
+  "name": "ai-inspector-runtime",
+  "main": "src/entry.py",
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": [
+    "python_workers"
+  ],
+  "workers_dev": false,
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": []
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "441230360aaa4b1eb27a6d33eb34e21e",
+      "localConnectionString": "postgresql://olegkulikov:test@127.0.0.1:55439/inspector_test"
+    }
+  ],
+  "account_id": "80238bcf5ce46836f5344aa9ee5c6463",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "INSPECTOR",
+        "class_name": "InspectorRuntime"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "InspectorRuntime"
+      ]
+    }
+  ],
+  "preview_urls": false
+}

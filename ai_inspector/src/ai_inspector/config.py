@@ -2,7 +2,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 from dotenv import dotenv_values
 
@@ -44,6 +44,9 @@ class Settings:
     max_archive_bytes: int = 50 * 1024 * 1024
     max_unpacked_archive_bytes: int = 2 * 1024**3
     max_archive_entries: int = 40000
+
+    database_url: str = field(default="", repr=False)
+    bim_storage: str = "local"
 
     def __post_init__(self) -> None:
         if not self.operator_token.strip() or not self.device_token.strip():
@@ -91,6 +94,21 @@ class Settings:
                         or parsed.query or parsed.fragment):
                     raise ValueError(f"{name} must be a configured HTTP(S) base URL")
                 parsed.port  # Validate port syntax even though URL construction preserves it.
+        if self.database_url:
+            try:
+                parsed_db = urlsplit(self.database_url)
+                valid = (parsed_db.scheme in ("postgres", "postgresql") and parsed_db.hostname
+                         and parsed_db.username and parsed_db.password and parsed_db.path.strip("/")
+                         and parse_qs(parsed_db.query).get("sslmode", [""])[0] in ("require", "verify-ca", "verify-full"))
+                parsed_db.port
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError("INSPECTOR_DATABASE_URL requires a PostgreSQL URI with credentials and TLS")
+        if self.bim_storage not in ("local", "supabase"):
+            raise ValueError("INSPECTOR_BIM_STORAGE must be local or supabase")
+        if self.bim_storage == "supabase" and not self.supabase_enabled:
+            raise ValueError("Supabase BIM storage requires Supabase configuration")
         configured = (bool(self.supabase_url), bool(self.supabase_storage_bucket), bool(self.supabase_secret_key))
         if any(configured) and not all(configured):
             raise ValueError("Set SUPABASE_URL, SUPABASE_STORAGE_BUCKET and SUPABASE_SECRET_KEY together")
@@ -117,6 +135,8 @@ class Settings:
         values.update(os.environ)
         get = values.get
         return cls(
+            database_url=get("INSPECTOR_DATABASE_URL", ""),
+            bim_storage=get("INSPECTOR_BIM_STORAGE", "local"),
             data_dir=Path(get("INSPECTOR_DATA_DIR", "data")).resolve(),
             operator_token=get("INSPECTOR_OPERATOR_TOKEN", ""),
             device_token=get("INSPECTOR_DEVICE_TOKEN", ""),

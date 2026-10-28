@@ -1,0 +1,35 @@
+{
+  "name": "ai-inspector",
+  "main": "index.js",
+  "compatibility_date": "2026-10-28",
+  "workers_dev": true,
+  "account_id": "80238bcf5ce46836f5344aa9ee5c6463",
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    {
+      "pattern": "inspector.campuscompile.eu",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "../../src/ai_inspector/web",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "INSPECTOR",
+        "class_name": "InspectorRuntime",
+        "script_name": "ai-inspector-runtime"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  }
+}
