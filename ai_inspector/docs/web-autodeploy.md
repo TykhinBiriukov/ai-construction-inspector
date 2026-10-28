@@ -65,3 +65,8 @@ login. Persistence after closing the browser is not promised.
 References:
 - https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/
 - https://developers.cloudflare.com/workers/authorization/workers/
+
+CI uses `versions upload` with a unique run/attempt tag, then `versions deploy`
+at 100%. This preserves existing domain and cron triggers. A direct `wrangler
+deploy` with the scoped token uploaded code but failed reconciling custom domains
+(code 10084); domain changes must be performed separately by an administrator.
