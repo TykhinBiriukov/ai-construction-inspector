@@ -1,28 +1,251 @@
 // !$*UTF8*$!
-{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
-000000000000000000000064 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInspectorApp.swift; sourceTree = "<group>"; };
-0000000000000000000000C8 = { isa = PBXBuildFile; fileRef = 000000000000000000000064; };
-000000000000000000000065 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorModel.swift; sourceTree = "<group>"; };
-0000000000000000000000C9 = { isa = PBXBuildFile; fileRef = 000000000000000000000065; };
-000000000000000000000066 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureService.swift; sourceTree = "<group>"; };
-0000000000000000000000CA = { isa = PBXBuildFile; fileRef = 000000000000000000000066; };
-000000000000000000000067 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Observation.swift; sourceTree = "<group>"; };
-0000000000000000000000CB = { isa = PBXBuildFile; fileRef = 000000000000000000000067; };
-000000000000000000000068 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomPreview.swift; sourceTree = "<group>"; };
-0000000000000000000000CC = { isa = PBXBuildFile; fileRef = 000000000000000000000068; };
-000000000000000000000001 = { isa = PBXProject; attributes = { LastUpgradeCheck = 2710; }; buildConfigurationList = 00000000000000000000000A; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; knownRegions = (en, Base); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000005); };
-000000000000000000000002 = { isa = PBXGroup; children = (000000000000000000000003, 000000000000000000000004); sourceTree = "<group>"; };
-000000000000000000000003 = { isa = PBXGroup; children = (000000000000000000000064, 000000000000000000000065, 000000000000000000000066, 000000000000000000000067, 000000000000000000000068); path = AIInspector; sourceTree = "<group>"; };
-000000000000000000000004 = { isa = PBXGroup; children = (000000000000000000000006); name = Products; sourceTree = "<group>"; };
-000000000000000000000005 = { isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000000B; buildPhases = (000000000000000000000007, 000000000000000000000008, 000000000000000000000009); buildRules = (); dependencies = (); name = AIInspector; productName = AIInspector; productReference = 000000000000000000000006; productType = "com.apple.product-type.application"; };
-000000000000000000000006 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIInspector.app; sourceTree = BUILT_PRODUCTS_DIR; };
-000000000000000000000007 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (0000000000000000000000C8, 0000000000000000000000C9, 0000000000000000000000CA, 0000000000000000000000CB, 0000000000000000000000CC); runOnlyForDeploymentPostprocessing = 0; };
-000000000000000000000008 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-000000000000000000000009 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-00000000000000000000000A = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000000C, 00000000000000000000000D); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-00000000000000000000000B = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000000E, 00000000000000000000000F); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-00000000000000000000000C = { isa = XCBuildConfiguration; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 18.0; CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; SWIFT_STRICT_CONCURRENCY = minimal; }; name = Debug; };
-00000000000000000000000D = { isa = XCBuildConfiguration; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 18.0; CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; SWIFT_STRICT_CONCURRENCY = minimal; }; name = Release; };
-00000000000000000000000E = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_BUNDLE_IDENTIFIER = com.aiinspector.capture; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = AIInspector/Info.plist; GENERATE_INFOPLIST_FILE = NO; MARKETING_VERSION = 0.1.0; CURRENT_PROJECT_VERSION = 1; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; CODE_SIGN_STYLE = Automatic; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; ENABLE_PREVIEWS = YES; }; name = Debug; };
-00000000000000000000000F = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_BUNDLE_IDENTIFIER = com.aiinspector.capture; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = AIInspector/Info.plist; GENERATE_INFOPLIST_FILE = NO; MARKETING_VERSION = 0.1.0; CURRENT_PROJECT_VERSION = 1; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; CODE_SIGN_STYLE = Automatic; SWIFT_OPTIMIZATION_LEVEL = "-O"; ENABLE_PREVIEWS = YES; }; name = Release; };
-}; rootObject = 000000000000000000000001; }
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0000000000000000000000D3 /* GeometryExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006F; };
+		0000000000000000000000D2 /* StorageUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006E; };
+		0000000000000000000000D1 /* InspectorConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006D; };
+		0000000000000000000000D0 /* SessionLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006C; };
+		0000000000000000000000C8 /* AIInspectorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000064 /* AIInspectorApp.swift */; };
+		0000000000000000000000C9 /* InspectorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000065 /* InspectorModel.swift */; };
+		0000000000000000000000CA /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000066 /* CaptureService.swift */; };
+		0000000000000000000000CB /* Observation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000067 /* Observation.swift */; };
+		0000000000000000000000CC /* RoomPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000068 /* RoomPreview.swift */; };
+		0000000000000000000000CD /* PushNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000069; };
+		0000000000000000000000CE /* PushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006A; };
+		0000000000000000000000CF /* SupabaseStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006B; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		00000000000000000000006F /* GeometryExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeometryExport.swift; sourceTree = "<group>"; };
+		00000000000000000000006E /* StorageUpload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageUpload.swift; sourceTree = "<group>"; };
+		00000000000000000000006D /* InspectorConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorConnection.swift; sourceTree = "<group>"; };
+		00000000000000000000006C /* SessionLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLifecycle.swift; sourceTree = "<group>"; };
+		000000000000000000000006 /* AIInspector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIInspector.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000064 /* AIInspectorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInspectorApp.swift; sourceTree = "<group>"; };
+		000000000000000000000065 /* InspectorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorModel.swift; sourceTree = "<group>"; };
+		000000000000000000000066 /* CaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureService.swift; sourceTree = "<group>"; };
+		000000000000000000000067 /* Observation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Observation.swift; sourceTree = "<group>"; };
+		000000000000000000000068 /* RoomPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomPreview.swift; sourceTree = "<group>"; };
+		000000000000000000000069 /* PushNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotification.swift; sourceTree = "<group>"; };
+		00000000000000000000006A /* PushService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushService.swift; sourceTree = "<group>"; };
+		00000000000000000000006B /* SupabaseStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseStorage.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		000000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		000000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000003 /* AIInspector */,
+				000000000000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		000000000000000000000003 /* AIInspector */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000064 /* AIInspectorApp.swift */,
+				000000000000000000000065 /* InspectorModel.swift */,
+				000000000000000000000066 /* CaptureService.swift */,
+				000000000000000000000067 /* Observation.swift */,
+				000000000000000000000068 /* RoomPreview.swift */,
+				00000000000000000000006B /* SupabaseStorage.swift */,
+				00000000000000000000006F /* GeometryExport.swift */,
+				00000000000000000000006E /* StorageUpload.swift */,
+				00000000000000000000006D /* InspectorConnection.swift */,
+				00000000000000000000006C /* SessionLifecycle.swift */,
+				00000000000000000000006A /* PushService.swift */,
+				000000000000000000000069 /* PushNotification.swift */,
+			);
+			path = AIInspector;
+			sourceTree = "<group>";
+		};
+		000000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000006 /* AIInspector.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		000000000000000000000005 /* AIInspector */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 00000000000000000000000B /* Build configuration list for PBXNativeTarget "AIInspector" */;
+			buildPhases = (
+				000000000000000000000007 /* Sources */,
+				000000000000000000000008 /* Frameworks */,
+				000000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AIInspector;
+			productName = AIInspector;
+			productReference = 000000000000000000000006 /* AIInspector.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		000000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 2710;
+			};
+			buildConfigurationList = 00000000000000000000000A /* Build configuration list for PBXProject "AIInspector" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 000000000000000000000002;
+			productRefGroup = 000000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				000000000000000000000005 /* AIInspector */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		000000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		000000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0000000000000000000000C8 /* AIInspectorApp.swift in Sources */,
+				0000000000000000000000C9 /* InspectorModel.swift in Sources */,
+				0000000000000000000000CA /* CaptureService.swift in Sources */,
+				0000000000000000000000CB /* Observation.swift in Sources */,
+				0000000000000000000000CC /* RoomPreview.swift in Sources */,
+				0000000000000000000000CF /* SupabaseStorage.swift in Sources */,
+				0000000000000000000000D3 /* GeometryExport.swift in Sources */,
+				0000000000000000000000D2 /* StorageUpload.swift in Sources */,
+				0000000000000000000000D1 /* InspectorConnection.swift in Sources */,
+				0000000000000000000000D0 /* SessionLifecycle.swift in Sources */,
+				0000000000000000000000CE /* PushService.swift in Sources */,
+				0000000000000000000000CD /* PushNotification.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		00000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		00000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		00000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				INSPECTOR_PUSH_ENABLED = NO;
+				APNS_ENVIRONMENT = development;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q87Z73DMT9;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AIInspector/Info.plist;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aiinspector.capture;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		00000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				INSPECTOR_PUSH_ENABLED = NO;
+				APNS_ENVIRONMENT = development;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q87Z73DMT9;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AIInspector/Info.plist;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aiinspector.capture;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		00000000000000000000000A /* Build configuration list for PBXProject "AIInspector" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000000000000000000000C /* Debug */,
+				00000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		00000000000000000000000B /* Build configuration list for PBXNativeTarget "AIInspector" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000000000000000000000E /* Debug */,
+				00000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 000000000000000000000001 /* Project object */;
+}

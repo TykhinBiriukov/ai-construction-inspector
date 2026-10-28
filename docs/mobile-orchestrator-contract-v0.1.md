@@ -1,6 +1,19 @@
+> **Superseded for the current first case:** use [Inspector server integration](inspector-server-integration.md) and [mobile implementation status](mobile-integration-status.md). The following document is an older architecture proposal.
+
 # iPhone ↔ Geometry Service + AI Inspector API — v0.1, на согласование
 
 Дата: 2026-10-27. **PROPOSED / НЕ СОГЛАСОВАНО.** Это предложение интерфейса, не описание уже работающего сервера. После согласования обе стороны реализуют один и тот же контракт.
+
+## Дополнение: мобильная схема кадра 0.2 (27.10.2026)
+
+По запросу Олега приложение теперь поддерживает телефоны без LiDAR. Это локальная реализация; приём новых кадров сервером **ещё требует согласования**. Ниже разделы v0.1 и их примеры остаются исходным предложением RGB-D; для новых кадров действует следующее изменение:
+
+- `frame.json.schema_version` = `"0.2"` для новых RGB и RGB-D наблюдений. Старые кадры `0.1` читаются приложением. Версия manifest сессии остаётся `0.1`.
+- Без LiDAR: `depth_source: "none"`; `depth`, `depth_size`, `depth_unit`, `depth_to_rgb_mapping`, `confidence` равны JSON `null`. В multipart такого наблюдения должны отсутствовать части depth/confidence. Нельзя подставлять нулевую или синтетическую глубину.
+- JPEG, размеры RGB, `K_rgb`, `T_world_camera`, timestamp, session/segment/frame IDs сохраняются. Положение — оценка ARKit, а не привязка к BIM. Съёмка требует normal tracking.
+- При наличии LiDAR формат глубины не меняется; кадр не сохраняется, пока sceneDepth не готова.
+- Geometry Service должен явно различать RGB и RGB-D: отсутствие измеренной глубины не является измерением или подтверждением геометрического соответствия. Возможность обработки RGB-only и ответ на неподдерживаемый тип требуется согласовать.
+- Описания depth/confidence encoding в manifest применимы только к кадрам, где соответствующий файл присутствует.
 
 ## 1. Кто что реализует
 

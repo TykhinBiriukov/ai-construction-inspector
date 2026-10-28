@@ -2,117 +2,107 @@ import SwiftUI
 
 @main
 struct AIInspectorApp: App {
-    var body: some Scene { WindowGroup { InspectorView() } }
+    @UIApplicationDelegateAdaptor(InspectorAppDelegate.self) private var appDelegate
+    var body: some Scene { WindowGroup { AssignmentWaitingView() } }
+}
+
+private struct AssignmentWaitingView: View {
+    @ObservedObject private var connection = InspectorConnection.shared
+    @State private var showStorage = false
+    @Environment(\.scenePhase) private var scenePhase
+    var body: some View {
+        Group {
+            if let assignment = connection.active {
+                InspectorView(assignment: assignment).id(assignment.id)
+            } else {
+                NavigationStack {
+                    VStack(spacing: 16) {
+                        Spacer()
+                        Image(systemName: "tray").font(.system(size: 52, weight: .light)).foregroundStyle(.secondary)
+                        Text("Нет активной сессии").font(.title2.bold())
+                        Text("Ожидаем задание от Inspector").foregroundStyle(.secondary)
+                        Spacer()
+                    }.frame(maxWidth: .infinity).padding(24)
+                        .navigationTitle("AI Inspector").navigationBarTitleDisplayMode(.inline)
+                        .toolbar { Button { showStorage = true } label: { Image(systemName: "gearshape") } }
+                }
+            }
+        }
+        .sheet(isPresented: $showStorage) { StorageConnectionView() }
+        .task { connection.setForeground(true) }
+        .onChange(of: scenePhase) { _, phase in connection.setForeground(phase == .active) }
+    }
 }
 
 struct InspectorView: View {
-    @StateObject private var model = InspectorModel()
+    @StateObject private var model: InspectorModel
+    @ObservedObject private var connection = InspectorConnection.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var showEvidence = false
     @State private var showModel = false
-
+    @State private var showSettings = false
+    init(assignment: InspectorAssignment) {
+        _model = StateObject(wrappedValue: InspectorModel(assignment: assignment))
+    }
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Room 204").font(.largeTitle.bold())
-                            Label("Demo building · Level 2", systemImage: "building.2")
-                                .font(.subheadline).foregroundStyle(.secondary)
+                    Text(model.assignment.room_id).font(.largeTitle.bold())
+                    Text("BIM: " + model.assignment.model_version).foregroundStyle(.secondary)
+                    if !connection.frozen {
+                        CapturePanel(model: model, capture: model.capture, showModel: $showModel)
+                    }
+                    Text("Снимите помещение согласно заданию инспекции.")
+                    Text("Наблюдений на телефоне: \(model.observations.count)")
+                    Button("Посмотреть наблюдения") { showEvidence = true }
+                    Text(connection.status).font(.footnote)
+                    if connection.geometryMode == "mock" {
+                        Text("Geometry: MOCK — тест обмена данными, не реконструкция комнаты.").font(.footnote).foregroundStyle(.orange)
+                    }
+                    if model.capture.supportsMesh && !model.synthetic {
+                        Button("Подготовить ZIP для Geometry") { Task { await model.exportGeometry() } }
+                            .disabled(model.busy || connection.busy || connection.frozen)
+                        if let zip = model.geometryZIP { ShareLink("Экспортировать ZIP", item: zip) }
+                        Text("ZIP сохраняется локально. Загрузка архива требует поддержки в Inspector.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if connection.frozen {
+                        Text("Набор зафиксирован. Ожидаем подтверждение Inspector.").font(.headline)
+                    }
+                    Button(connection.frozen ? "Повторить отправку" : "Завершить съёмку и отправить") {
+                        model.pause(); model.frozen = true
+                        Task {
+                            await connection.finish(store: model.store, retryRejected: true)
+                            model.frozen = connection.frozen
                         }
-                        Spacer()
-                        Menu {
-                            Button(model.synthetic ? "Перейти к камере iPhone" : "Тестовые данные") {
-                                model.synthetic.toggle()
-                                Task { await model.load() }
-                            }
-                            Button("Демоинструкция", systemImage: "text.bubble") { model.demoInstruction() }
-                        } label: {
-                            Image(systemName: "slider.horizontal.3").font(.title3)
-                                .padding(14).background(.white, in: Circle())
-                        }.disabled(model.busy)
-                    }
-
-                    CapturePanel(model: model, capture: model.capture, showModel: $showModel)
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Label("Задание инспектора", systemImage: "text.bubble.fill").font(.headline)
-                            Spacer()
-                            Text(model.instruction == nil ? "OFFLINE" : "DEMO")
-                                .font(.caption2.bold()).foregroundStyle(.orange)
-                        }
-                        Text(model.instruction ?? "Подключение к оркестратору появится после согласования API. Пока можно проверить съёмку и сохранение.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if model.instruction == nil {
-                            Button("Показать пример задания", action: model.demoInstruction).font(.subheadline.weight(.semibold))
-                        } else {
-                            Button("Нет доступа к объекту", action: model.cannotAccess).font(.subheadline)
-                        }
-                    }.padding(18).background(.white, in: RoundedRectangle(cornerRadius: 22))
-
-                    HStack(spacing: 12) {
-                        metric("Сохранено", value: "\(model.observations.count)", icon: "checkmark.circle.fill", color: .blue)
-                        metric("Отправлено", value: "0", icon: "arrow.up.circle", color: .secondary)
-                        metric("Ожидают", value: "\(model.observations.count)", icon: "clock", color: .orange)
-                    }
-                    Button { showEvidence = true } label: {
-                        HStack {
-                            Label("Наблюдения", systemImage: "photo.stack")
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption.bold())
-                        }.padding(18).background(.white, in: RoundedRectangle(cornerRadius: 18))
-                    }
-                    Text(model.notice).font(.footnote).foregroundStyle(.secondary)
-                    if let manifest = model.manifest {
-                        Text("SESSION \(manifest.session_id.prefix(8)) · RAW RGB-D")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.tertiary)
-                    }
+                    }.buttonStyle(.bordered).disabled(model.busy || connection.busy || model.observations.isEmpty)
+                    Text("SESSION " + model.assignment.id).font(.caption.monospaced())
                 }.padding(20)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("AI Inspector")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Инспекция").navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button { showSettings = true } label: { Image(systemName: "gearshape") } }
             .safeAreaInset(edge: .bottom) {
-                Button { Task { await model.takeObservation() } } label: {
-                    HStack(spacing: 10) {
-                        if model.busy { ProgressView().tint(.white) } else { Image(systemName: "camera.fill") }
-                        Text(model.synthetic ? "Сохранить тестовое наблюдение" : "Снять наблюдение").fontWeight(.semibold)
-                    }.frame(maxWidth: .infinity).padding(.vertical, 17)
+                if !connection.frozen {
+                    Button {
+                        model.instructionID = nil
+                        Task { await model.takeObservation() }
+                    } label: {
+                        Label(model.synthetic ? "Сохранить синтетическое наблюдение" : "Снять наблюдение", systemImage: "camera.fill")
+                            .frame(maxWidth: .infinity).padding(12)
+                    }.buttonStyle(.borderedProminent).padding()
+                        .disabled(model.busy || model.manifest == nil)
                 }
-                .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: 18))
-                .disabled(model.busy || model.manifest == nil)
-                .padding(.horizontal, 20).padding(.vertical, 10).background(.ultraThinMaterial)
             }
-            .task { await model.load() }
+            .task { await model.load(); model.frozen = connection.frozen }
+            .onDisappear { model.pause() }
+            .onChange(of: connection.frozen) { _, value in model.frozen = value; if value { model.pause() } }
             .onChange(of: scenePhase) { _, phase in if phase != .active { model.pause() } }
+            .sheet(isPresented: $showEvidence) { EvidenceView(model: model) }
+            .sheet(isPresented: $showSettings) { StorageConnectionView() }
             .alert("Не удалось выполнить действие", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
                 Button("OK") { model.error = nil }
             } message: { Text(model.error ?? "") }
-            .sheet(isPresented: $showEvidence) { EvidenceView(model: model) }
-            .sheet(isPresented: $showModel) {
-                NavigationStack {
-                    VStack {
-                        RoomPreview()
-                        Text("Синтетическая комната · demo-room-v1").font(.headline)
-                        Text("Привязка к съёмке отсутствует. Покрытие и положение телефона пока не показаны.")
-                            .font(.subheadline).foregroundStyle(.secondary).padding()
-                    }.navigationTitle("Модель помещения")
-                        .toolbar { Button("Готово") { showModel = false } }
-                }
-            }
-        }.tint(.blue)
-    }
-
-    private func metric(_ title: String, value: String, icon: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: icon).foregroundStyle(color)
-            Text(value).font(.title2.bold())
-            Text(title).font(.caption).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
-            .background(.white, in: RoundedRectangle(cornerRadius: 16))
+        }
     }
 }
 
@@ -131,13 +121,11 @@ private struct CapturePanel: View {
             }
             VStack {
                 HStack {
-                    Label(model.synthetic ? "СИНТЕТИЧЕСКОЕ ДЕМО" : "КАМЕРА + LiDAR", systemImage: model.synthetic ? "cube" : "viewfinder")
+                    Label(model.synthetic ? "СИНТЕТИЧЕСКОЕ ДЕМО" : (capture.supportsDepth ? "КАМЕРА + LiDAR" : "КАМЕРА · БЕЗ LiDAR"), systemImage: model.synthetic ? "cube" : "viewfinder")
                         .font(.system(size: 10, weight: .bold)).padding(10)
                         .background(.regularMaterial, in: Capsule())
                     Spacer()
-                    Button { showModel = true } label: {
-                        Image(systemName: "cube.transparent").padding(12).background(.regularMaterial, in: Circle())
-                    }.accessibilityLabel("Открыть модель помещения")
+
                 }
                 Spacer()
                 if !model.synthetic && !capture.running {
@@ -148,7 +136,7 @@ private struct CapturePanel: View {
                 }
                 VStack(spacing: 5) {
                     Text(model.synthetic ? "Предпросмотр тестовой комнаты" : capture.status).font(.subheadline.weight(.semibold))
-                    Text(model.synthetic ? "Кнопка сохранит тестовую плоскость, не скан комнаты" : "Один снимок · RGB, depth, confidence, pose")
+                    Text(model.synthetic ? "Кнопка сохранит тестовую плоскость, не скан комнаты" : (capture.supportsDepth ? "Один снимок · RGB, depth, confidence, pose" : "Фото + положение камеры · глубина отсутствует"))
                         .font(.caption)
                     if capture.running {
                         Button("Остановить камеру") { model.pause() }.font(.caption.bold())
@@ -168,7 +156,7 @@ private struct EvidenceView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Сохранено локально. Отправка на сервер ещё не подключена. Файлы доступны также в Файлы → На iPhone → AI Inspector → sessions.")
+                    Text("Локальные оригиналы сохраняются после загрузки. Статус отправки и приёма Inspector показан на экране сессии.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if model.observations.isEmpty {
@@ -179,9 +167,9 @@ private struct EvidenceView: View {
                         ObservationDetail(frame: frame, folder: model.observationURL(frame))
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label(frame.capture_origin == "synthetic" ? "Тестовое наблюдение" : "Снимок RGB-D", systemImage: "photo")
+                            Label(frame.capture_origin == "synthetic" ? "Тестовое наблюдение" : (frame.depth == nil ? "Фото без глубины" : "Снимок RGB-D"), systemImage: "photo")
                             Text(frame.saved_at.formatted(date: .abbreviated, time: .standard)).font(.caption).foregroundStyle(.secondary)
-                            Text("\(frame.rgb_size[0]) × \(frame.rgb_size[1]) · depth \(frame.depth_size[0]) × \(frame.depth_size[1])")
+                            Text("\(frame.rgb_size[0]) × \(frame.rgb_size[1]) · " + (frame.depth_size.map { "depth \($0[0]) × \($0[1])" } ?? "без глубины"))
                                 .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }.padding(.vertical, 4)
                     }
@@ -200,13 +188,13 @@ private struct ObservationDetail: View {
                 Image(uiImage: image).resizable().scaledToFit()
             }
             LabeledContent("Источник", value: frame.capture_origin)
-            LabeledContent("Depth", value: frame.depth_source)
-            LabeledContent("Единицы", value: frame.depth_unit)
+            LabeledContent("Depth", value: frame.depth == nil ? "Отсутствует" : frame.depth_source)
+            LabeledContent("Единицы", value: frame.depth_unit ?? "—")
             LabeledContent("Сегмент", value: String(frame.segment_id.prefix(8)))
             LabeledContent("Confidence", value: frame.confidence == nil ? "Отсутствует" : "Сохранена")
             if let instruction = frame.instruction_id { LabeledContent("Задание", value: instruction) }
             Section("Экспорт исходных файлов") {
-                ForEach(["frame.json", "rgb.jpg", "depth.f32"] + (frame.confidence == nil ? [] : ["confidence.u8"]), id: \.self) { name in
+                ForEach(["frame.json", "rgb.jpg"] + (frame.depth == nil ? [] : ["depth.f32"]) + (frame.confidence == nil ? [] : ["confidence.u8"]), id: \.self) { name in
                     ShareLink(item: folder.appendingPathComponent(name)) { Label(name, systemImage: "square.and.arrow.up") }
                 }
             }

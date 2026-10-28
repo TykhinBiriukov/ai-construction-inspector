@@ -2,6 +2,42 @@ import SwiftUI
 import RealityKit
 import ARKit
 
+#if targetEnvironment(simulator)
+// Simulator RealityKit initialization can block the first SwiftUI layout.
+// Keep the fixture workflow independent of AR/Metal availability.
+struct CameraPreview: View {
+    let session: ARSession
+    var body: some View { Color.black }
+}
+
+struct RoomPreview: View {
+    var body: some View {
+        Canvas { context, size in
+            let scale = min(size.width / 400, size.height / 330)
+            let origin = CGPoint(x: size.width / 2, y: size.height / 2 + 20 * scale)
+            func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+                CGPoint(x: origin.x + x * scale, y: origin.y + y * scale)
+            }
+            func polygon(_ vertices: [CGPoint], color: Color) {
+                var path = Path()
+                path.addLines(vertices)
+                path.closeSubpath()
+                context.fill(path, with: .color(color))
+                context.stroke(path, with: .color(.white.opacity(0.8)), lineWidth: 1)
+            }
+            polygon([point(-155,0), point(0,-75), point(155,0), point(0,85)], color: Color(red: 0.80, green: 0.84, blue: 0.89))
+            polygon([point(-155,0), point(-155,-120), point(0,-195), point(0,-75)], color: Color(red: 0.70, green: 0.75, blue: 0.82))
+            polygon([point(0,-75), point(0,-195), point(155,-120), point(155,0)], color: Color(red: 0.85, green: 0.88, blue: 0.92))
+            var doorway = Path()
+            doorway.addLines([point(52,-50), point(52,-137), point(100,-114), point(100,-27)])
+            context.stroke(doorway, with: .color(.blue), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+            context.draw(Text("Схема · simulator").font(.caption).foregroundStyle(.secondary), at: point(0,110))
+        }
+        .background(Color(red: 0.91, green: 0.93, blue: 0.96))
+        .accessibilityLabel("Схематический вид тестовой комнаты. 3D-превью доступно на устройстве.")
+    }
+}
+#else
 struct CameraPreview: UIViewRepresentable {
     let session: ARSession
     func makeUIView(context: Context) -> ARView {
@@ -51,3 +87,5 @@ struct RoomPreview: UIViewRepresentable {
     }
     func updateUIView(_ uiView: ARView, context: Context) {}
 }
+
+#endif

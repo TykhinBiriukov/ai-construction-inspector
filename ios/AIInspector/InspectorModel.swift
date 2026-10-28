@@ -11,24 +11,25 @@ final class InspectorModel: ObservableObject {
     @Published var notice = "Оркестратор не подключён. Данные сохраняются на телефоне."
     @Published var instruction: String?
     @Published var instructionID: String?
+    @Published var geometryZIP: URL?
     @Published var synthetic: Bool
     let capture = CaptureService()
     let store: ObservationStore
     private var segment: String?
 
-    init() {
-        #if targetEnvironment(simulator)
-        synthetic = true
-        #else
-        synthetic = false
-        #endif
+    let assignment: InspectorAssignment
+    @Published var frozen = false
+
+    init(assignment: InspectorAssignment) {
+        self.assignment = assignment
+        synthetic = assignment.capture_origin == "synthetic"
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         store = ObservationStore(root: documents.appendingPathComponent("sessions"))
         capture.onInterruption = { [weak self] in self?.segment = nil }
     }
 
     func load() async {
-        guard !busy else { return }
+        guard !busy, !frozen else { return }
         busy = true
         defer { busy = false }
         capture.stop()
@@ -37,11 +38,11 @@ final class InspectorModel: ObservableObject {
         observations = []
         instruction = nil
         instructionID = nil
-        let store = store, origin = synthetic ? "synthetic" : "device"
+        let store = store, origin = synthetic ? "synthetic" : "device", assignment = assignment
         let device = UIDevice.current.model, os = UIDevice.current.systemVersion
         do {
             let result = try await Task.detached {
-                let session = try store.open(origin: origin, device: device, os: os)
+                let session = try store.openAssigned(id: assignment.id, room: assignment.room_id, model: assignment.model_version, modelIsSynthetic: assignment.model_is_synthetic, origin: origin, device: device, os: os)
                 return (session, try store.observations(session.session_id))
             }.value
             manifest = result.0
@@ -51,7 +52,7 @@ final class InspectorModel: ObservableObject {
 
     private func newSegment() throws {
         guard var session = manifest else { throw CaptureError.invalid("Сессия не открыта") }
-        let id = UUID().uuidString
+        let id = UUID().uuidString.lowercased()
         session.segment_ids.append(id)
         try store.save(session)
         manifest = session
@@ -59,10 +60,11 @@ final class InspectorModel: ObservableObject {
     }
 
     func startCamera() async {
-        guard !busy else { return }
+        guard !busy, !frozen else { return }
         busy = true
         defer { busy = false }
         do {
+            try await InspectorConnection.shared.startCapture()
             try newSegment()
             try await capture.start()
         } catch {
@@ -72,16 +74,17 @@ final class InspectorModel: ObservableObject {
     }
 
     func pause() {
+        persistMeshIfAvailable()
         capture.stop()
         segment = nil
     }
 
     func takeObservation() async {
-        guard !busy else { return }
+        guard !busy, !frozen else { return }
         busy = true
         defer { busy = false }
         do {
-            if synthetic && segment == nil { try newSegment() }
+            if synthetic && segment == nil { try await InspectorConnection.shared.startCapture(); try newSegment() }
             guard let session = manifest, let segment else { throw CaptureError.invalid("Сначала включите камеру") }
             let store = store, instruction = instructionID
             let frame: FrameMetadata
@@ -97,17 +100,39 @@ final class InspectorModel: ObservableObject {
                 }.value
             }
             observations.append(frame)
-            notice = "Наблюдение сохранено на телефоне. Отправка ожидает подключения оркестратора."
+            persistMeshIfAvailable()
+
+            notice = "Наблюдение сохранено на телефоне. Завершите съёмку для отправки."
         } catch { self.error = error.localizedDescription }
     }
 
-    func demoInstruction() {
-        instructionID = "mock-door-01"
-        instruction = "Снимите дверной проём с другого ракурса, сохраняя часть предыдущего вида в кадре."
+    private func persistMeshIfAvailable() {
+        guard !synthetic, let segment, let manifest, capture.supportsMesh else { return }
+        do {
+            let bytes = try capture.meshSnapshot().ply()
+            let folder = store.folder(manifest.session_id).appendingPathComponent("mesh")
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try bytes.write(to: folder.appendingPathComponent(segment + ".ply"), options: .atomic)
+        } catch {
+            try? FileManager.default.removeItem(at: store.folder(manifest.session_id).appendingPathComponent("mesh/" + segment + ".ply"))
+            notice = "Mesh ещё не готов: ZIP Geometry недоступен. Фото можно сохранить."
+        }
     }
-
-    func cannotAccess() {
-        notice = "Демо: ответ «Нет доступа» показан локально. Оркестратору ничего не отправлено."
+    func exportGeometry() async {
+        guard !busy, !frozen, let manifest else { return }
+        busy = true; defer { busy = false }
+        persistMeshIfAvailable()
+        capture.stop(); segment = nil
+        do {
+            let segments = Set(observations.map(\.segment_id))
+            guard segments.count == 1, let meshSegment = segments.first else { throw CaptureError.invalid("Для Geometry ZIP снимите кадры за один запуск камеры, без сбросов ARKit") }
+            let store = store
+            let mesh = try Data(contentsOf: store.folder(manifest.session_id).appendingPathComponent("mesh/" + meshSegment + ".ply"))
+            geometryZIP = try await Task.detached {
+                try GeometryExport.export(sessionID: manifest.session_id, store: store, mesh: mesh, meshSegment: meshSegment)
+            }.value
+            notice = "ZIP готов локально. Он пока не передаётся Inspector."
+        } catch { self.error = error.localizedDescription }
     }
 
     func observationURL(_ frame: FrameMetadata) -> URL {

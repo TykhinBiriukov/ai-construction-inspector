@@ -1,3 +1,5 @@
+> **Update 2026-10-27 — first-case implementation:** the current iPhone/Inspector transport is specified in [the server-owner integration guide](../../docs/inspector-server-integration.md) and [mobile integration status](../../docs/mobile-integration-status.md). Oleg approved Supabase **signed upload plans**, using a separate scoped Inspector device token. The S3 versioning, S3 completion examples and earlier direct Supabase-user proposal below are superseded for this first case. Geometry ZIP is a separate pending API extension; dispatch stays with Inspector. The remainder preserves the broader earlier proposal for reference.
+
 # iPhone → AI Inspector → Geometry Service + BIM / Display API — v0.1, редакция 5, на согласование
 
 Дата: 2026-10-27. **PROPOSED / НЕ СОГЛАСОВАНО МЕЖДУ ВСЕМИ УЧАСТНИКАМИ.** Документ задаёт предлагаемый интерфейс; наличие работающей реализации не подтверждено. Редакция 4 отражает уточнение владельца Inspector: session_id создаёт Inspector; iPhone сохраняет весь набор RGB-D в S3 и возвращает Inspector ссылку после завершения capture; Inspector запускает Geometry Service по этой ссылке. Прямой связи телефона с Geometry Service нет.
@@ -613,6 +615,25 @@ Foreground — условие целевой задержки. При уходе
 Состояние collecting не запрещает отправить полный набор на обработку: проверка пригодности evidence может зависеть от Geometry Service. Если обработка выявила нехватку данных, I завершает результатом needs_more_data и создаёт новую follow-up session для досъёмки. В одной sealed session новая съёмка не открывается.
 
 Квитанция: `{"response_id":"RESPONSE_UUID","status":"accepted"}` — принятие ответа, не достаточность evidence. Семантически устаревшая instruction revision → 409 stale_instruction с текущей инструкцией в details. Изменение display-манифеста само по себе не вызывает этот конфликт. При осознанной новой отправке после конфликта — новый response_id. Точный повтор успешного response_id/body возвращает исходную квитанцию **до** проверки текущей revision; другой body того же ID → 409.
+
+### 5.6.1 Текущий MVP: локальные уведомления без APNs
+
+Согласовано с Олегом: стартовый экран ждёт назначение Inspector, без камеры и автоматически открытой локальной сессии. При получении новой assignment во время работы приложения в foreground клиент сохраняет назначение и создаёт локальное системное уведомление, если пользователь разрешил уведомления. Повторная доставка той же session_id не создаёт повторных уведомлений. Нажатие открывает приложение; доступность/актуальность сессии проверяется через I до перехода к съёмке. Камера включается пользователем. В отсутствии сети/доступа показывается ожидание, а не выдуманное задание.
+
+Этот режим не доставляет новые задания, когда iOS приостановила или закрыла приложение. При возвращении клиент перечитывает capture-assignments. Системное уведомление — дополнительный сигнал; отказ в разрешении не скрывает задание из интерфейса. На стартовом экране нет тестовых кнопок или входа в локальную съёмку; только заглушка ожидания назначения. Сетевой клиент assignment ещё требуется реализовать.
+
+### 5.6.2 Будущее расширение APNs (выключено, не подключено)
+
+Inspector остаётся инициатором: после долговременного создания session + assignment сохраняет исходящую push-операцию. APNs — уведомление о назначении, не источник истины. Polling assignments и replay/snapshot остаются обязательными при открытии приложения. Доставка и показ не гарантируются; отключённые уведомления не блокируют съёмку. Нативный APNs требует Apple Developer Program; текущая Personal Team этой интеграции не обеспечивает. Web Push через отдельное Home Screen веб-приложение — возможная альтернатива, ещё не выбранная и не реализованная.
+
+Предлагаемые API I (сервер пока не реализован):
+
+- PUT /v1/devices/{device_id}/push-registration с API Bearer: `{"schema_version":"0.1","provider":"apns","token":"HEX_DEVICE_TOKEN","environment":"development","topic":"com.aiinspector.capture"}`. 201 при создании, 200/204 при идемпотентной замене текущей регистрации устройства. I сверяет device identity, разрешённые topic/environment; токен не даёт прав на сессии. Один актуальный токен на device/topic/environment, без дублирования подписок. APNs token обновляется при каждом запуске; повтор PUT использует актуальный токен, ошибки доступа требуют обновления авторизации.
+- DELETE того же пути отзывает регистрацию при выходе из аккаунта, 204 идемпотентно. Завершённый logout должен также отвязать регистрацию на сервере; отсутствие сети не даёт основания сообщать об успешном отзыве. Полноценный logout flow в iOS пока отсутствует.
+
+Пример payload: `{"aps":{"alert":{"title":"AI Inspector","body":"Вам назначена новая съёмка"},"sound":"default"},"schema_version":"0.1","type":"capture.assigned","event_id":"11111111-1111-4111-8111-111111111111","session_id":"22222222-2222-4222-8222-222222222222"}`. IDs — UUID; одно исходящее событие сохраняет event_id при повторах. I использует apns-push-type=alert и topic/environment соответствующей регистрации. Доступ к APNs signing key есть только у сервера; ключи, токены и приватные задания не попадают в push/debug-логи. Невалидный/отозванный APNs token деактивируется; временные ошибки повторяются с ограниченным backoff.
+
+При нажатии клиент проверяет доступ и актуальность через I GET session/snapshot, затем открывает назначение; отменённая/закрытая/недоступная сессия не начинает новую съёмку. Существующая несохранённая работа не переключается автоматически. Камера включается пользователем. В foreground допускаются banner и карточка, без смены активной сессии. Сейчас мобильный код только сохраняет проверенный по формату hint; authenticated lookup и навигацию ещё нужно связать с backend. Локальный тест или симуляция не подтверждают доставку I → APNs → iPhone.
 
 ### 5.7 Состояние Inspector и итог
 
