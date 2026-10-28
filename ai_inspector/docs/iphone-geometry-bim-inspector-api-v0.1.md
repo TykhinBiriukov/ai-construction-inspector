@@ -1,8 +1,10 @@
+> **Редакция 6 — 28.10.2026:** в этот общий контракт включён согласованный с Олегом сценарий отдельного Localization Service: Inspector назначает задание → Localization напрямую руководит начальной привязкой через приложение → Inspector продолжает инспекцию, Localization параллельно отслеживает положение и покрытие. При потере привязки задание Inspector приостанавливается до восстановления. Без BIM локализация пропускается. API расширения в §13 — предложение для согласования владельцами, не реализованные endpoints. Финальный Inspector ZIP и существующий интерфейс Geometry не меняются. Ранние наблюдения передаются дополнительно через существующие signed upload plans. Старые S3/PNG-примеры ниже сохраняют исторический контекст; текущий транспорт описан в связанных руководствах, а онлайн-локализация — в §13.
+
 > **Update 2026-10-27 — first-case implementation:** the current iPhone/Inspector transport is specified in [the server-owner integration guide](../../docs/inspector-server-integration.md) and [mobile integration status](../../docs/mobile-integration-status.md). Oleg approved Supabase **signed upload plans**, using a separate scoped Inspector device token. The S3 versioning, S3 completion examples and earlier direct Supabase-user proposal below are superseded for this first case. Geometry ZIP is a separate pending API extension; dispatch stays with Inspector. The remainder preserves the broader earlier proposal for reference.
 
-# iPhone → AI Inspector → Geometry Service + BIM / Display API — v0.1, редакция 5, на согласование
+# iPhone → AI Inspector → Geometry Service + BIM / Display API — v0.1, редакция 6, на согласование
 
-Дата: 2026-10-27. **PROPOSED / НЕ СОГЛАСОВАНО МЕЖДУ ВСЕМИ УЧАСТНИКАМИ.** Документ задаёт предлагаемый интерфейс; наличие работающей реализации не подтверждено. Редакция 4 отражает уточнение владельца Inspector: session_id создаёт Inspector; iPhone сохраняет весь набор RGB-D в S3 и возвращает Inspector ссылку после завершения capture; Inspector запускает Geometry Service по этой ссылке. Прямой связи телефона с Geometry Service нет.
+Дата: 2026-10-28. **PROPOSED / НЕ СОГЛАСОВАНО МЕЖДУ ВСЕМИ УЧАСТНИКАМИ.** Документ задаёт предлагаемый интерфейс; наличие работающей реализации не подтверждено. Редакция 4 отражает уточнение владельца Inspector: session_id создаёт Inspector; iPhone сохраняет весь набор RGB-D в S3 и возвращает Inspector ссылку после завершения capture; Inspector запускает Geometry Service по этой ссылке. Прямой связи телефона с Geometry Service нет.
 
 Архитектурный контекст runtime взят из обсуждений «Design agent orchestrator» и «Open design orchestrator chat»; актуальный транспорт capture уточнён владельцем Inspector в этом чате. Детали Geometry Builder, iOS и BIM-провайдера согласуются с их владельцами.
 
@@ -12,27 +14,30 @@
 
 ```mermaid
 flowchart LR
-    I[AI Inspector I] -->|Session ID, tasks, display events| P[iPhone app]
-    P -->|Capture finished and manifest reference| I
-    P -->|RGB-D files and final manifest| S[S3 capture storage]
-    I -->|Validate exact object versions| S
-    I -->|Geometry job and source link| G[Geometry Service G]
-    G -->|Read assigned source objects| S
-    G -->|Job status and geometry result| I
-    I <-->|Alignment, coverage, comparison| T[Replaceable tools]
-    I -->|Versioned render commands| B[BIM / Display Service B]
-    B -->|Render completion webhook| I
-    B -->|HTTPS PNG image| P
+    I[Inspector: assignment and inspection] -->|Tasks and control handoff| A[Device API: transport, no LLM per frame]
+    A <-->|Instructions, early observations, camera pose| P[iPhone app]
+    A <-->|Localization guidance and spatial state| L[Localization Service]
+    L -->|Ready, lost, recovery complete| I
+    L -->|Position and coverage| V[Phone and Inspector viewers]
+    B[BIM model] --> L
+    P -->|Early files and unchanged final ZIP| S[Supabase signed uploads]
+    A -->|Verify and pin early evidence| S
+    L -->|Read verified early evidence| S
+    P -->|Final completion| I
+    I -->|Existing reconstruction job| G[Geometry Service]
+    G -->|Read final verified source| S
+    G -->|Geometry result| I
 ```
 
-- **Inspector I** создаёт capture session, назначает её разрешённому телефону, закрепляет project/room/model/policy и управляет состоянием. Принимает от телефона capture completion и ссылку на manifest, проверяет полный набор, фиксирует его неизменяемую версию и запускает G. Принимает результаты G, вызывает alignment/coverage/Compare tools, сохраняет выводы и управляет отображением B.
+- **Inspector I** создаёт capture session, назначает её разрешённому телефону, закрепляет project/room/model/policy и управляет состоянием. Принимает от телефона capture completion и ссылку на manifest, проверяет полный набор, фиксирует его неизменяемую версию и запускает G. Принимает результаты G, использует результаты L и вызывает Compare, сохраняет выводы и управляет отображением B. Во время начальной привязки агент ждёт: инструкции пользователю формирует L, API передаёт их без переписывания LLM.
 - **iPhone** получает session_id от I, сохраняет все captures под ним, загружает файлы в S3 и сообщает I о завершении после загрузки финального manifest. Не создаёт capture session_id и не вызывает G. Создаёт локальные UUID segment/observation/response/completion. Поддерживает локальное сохранение/повторы, текстовые задания и скачивание готовых BIM-картинок.
 - **S3** хранит исходные файлы и manifest в выделенном session prefix. Это файловое хранилище; оно не выполняет геометрическую обработку и не принимает решений об инспекции. Inspector управляет выдачей доступа; телефон не получает AWS secret keys или service credentials.
 - **Geometry Service G** принимает задания только от Inspector, читает разрешённый зафиксированный набор в S3 и возвращает фактическую геометрию с версиями и evidence refs. Не принимает uploads, session registration или команды от iPhone; не отправляет телефону события.
 - **BIM / Display Service B** входит в систему Inspector и предоставляет отдельный API. Хранит эталонный BIM и готовит PNG по команде I: выбранная комната, виртуальный ракурс, цель и проверенные результаты. Телефон имеет доступ на чтение. Подсветка/ракурс не меняют исходную BIM-геометрию.
-- **Агент Inspector** выбирает полезную цель и объясняет результат. Runtime проверяет предложения и версии, сохраняет состояние и вызывает tools. Pipeline принадлежит I; алгоритмы alignment/coverage могут быть заменяемыми модулями, workers или сервисами. Вызов LLM для каждого файла/кадра/render не требуется.
+- **Localization Service L** — отдельный сервис. При наличии пригодной BIM-модели ведёт пользователя через приложение (дверь, пол, угол), вычисляет и проверяет привязку. После успеха возвращает управление заданиями I, продолжая отслеживание камеры и покрытия для обоих интерфейсов. При потере привязки временно забирает управление для восстановления. Инструкции L не требуют вызова LLM Inspector; транспорт через API I не меняет авторство. Подробный контракт и состояние управления — §13.
+- **Агент Inspector** выбирает полезную цель и объясняет результат. Runtime проверяет предложения и версии, сохраняет состояние и вызывает tools. Инспекционный pipeline принадлежит I; онлайн-привязка и покрытие принадлежат отдельному L, который автономно ведёт свой этап. Вызов LLM для каждого файла/кадра/render не требуется.
 
-Во время съёмки отображается **цель задания**. Измеренное покрытие появляется **после обработки набора**. Inspector управляет ракурсом отдельной серверной BIM-картинки; пользователь может масштабировать её локально. Для хакатона — один проект и телефон. Эти решения подтверждены владельцем Inspector; конкретные service payloads остаются предложением команде.
+Во время съёмки отображается инструкция текущего владельца управления: L при привязке/восстановлении, I при инспекции. Онлайн-положение и предварительное покрытие поступают от L; подтверждённое покрытие требует обработки evidence и проверки качества (§13). Inspector управляет ракурсом отдельной серверной BIM-картинки; пользователь может масштабировать её локально. Для хакатона — один проект и телефон. Эти решения подтверждены владельцем Inspector; конкретные service payloads остаются предложением команде.
 
 ## 2. Реализованное и предлагаемое
 
@@ -54,19 +59,21 @@ flowchart LR
 
 ## 4. Жизненный цикл
 
-1. В рамках выбранной пользователем инспекции/комнаты AI Inspector инициирует съёмку. I создаёт session_id, закрепляет конфигурацию и назначает session телефону. Сессия хранится на I даже при отключённом телефоне.
-2. Телефон получает assignment, сохраняет session_id и подтверждает начало. Каждый запуск/сброс ARKit создаёт новый segment_id внутри той же открытой capture session.
-3. Телефон сохраняет кадры локально и загружает их в выделенный S3 prefix. Во время съёмки I/B могут обновлять цель, но измеренное покрытие ещё не показывается.
-4. Пользователь заканчивает capture. Телефон фиксирует непустой inventory, дожидается загрузки файлов и последним загружает manifest. Затем отправляет I completion_id и ссылку на точную версию manifest. При отключении сети это сообщение остаётся в локальной очереди.
-5. I долговременно принимает completion, проверяет S3/manifest/файлы. При ошибках отклоняет операцию с деталями и позволяет закончить загрузку. При успехе атомарно фиксирует источник и закрывает capture для новых входов.
-6. I создаёт устойчивое geometry job и передаёт G ссылку на зафиксированный источник. G читает S3; телефон в обмене I ↔ G не участвует.
-7. Готовый результат G проходит проверку связи с session/manifest/job. I вызывает alignment/coverage/Compare tools и сохраняет версии результатов. Непригодная привязка сохраняет unknown/inconclusive.
-8. I обновляет B, B рендерит PNG и уведомляет I. I публикует display.updated в replayable WebSocket; телефон скачивает готовую картинку по HTTPS.
-9. При необходимости досъёмки I создаёт follow-up session с новым session_id. Уже зафиксированный S3 набор и старый geometry job не изменяются.
+1. Inspector создаёт и назначает session_id с закреплёнными project/room/model. Телефон получает задание и уведомляет пользователя доступным способом; это не обещание системного APNs в текущей сборке.
+2. Пользователь открывает камеру; телефон подтверждает получение и capture-start. Новый запуск/сброс ARKit создаёт отдельный segment_id.
+3. Если BIM доступна и пригодна, управление инструкциями получает L. Он напрямую через приложение просит показать известную дверь, пол, стену/угол. I ждёт результата. Без BIM начинается обычная съёмка под управлением I; непригодная переданная BIM — явная ошибка/blocked, а не скрытый пропуск.
+4. Телефон сохраняет наблюдения и отправляет необходимые исходные файлы раньше финала через signed upload plans. API проверяет/фиксирует bytes и направляет evidence в L без вызова агента. L запрашивает дополнительные ракурсы до пригодной привязки.
+5. L сообщает успех приложению и I. Инструкции снова задаёт I, L параллельно обновляет положение камеры и покрытие в обоих интерфейсах. При потере привязки инструкция I приостанавливается; L ведёт восстановление, затем возобновляется актуальная инструкция I. Одновременно активен один источник инструкций (§13).
+6. Пользователь заканчивает съёмку. Телефон фиксирует inventory и загружает прежний финальный Inspector ZIP через signed upload plan Supabase, затем отправляет прежний completion. Ранние наблюдения входят с теми же ID/байтами; потеря сети допускает устойчивый повтор.
+7. I проверяет и фиксирует окончательный источник, закрывает набор и запускает существующий G job. Geometry читает финальный источник и строит модель; его контракт не меняется, раннюю локализацию он не выполняет.
+8. I проверяет результат G, результаты L и необходимые сравнения, сохраняет выводы и обновляет отображение. Онлайн-покрытие не означает соответствия стройки проекту.
+9. Досъёмка после sealed получает новую связанную session; поздние результаты и callbacks не открывают старую. Без успешной локализации исходную съёмку можно сохранить, но нельзя объявить BIM-покрытие/инспекцию выполненной.
 
 ## 5. Внешние и межсервисные API
 
 ### Маршруты приложения
+
+Исторические маршруты ниже читать вместе с актуальным транспортным руководством. Новые предлагаемые маршруты ранних наблюдений и spatial-state, а также camera.pose и spatial.updated определены в §13; до capability negotiation они не вызываются.
 
 | Сервис | Метод и путь | Назначение | Успех |
 |---|---|---|---|
@@ -756,7 +763,7 @@ I не применяет старые/чужие job results к текущей 
 
 **Решение владельца Inspector:** pipeline находится в I, вычисления выполняют заменяемые детерминированные инструменты. Выделять отдельную LLM или отдельный HTTP-сервис для каждого этапа необязательно. I предоставляет зафиксированные исходные данные S3, G — реконструкцию; B — эталонную геометрию. Реализация конкретного алгоритма и поддерживаемые проверки требуют отдельного согласования и не объявляются готовыми этим документом.
 
-Последовательность I после capture completion: проверить и зафиксировать S3 manifest → GeometryPort.startBuild по ссылке на источник → принять и проверить geometry.ready → получить/проверить alignment → вычислить coverage → выполнить необходимые сравнения → сохранить результаты и обновить BIM render. Во время съёмки B показывает только цель; измеренное покрытие появляется после обработки полного набора. I сохраняет измерения и применяет policy, затем агент объясняет сохранённый итог. Gate перед запуском G проверяет доступность и целостность входа; он не требует результата coverage, для которого ещё нужна реконструкция G.
+Последовательность I после capture completion: проверить и зафиксировать S3 manifest → GeometryPort.startBuild по ссылке на источник → принять и проверить geometry.ready → получить/проверить alignment → вычислить coverage → выполнить необходимые сравнения → сохранить результаты и обновить BIM render. Это финальный путь обработки; дополнительно во время съёмки отдельный L выполняет привязку и оценку покрытия по ранним наблюдениям (§13). I сохраняет измерения и применяет policy, затем агент объясняет сохранённый итог. Gate перед запуском G проверяет доступность и целостность входа; он не требует результата coverage, для которого ещё нужна реконструкция G.
 
 Для запуска инструмента I сохраняет operation_key из inspection/session, типа операции и неизменяемых версий входов, включая manifest_sha256. Запись создаётся до внешнего вызова. Инструмент поддерживает этот ключ либо поиск задания по нему. Завершение сопоставляется с job_id/operation_key и версиями, старый результат сохраняется для истории, но не меняет текущий контекст. LLM не получает произвольную запись в state/БД и не ослабляет закреплённую политику.
 
@@ -841,13 +848,13 @@ I хранит принятые completion/job/tool/display операции и 
 
 ## 9. Подтверждённые решения и открытые зависимости
 
-Подтверждено владельцем Inspector:
+Ранее подтверждённые решения владельца Inspector и продуктовые уточнения Олега редакции 6 (новые API L требуют согласования владельцами):
 
 - Session ID создаёт Inspector и передаёт iPhone.
 - Телефон сохраняет весь RGB-D набор под этим ID в S3, после завершения возвращает Inspector ссылку на набор.
 - Inspector запускает Geometry Service по ссылке; iPhone и G напрямую не связаны.
-- Во время съёмки показывается цель; измеренное покрытие — после обработки набора.
-- Inspector владеет pipeline и вызывает заменяемые alignment/coverage tools.
+- Редакция 6 расширяет прежний сценарий: во время съёмки L показывает положение и предварительное/подтверждённое покрытие по обработанным ранним наблюдениям; финальная реконструкция G остаётся отдельным этапом.
+- Inspector координирует инспекцию; отдельный L управляет привязкой и восстановлением, затем продолжает мониторинг. API I может служить транспортом без LLM на каждом сообщении.
 - B выдаёт готовую серверную BIM-картинку; ракурс задаёт I, телефон масштабирует локально. Обновление картинки ориентировано на 2–5 секунд; загрузка набора и реконструкция имеют отдельные длительности.
 - Для хакатона — один проект и один телефон; интерфейсы сохраняют scopes/версии для роста.
 
@@ -869,7 +876,7 @@ I хранит принятые completion/job/tool/display операции и 
 5. Completion с недостающими/подменёнными файлами отклоняется без запуска G. Принятая точная версия manifest и файлов фиксируется I; поздняя новая версия S3 не меняет вход job.
 6. После restart/timeout I отправляет G тот же job_id/operation_key/source. G обновляет истёкший доступ через I, читает S3 и не обращается к телефону.
 7. Геометрический результат проверен на реальном RGB-D: оси, intrinsics, depth и измеренная ошибка; исключённые кадры перечислены явно. Mock/synthetic/recorded различаются.
-8. При съёмке показывается только цель. Измеренная coverage появляется после полного набора и пригодной alignment/tool schema; unknown не отображается как проверенное покрытие.
+8. Во время localizing/relocalizing отображаются только инструкции L, во время inspecting — I. После handoff оба интерфейса получают положение/покрытие; unknown и preliminary не отображаются как verified_capture. Проверяются потеря привязки, восстановление, отсутствие BIM и устаревшие callbacks (§13).
 9. Render/progress не меняет semantic task revision. Captured acknowledgement не закрывает task без фактической проверки; collecting не блокирует запуск полного набора.
 10. WSS replay/snapshot, повторные callbacks и старые geometry/render revisions не теряют события и не заменяют актуальный контекст. Истёкший PNG URL обновляется для того же artifact/hash.
 11. После sealed новый capture получает ID от I с parent_session_id. Сбой G/B и поздние события не открывают старую съёмку и не запускают дубли операций.
@@ -877,6 +884,8 @@ I хранит принятые completion/job/tool/display операции и 
 13. Доступ другого device/project к assignment, manifest, S3 URLs, job и PNG отклоняется. Данные не становятся публичными по знанию UUID или object prefix.
 
 ## 11. История редакций и миграция
+
+**Редакция 6:** отдельный Localization Service, самостоятельное руководство пользователем при привязке, передача управления обратно Inspector, параллельная телеметрия/покрытие и временный возврат при потере привязки. Добавлен §13 с предлагаемым API. Прежние ограничения «только после полного набора» заменены этой логикой. Существующий Geometry и финальный ZIP не меняются. Эта редакция обновляет тот же общий файл; отдельный документ локализации удалён.
 
 Редакция 1 предлагала прямые API iPhone к G/I и G → I notifications. Редакция 2 выделила B с локальной сценой; редакция 3 уточнила серверный PNG, WebSocket и Inspector-owned tools.
 
@@ -888,7 +897,7 @@ I хранит принятые completion/job/tool/display операции и 
 
 ## 12. Исполнение Inspector и дальнейший рост
 
-Для хакатона допустим один backend I с модулем coverage, отдельным адаптером B и сохраняемой очередью workers. Логические порты не требуют немедленного развёртывания каждого модуля как микросервиса. Дальнейшее выделение tools/renderer в процессы не меняет идентификаторы, версии и публичные события.
+Для нового сценария L выделяется как отдельный сервис локализации/покрытия; backend I сохраняет координацию, транспортный API, адаптер B и устойчивые очереди. Логические порты не требуют немедленного развёртывания каждого модуля как микросервиса. Дальнейшее выделение tools/renderer в процессы не меняет идентификаторы, версии и публичные события.
 
 - **Состояние:** одна authoritative запись inspection/session и проверка expected state version при применении proposal/result. I атомарно фиксирует предметные изменения и outbox; принимающие сервисы используют durable inbox и дедупликацию. Checkpointer оркестратора не заменяет предметное хранилище и ключи внешних операций.
 - **Планирование:** capture registration/source verification, tools и render имеют отдельные ограниченные очереди. Быстрый транспорт повторяет сообщения; runtime решает, какой актуальный контекст применять. Очереди могут разделяться по project/session, с лимитами конкурентности и справедливостью между проектами. Брокер для хакатона не обязателен; долговременная доставка обязательна.
@@ -899,3 +908,341 @@ I хранит принятые completion/job/tool/display операции и 
 - **Развитие:** несколько независимых capture sessions/проектов используют те же scopes и протокол. Совместная запись нескольких телефонов в одну сессию, AR-наложение, свободная интерактивная 3D-навигация и видеострим являются отдельными расширениями с явным согласованием capabilities/schema.
 
 Транспортные опоры: [WebSocket, RFC 6455](https://www.rfc-editor.org/rfc/rfc6455) для соединения и Ping/Pong; [HTTP Caching, RFC 9111](https://www.rfc-editor.org/rfc/rfc9111) для Cache-Control. Replay, snapshots, идемпотентность и версии — правила приложения Inspector поверх транспорта.
+
+
+## 13. Localization Service: управление, ранние наблюдения и онлайн-покрытие
+
+Продуктовый сценарий подтверждён Олегом; следующие wire-схемы предлагаются владельцам реализаций. Это часть настоящего общего контракта, не отдельный источник истины. Термины и примеры API сохранены на английском.
+
+### 13.1. Scope and responsibilities
+
+- iPhone collects RGB, optional LiDAR depth/confidence, camera calibration and pose;
+  displays instructions and localization status. It does not align to BIM.
+- Inspector owns assignment, authorization, early evidence validation/storage,
+  Localization Service dispatch, durable state and operator/device delivery.
+- Localization Service (proposed separate microservice) owns geometric localization,
+  ambiguity checks, camera-to-BIM transformation and coverage calculation.
+- Existing Geometry Service retains post-capture reconstruction and its current
+  input contract. This proposal does not change its ZIP format or require it to
+  process early observations. The current final Inspector ZIP flow also stays intact.
+- Inspector is the LLM coordinator. Its API layer may authenticate and relay data,
+  but pose updates and geometry calculations never require an LLM call.
+  Localization Service authors and controls its own user-facing localization
+  instructions. The API relays these unchanged; the Inspector LLM waits for
+  localization completion and does not rewrite or approve each instruction.
+- Viewer displays camera/frustum and coverage; inspection compliance is separate.
+- First acceptance target: one real room, known door, LiDAR phone, real BIM geometry.
+  RGB-only capture stays supported; RGB-only localization is not promised by this MVP.
+- A stored BIM upload is insufficient: Localization Service needs parsed geometry, stable element
+  IDs, units and a pinned model revision. Capture-only/unbound sessions cannot localize.
+
+### 13.2. User flow
+
+1. Inspector assigns an inspection task. Phone receives the assignment through the
+   existing device channel and displays it; the user opens the camera. Notification
+   delivery does not imply APNs support in the current Personal Team build.
+2. After acknowledgement/capture-start, if the task has a usable pinned BIM model,
+   control passes to Localization Service. It tells the user directly through the
+   app: face the known door, show the floor, show the adjacent corner. Inspector
+   waits; it does not generate intermediate localization instructions.
+3. Phone uploads requested observations early through existing observation_files
+   signed upload plans and declares evidence batches ready. The API validates/pins
+   bytes and relays them without an LLM call. One observation is one photo/metadata.
+4. Localization Service requests additional views until the alignment is validated.
+   Ambiguous openings do not produce an arbitrarily chosen pose. It reports
+   completion to both the app and Inspector, which resumes inspection guidance.
+5. During inspection, Localization Service keeps processing camera telemetry and
+   coverage in parallel. The same spatial state is available to the phone and
+   Inspector UI; the LLM receives meaningful changes, not every camera pose.
+6. If alignment is lost, pause the current Inspector instruction and let Localization
+   Service guide recovery. Resume that instruction after validated recovery.
+7. Without BIM, skip localization and continue ordinary Inspector-guided capture.
+   A supplied but unprocessable BIM is an explicit blocked/unsupported state, not
+   a silent no-BIM success. Final ZIP/completion remains unchanged.
+
+#### Instruction ownership and handoff (normative product flow)
+
+The durable spatial snapshot contains `guidance`:
+
+```json
+{
+  "phase":"localizing",
+  "owner":"localization",
+  "control_revision":3,
+  "active_instruction_id":"55555555-5555-4555-8555-555555555555",
+  "paused_inspector_instruction_id":null,
+  "reason":"initial_alignment"
+}
+```
+
+| Phase | Instruction owner | Transition |
+|---|---|---|
+| awaiting_camera | inspector | Camera starts: localizing with BIM, inspecting without BIM |
+| localizing | localization | Validated alignment: inspecting; failure: blocked |
+| inspecting | inspector | Lost alignment/reset with BIM: relocalizing |
+| relocalizing | localization | Validated recovery: inspecting, resume paused task |
+| blocked | localization | Explicit retry: localizing/relocalizing; cancellation: finished |
+| finished | none | No further guidance; final capture lifecycle is authoritative |
+
+Only one active instruction is shown. The API durably commits ownership changes
+using expected `control_revision`; authenticated service callbacks include stable
+operation ID, session/segment/model identity and alignment revision. Identical
+replays are idempotent; stale/conflicting updates return 409. Only validated
+Localization results can release the localization gate. Inspector cannot bypass it
+by emitting another inspection instruction. Session cancellation takes precedence.
+
+Instructions carry `source=localization|inspector`, `control_revision`, session and
+segment scope, ID, text and status (active/paused/satisfied/cancelled). New Inspector
+instructions cannot displace localization guidance; a paused instruction is restored
+only if still applicable and not cancelled. The phone routes responses by source/ID;
+transport through the shared API does not make the LLM the instruction author.
+
+A `spatial.updated` event announces the committed snapshot revision to both consumers.
+On reconnect, fetch authoritative state before showing instructions; do not replay
+obsolete prompts. Background monitoring here means parallel work while the camera
+and app are active, not guaranteed suspended-iOS execution. Failure keeps the gate
+blocked with an explicit retry/cancel choice; raw capture may still be preserved
+without claiming localization or completed BIM inspection.
+
+### 13.3. Negotiation and pinned localization context
+
+Proposed capability under GET /v1/capabilities:
+
+```json
+{"live_localization":{"protocol":"live_bim_v1","enabled":true,"pose_hz":5,"stale_after_ms":2000,"max_batch_observations":10,"rgb_only_localization":false}}
+```
+
+Missing/disabled capability means existing ZIP-only operation. Current device WSS
+accepts only ping/pong; **do not send pose messages to the existing implementation**.
+Server and client must both support the extension before enabling it.
+
+Proposed new GET `/v1/sessions/{session_id}/spatial-state` returns a durable snapshot:
+`protocol`, `session_id`, increasing `revision`, `context`, `alignments`,
+`instructions`, `guidance`, `coverage_ref`. It is separate from the existing strict Session model.
+Context (operator-created, pinned before capture):
+
+```json
+{
+  "model_version":"bim-revision-7",
+  "model_sha256":"MODEL_BYTES_SHA256",
+  "room_id":"room-204",
+  "entry_element_id":"BIM_DOOR_ID",
+  "starting_side":"inside_room",
+  "bim_frame_id":"bim-revision-7-local-meters",
+  "units":"m",
+  "coordinate_convention":"right_handed_y_up",
+  "model_to_bim_transform_ref":"SERVER_OWNED_TRANSFORM_REF",
+  "initial_instruction":"Stand inside the room facing the entry door. Capture the opening, floor and adjacent corner."
+}
+```
+
+Strings in uppercase are placeholders, not valid production IDs/hashes. The server
+must validate the door belongs to the selected room/revision. Normalize original
+BIM axes, units and large survey offsets once on the backend; retain the reversible
+source-to-working-frame transform. Viewer geometry uses this same working frame.
+A revision/context change requires a new session, not silent rebinding.
+
+### 13.4. Early evidence (new endpoint; existing upload plans)
+
+Upload originals as described in the current iOS guide. Preserve frame schema 0.2,
+original unrotated RGB, its calibration, optional depth/confidence, exact bytes and
+hashes. No preview resizing in this first increment. Uploads use returned signed
+URLs only; device auth is sent to Inspector, never forwarded to storage.
+
+POST `/v1/sessions/{session_id}/evidence-batches`:
+
+```json
+{
+  "protocol":"live_bim_v1",
+  "batch_id":"11111111-1111-4111-8111-111111111111",
+  "purpose":"localization",
+  "instruction_id":null,
+  "segment_id":"22222222-2222-4222-8222-222222222222",
+  "observations":[{
+    "observation_id":"33333333-3333-4333-8333-333333333333",
+    "files":[
+      {"name":"frame.json","object_key":"RETURNED_FRAME_KEY","byte_length":2048,"sha256":"ACTUAL_FRAME_SHA256"},
+      {"name":"rgb.jpg","object_key":"RETURNED_RGB_KEY","byte_length":123456,"sha256":"ACTUAL_RGB_SHA256"}
+    ]
+  }]
+}
+```
+
+Example inventory is abbreviated RGB-only. LiDAR observations must include their
+actual depth/confidence file refs. `purpose`: localization or coverage. Each batch
+has one segment; all IDs and context must agree with frame metadata. `instruction_id`
+references a spatial instruction or null; do not rewrite immutable frame.json to
+attach a later instruction. Files must belong to this session's upload plans/prefix.
+
+202 response: `protocol`, `session_id`, `batch_id`, `status=validating`.
+GET `/v1/sessions/{session_id}/evidence-batches/{batch_id}` returns the same identity,
+status (`validating|queued|processing|completed|rejected|failed`), nullable `error`
+and nullable `alignment_id`. 200 on identical POST replay; 409 on changed body with
+the same ID. Failed transient processing retries the same batch, not new evidence.
+File validation failure requires correction under new observation/batch IDs.
+
+Inspector verifies byte counts/hashes, metadata and context, then pins immutable
+copies before dispatch. Localization Service reads these verified sources through a service
+adapter; the phone never calls Localization Service. Internal Localization Service route names remain its
+owner's choice. Device telemetry is relayed by the Inspector API layer directly
+to this service; only meaningful state changes reach the LLM coordinator. Job input includes batch/context/segment IDs, source refs, purpose,
+prior alignment if any; job output follows sections 13.5 and 13.7.
+
+Early accepted observations remain in the final ZIP with the **same IDs and bytes**.
+Final validation must reject cross-transport hash conflicts and omitted accepted
+evidence for this MVP. Hash-identical duplicates are one observation, not double
+coverage. The server must enforce this explicitly; current mixing support alone
+is not proof of this new rule. Final ZIP is still required and remains self-contained.
+After submitted/sealed/cancelled, reject new evidence; delayed job results cannot
+reopen the session or replace final results. Early processing is provisional.
+
+### 13.5. Alignment result and coordinate contract
+
+One independent alignment per `segment_id`. ARKit reset/restart never inherits the
+previous segment transform automatically. All transforms use metres, 4x4 matrices
+serialized as rows and column-vector multiplication:
+
+```text
+p_bim = T_bim_arkit * p_arkit
+T_bim_camera = T_bim_arkit * T_arkit_camera
+```
+
+`T_arkit_camera` is the existing frame `T_world_camera`, not its inverse. ARKit
+camera forward is local -Z. Derive the frustum from original image size/intrinsics;
+handle camera-vs-image axes explicitly. Portrait UI rotation is not a change to
+stored camera calibration. Rigid transforms only after BIM unit normalization:
+finite values, last row [0,0,0,1], orthonormal rotation with determinant +1.
+
+Each spatial snapshot alignment contains:
+
+| Field | Meaning |
+|---|---|
+| alignment_id, revision | Stable ID and monotonically increasing revision |
+| segment_id, bim_frame_id, model_version | Exact coordinate/model scope |
+| status | pending, needs_more_evidence, localized, lost, failed, unsupported |
+| T_bim_arkit | 4x4 or null; only localized authorizes live rendering |
+| evidence_observation_ids | Observations used, not guessed IDs |
+| quality | overlap_fraction, residual_rmse_m, ambiguity_margin (nullable), policy_version |
+| valid_from_sequence | First telemetry sequence covered by this revision |
+| analysis_origin | live, recorded, synthetic; independent of capture_origin |
+| error | null or code/message/retryable/details |
+
+Quality thresholds and ambiguity metric are owned/versioned by Localization Service and must
+be measured on fixtures and a real room. No universal invented “95% confidence”.
+Do not force structural deviations to match BIM through nonrigid fitting.
+When an alignment is refined, recompute dependent provisional coverage; preserve
+provenance. Older results cannot overwrite newer revisions.
+
+Localization Service creates and delivers needs_more_evidence instructions directly
+through the API, without Inspector LLM mediation. Persist a spatial instruction with
+`source=localization`, `control_revision`, `instruction_id`,
+`segment_id`, `text`, nullable `target_element_id`, `status` (active/satisfied/cancelled).
+Batch submission links the response. Voice can later render the same text; no audio
+transport is required now. This supplements the current first-case null instruction.
+
+### 13.6. Camera telemetry
+
+Proposed phone-to-Inspector message on the existing authenticated device WSS:
+
+```json
+{
+  "type":"camera.pose",
+  "protocol":"live_bim_v1",
+  "session_id":"44444444-4444-4444-8444-444444444444",
+  "segment_id":"22222222-2222-4222-8222-222222222222",
+  "sequence":42,
+  "frame_timestamp_s":123.45,
+  "tracking_state":"normal",
+  "tracking_reason":null,
+  "T_arkit_camera":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],
+  "intrinsics":[[1000,0,960],[0,1000,720],[0,0,1]],
+  "image_size":[1920,1440]
+}
+```
+
+Illustrative calibration, not device defaults. Timestamp is ARFrame monotonic
+seconds, not UTC; sequence increases across reconnects within a segment. Persist
+its counter or create a new segment if continuity is lost. Tracking enum:
+normal/limited/not_available; matrix may be null when unavailable. Report degradation
+immediately. Keep existing ping/pong heartbeat separately.
+
+Start at negotiated 5 Hz; bounded latest-value queue, no backlog replay. Server
+checks assigned device/session, capturing state, increasing sequence, finite matrices
+and known segment. Phone may send pose before localization; viewer must not place
+it into BIM until localized. Never interpret telemetry as a saved photograph.
+
+Server records receipt time. Viewer marks camera stale after negotiated silence,
+on disconnect or non-normal tracking. Do not compare phone monotonic time with
+server UTC. Recovery after lost tracking requires validated alignment/relocalization;
+no green “live” icon based only on reconnect.
+
+GET spatial-state includes `latest_pose` with server receipt time and sequence;
+latest_pose does not advance durable spatial revision. Initial operator UI can poll
+this endpoint at 5 Hz while visible (project-scoped operator auth); this avoids
+inventing an unimplemented browser WSS endpoint. Device gets its own scoped access.
+Durable alignment/instruction/coverage changes emit `spatial.updated` through the
+existing event envelope/cursor; event contains session_id and spatial_revision,
+then clients fetch snapshot. Telemetry does not consume durable replay cursors.
+
+### 13.7. Coverage semantics
+
+Track surface patches, not whole-wall green flags. Proposed `coverage_ref` points
+to a project-authorized artifact endpoint with artifact ID, SHA256 and revision.
+Artifact has model_version, bim_frame_id, partition_revision and patches:
+`patch_id`, `element_id`, BIM-space polygon/triangles, state, observation_ids,
+alignment_id/revision, method, quality_policy_version, analysis_origin.
+States: unseen, preliminary, verified_capture. Current camera frustum is a separate
+transient overlay, never accumulated as capture coverage.
+
+Preliminary means an uploaded saved observation projects onto the patch according
+to BIM; actual occluders may be unknown. Verified_capture requires processed evidence,
+visibility/occlusion checks, acceptable distance/angle/image quality and a validated
+alignment. Depth agreement may help but missing/invalid depth is not confirmation.
+For first LiDAR implementation, depth-unsupported patches stay preliminary.
+“Verified” means capture coverage, never construction compliance.
+
+No arbitrary coverage percentage without a defined observable surface denominator.
+Store evidence links and allow coverage downgrades on alignment revision, conflicts
+or invalid evidence. Partial occlusion must leave the hidden patch unverified.
+
+### 13.8. Authorization, retry and lifecycle
+
+All new HTTP routes use existing scoped device/operator authorization. Service
+results require service auth; device cannot submit its own accepted alignment.
+No arbitrary storage URLs from clients. Reuse existing limits and signed-upload
+renewal; negotiate early batch/telemetry limits before enabling. Standard API errors
+retain code/message/retryable/details. Persist batches and original bytes locally.
+Offline: keep capturing, show spatial feedback unavailable, upload/reconcile later.
+On background: stop live indication; no APNs/background-execution promise.
+Final completion is independent of successful localization: capture can be preserved
+as unlocalized. UI must not claim BIM coverage or compliance in that case.
+
+### 13.9. Implementation sequence and acceptance
+
+1. Owners agree this extension, door/model identity, quality policy and Localization Service job
+   adapter. Backend advertises capability only after routes/handlers exist.
+2. Backend early verification/pinning and spatial snapshot; iOS durable early uploads
+   and localization status. Fixture job explicitly labelled synthetic.
+3. Real known-door localization on LiDAR; targeted extra-evidence loop.
+4. Telemetry + web camera/frustum; then preliminary and evidence-verified coverage.
+5. Phone BIM viewer and RGB-only localization are later independent increments.
+
+Acceptance checks before calling this live:
+- Handoff: Inspector assignment -> Localization guidance -> Inspector inspection;
+  loss pauses/resumes the same task. Duplicate/out-of-order callbacks and reconnect
+  never display two owners or revive cancelled instructions. No BIM skips the gate;
+  invalid supplied BIM blocks it explicitly.
+- Known rigid transform fixture proves translation/rotation/direction and intrinsics;
+  real doorway test checks projected geometry against visible landmarks.
+- Symmetric door, wrong room, incomplete floor/wall evidence -> no false localization.
+- ARKit reset, tracking loss, offline return, delayed/out-of-order results -> no stale
+  transform applied to a new segment; stale camera is visibly marked.
+- Repeat early upload/batch after timeout -> same source/job, no duplicates; unauthorized
+  device, changed hashes, wrong prefix, sealed session -> explicit rejection.
+- Early + final ZIP has identical IDs/hashes; no lost files or duplicate coverage.
+- Occluded wall stays unverified; merely aiming without saving produces no coverage.
+- RGB-only phone can finish existing ZIP flow without fabricated depth/localization.
+- Old server/no capability continues existing workflow; live extension stays disabled.
+
+This document does not implement or validate these features. Localization Service algorithm,
+thresholds and real-room accuracy remain to be agreed and tested.
