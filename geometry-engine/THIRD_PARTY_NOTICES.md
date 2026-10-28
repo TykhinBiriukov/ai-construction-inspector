@@ -1,5 +1,48 @@
 # Open-source algorithms used by Geometry Engine
 
+## Open3D: RANSAC plane detection
+
+`geometry_engine/wall_plane_detection.py` adapts the three-point RANSAC
+hypotheses, distance-based support/RMSE ranking, adaptive iteration bound and
+least-squares refinement sequence from Open3D's `PointCloud::SegmentPlane`.
+This is a NumPy adaptation, not an invocation of the Open3D package. It adds
+area-uniform mesh sampling, triangle-normal filtering, area-weighted refinement
+and correspondence to the original mesh faces. Only SAM wall-labeled faces
+participate in plane sampling, fitting, refinement and final support.
+
+Pinned upstream version: Open3D 0.19.0, commit
+`1e7b17438687a0b0c1e5a7187321ac7044afe275`.
+
+- [PointCloudSegmentation.cpp](https://github.com/isl-org/Open3D/blob/1e7b17438687a0b0c1e5a7187321ac7044afe275/cpp/open3d/geometry/PointCloudSegmentation.cpp)
+- [Upstream MIT license](https://github.com/isl-org/Open3D/blob/1e7b17438687a0b0c1e5a7187321ac7044afe275/LICENSE)
+
+The source file identifies Copyright (c) 2018-2024 www.open3d.org. The
+repository license is reproduced below:
+
+```text
+The MIT License (MIT)
+
+Open3D: www.open3d.org
+Copyright (c) 2018-2023 www.open3d.org
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+SPDX-License-Identifier: MIT
+```
+
 ## Open3DIS: depth agreement, region relations and cross-view grouping
 
 `geometry_engine/mask_projection.py` adapts the depth-consistency test in
