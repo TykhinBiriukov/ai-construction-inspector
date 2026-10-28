@@ -300,6 +300,10 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     def get_session(session_id: UUID, principal: Annotated[Principal, Depends(authenticate)]):
         return service.get_session(principal, str(session_id))
 
+    @app.post("/v1/sessions/{session_id}/abort", response_model=Session, tags=["capture sessions"])
+    def abort_session(session_id: UUID, principal: Annotated[Principal, Depends(operator)]):
+        return service.abort_session(principal, str(session_id))
+
     @app.post("/v1/sessions/{session_id}/upload-plans", status_code=201, tags=["capture completion"])
     def upload_plan(session_id: UUID, body: UploadPlanRequest, response: Response, principal: Annotated[Principal, Depends(authenticate)]):
         from .capture_uploads import CaptureUploads

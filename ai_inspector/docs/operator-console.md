@@ -132,3 +132,16 @@ Browser QA verified login, unauthorized response, capture creation, session deta
 reload/relogin with saved sessions, and switching the BIM upload form. A real phone upload was accepted after Supabase configuration. Live Geometry
 was not exercised. Docker execution was unavailable
 because the local Docker daemon was not running; container build remains unverified.
+
+### Abort a session
+
+The Capture sessions table has an **Abort** action for sessions that are not
+completed, failed or already cancelled. Confirming abort marks capture and
+processing as cancelled, revokes queued/in-flight Inspector work leases and
+notifies the device through the existing event stream. Files, inspection records,
+verified source inventory and existing results are preserved. Pending completion
+receipts become rejected with `session_cancelled`. Already dispatched external
+Geometry jobs or previously issued upload URLs cannot be recalled by this action.
+
+`POST /v1/sessions/{session_id}/abort` requires the operator token. Repeating it
+is safe and returns the cancelled session without emitting another revision.

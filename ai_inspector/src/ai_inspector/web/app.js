@@ -2,6 +2,8 @@
 const $ = id => document.getElementById(id);
 let token = '', generation = 0, overview, capabilities, selected = null, sessions = [], nextBefore = null;
 let pending = null, busy = false, polling = false;
+const aborting = new Set();
+let abortCandidate = null;
 const pretty = value => JSON.stringify(value, null, 2);
 const date = value => value ? new Date(value).toLocaleString() : 'Never';
 function notice(message = '') { $('notice').textContent = message; $('notice').hidden = !message; }
@@ -23,7 +25,7 @@ function lock() {
   $('token').value = ''; $('login').hidden = false; $('workspace').hidden = true;
   $('logout').hidden = true; $('refresh').disabled = true; $('connection').textContent = 'Locked';
   $('session-json').textContent = ''; $('geometry-result').textContent = ''; $('inspection-json').textContent = '';
-  $('detail').hidden = true;
+  $('detail').hidden = true; abortCandidate = null; $('abort-dialog').close();
   // Retain the pending request ID in this tab to allow safe retry after reauthentication.
 }
 function fields() {
@@ -47,9 +49,29 @@ function renderSessions() {
     for (const value of [session.capture_state, session.processing_state, session.input_mode, date(session.created_at)]) {
       const cell = document.createElement('td'); cell.textContent = value.replaceAll('_', ' '); row.append(cell);
     }
+    const actions = document.createElement('td');
+    const abort = document.createElement('button'); abort.className = 'secondary danger';
+    abort.textContent = aborting.has(session.session_id) ? 'Aborting…' : 'Abort';
+    abort.disabled = aborting.has(session.session_id) || ['completed', 'failed', 'cancelled'].includes(session.processing_state);
+    abort.setAttribute('aria-label', `Abort ${session.room_id} · ${session.session_id.slice(0, 8)}`);
+    abort.addEventListener('click', () => { abortCandidate = session; $('abort-target').textContent = `${session.room_id} · ${session.session_id.slice(0, 8)}`; $('abort-dialog').showModal(); }); actions.append(abort); row.append(actions);
     body.append(row);
   }
   $('more').hidden = !nextBefore;
+}
+async function abortSession(session) {
+  const id = session.session_id;
+  if (aborting.has(id)) return;
+  const epoch = generation; aborting.add(id); renderSessions(); notice();
+  try {
+    const updated = await api(`/v1/sessions/${encodeURIComponent(id)}/abort`, {method:'POST'});
+    if (epoch !== generation) return;
+    sessions = sessions.map(item => item.session_id === id ? updated : item);
+    notice('Session aborted. Uploaded files and history are preserved.');
+    if (selected === id) await showSession(id, false);
+  } catch (error) {
+    if (epoch === generation) notice(`Abort was not confirmed: ${error.message}. Refresh or retry safely.`);
+  } finally { aborting.delete(id); if (epoch === generation) renderSessions(); }
 }
 function renderOverview(data, caps, device) {
   overview = data; capabilities = caps;
@@ -111,6 +133,12 @@ async function showSession(id, scroll = true) {
 }
 function download(blob, name) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 async function downloadBim(inspection) { download(await api(`/v1/inspections/${inspection.inspection_id}/bim-model`, {blob:true}), inspection.bim_model.filename); }
+$('abort-confirm').addEventListener('click', () => {
+  const session = abortCandidate; abortCandidate = null; $('abort-dialog').close();
+  if (session) abortSession(session);
+});
+$('abort-dismiss').addEventListener('click', () => { abortCandidate = null; $('abort-dialog').close(); });
+$('abort-dialog').addEventListener('cancel', () => { abortCandidate = null; });
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault(); if (polling) return; token = $('token').value.trim(); generation++; notice();
   const button = event.submitter; button.disabled = true;

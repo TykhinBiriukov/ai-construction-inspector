@@ -108,6 +108,8 @@ class CaptureWorkflow:
         with self.database.transaction() as connection:
             session = self.service._load(connection, "sessions", session_id)
             self.service._check_access(principal, session)
+            if session["processing_state"] == "cancelled":
+                raise APIError(409, "session_closed", "Cancelled session cannot dispatch Geometry")
             job = session["geometry_job"]
             if not job or session["source"]["status"] != "accepted":
                 raise APIError(409, "source_not_accepted", "Capture source must pass validation before dispatch")

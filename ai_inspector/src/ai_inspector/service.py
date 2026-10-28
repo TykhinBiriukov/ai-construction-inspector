@@ -260,6 +260,29 @@ class InspectorService:
             self._check_access(principal, session)
             return session
 
+    def abort_session(self, principal: Principal, session_id: str) -> dict:
+        require_role(principal, "operator")
+        with self.database.transaction() as connection:
+            session = self._load(connection, "sessions", session_id)
+            self._check_access(principal, session)
+            if session["processing_state"] == "cancelled":
+                return session
+            if session["processing_state"] in ("completed", "failed"):
+                raise APIError(409, "session_terminal", "Finished sessions cannot be aborted")
+            error = APIError(409, "session_cancelled", "Session aborted by the operator").body
+            # Revoke leases atomically: an in-flight worker cannot publish a late result.
+            connection.execute(
+                "UPDATE work_items SET status='cancelled', lease_until=0, lease_token=NULL "
+                "WHERE session_id=? AND status IN ('pending', 'processing')", (session_id,),
+            )
+            if session.get("completion") and session["completion"]["status"] == "pending":
+                session["completion"] = {**session["completion"], "status": "rejected", "error": error}
+                connection.execute("UPDATE capture_completions SET data=? WHERE session_id=? AND completion_id=?",
+                                   (canonical_json(session["completion"]), session_id, session["completion"]["completion_id"]))
+            session.update(capture_state="cancelled", processing_state="cancelled", error=error)
+            self.capture._save_session(connection, session)
+            return session
+
     def list_assignments(self, principal: Principal, device_id: str, after: str | None, limit: int) -> dict:
         require_role(principal, "device")
         if principal.device_id != device_id:
