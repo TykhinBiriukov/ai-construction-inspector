@@ -72,7 +72,7 @@ class SupabaseCaptureSourceStore(S3CaptureSourceStore):
             raise _invalid("Capture object requires a lowercase SHA-256")
 
     def _reference(self, capture_ref: dict, session: dict | None = None):
-        if not isinstance(capture_ref, dict) or capture_ref.get("format") != "supabase_capture_v1" or capture_ref.get("storage_id") != "capture-supabase":
+        if not isinstance(capture_ref, dict) or capture_ref.get("format") not in ("supabase_capture_v1", "supabase_geometry_parts_v1") or capture_ref.get("storage_id") != "capture-supabase":
             raise _invalid("Unsupported Supabase capture reference")
         key = capture_ref.get("manifest_key")
         match = _MANIFEST_KEY.fullmatch(key) if isinstance(key, str) else None
@@ -142,6 +142,9 @@ class SupabaseCaptureSourceStore(S3CaptureSourceStore):
 
     def validate(self, session: dict, capture_ref: dict) -> dict:
         with self._validation_lock:
+            if capture_ref.get("format") == "supabase_geometry_parts_v1":
+                from .geometry_parts import validate_parts
+                return validate_parts(self, session, capture_ref)
             if capture_ref.get("format") == "supabase_capture_zip_v1":
                 from .capture_archives import validate_archive
                 return validate_archive(self, session, capture_ref)

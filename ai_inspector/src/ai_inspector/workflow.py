@@ -71,9 +71,9 @@ class CaptureWorkflow:
             capture_ref = body["capture_ref"]
             is_archive = capture_ref.get("format") == "supabase_capture_zip_v1"
             if session["storage"].get("provider") == "supabase":
-                if capture_ref.get("format") not in ("supabase_capture_v1", "supabase_capture_zip_v1"):
+                if capture_ref.get("format") not in ("supabase_capture_v1", "supabase_capture_zip_v1", "supabase_geometry_parts_v1"):
                     raise APIError(422, "invalid_capture_format", "Supabase capture requires its manifest or ZIP reference format")
-            elif capture_ref.get("format") in ("supabase_capture_v1", "supabase_capture_zip_v1"):
+            elif capture_ref.get("format") in ("supabase_capture_v1", "supabase_capture_zip_v1", "supabase_geometry_parts_v1"):
                 raise APIError(422, "invalid_capture_format", "This session requires exact S3 object versions")
             expected_key = (f"{session['storage']['key_prefix']}archives/{completion_id}.zip" if is_archive
                             else f"{session['storage']['key_prefix']}manifests/{completion_id}.json")

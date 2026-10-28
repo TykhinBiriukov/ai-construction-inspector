@@ -1,11 +1,11 @@
-name: Deploy Inspector web
+name: Deploy Inspector backend and web
 
 on:
   push:
     branches: [feat/ai-inspector-development]
     paths:
-      - ai_inspector/src/ai_inspector/web/**
-      - ai_inspector/cloudflare/frontend/**
+      - ai_inspector/src/ai_inspector/**
+      - ai_inspector/cloudflare/**
       - .github/workflows/deploy-inspector-web.yml
   workflow_dispatch:
 
@@ -20,7 +20,7 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/feat/ai-inspector-development'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ai_inspector/cloudflare/frontend
@@ -28,14 +28,53 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Detect changed components
+        id: changes
+        working-directory: .
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PYCODE'
+          import os, subprocess
+          before = os.environ.get('BEFORE_SHA', '')
+          all_components = os.environ['EVENT_NAME'] != 'push' or not before or set(before) == {'0'}
+          files = [] if all_components else subprocess.check_output(['git', 'diff', '--name-only', before, 'HEAD'], text=True).splitlines()
+          if '.github/workflows/deploy-inspector-web.yml' in files:
+              all_components = True
+          web = all_components or any(p.startswith(('ai_inspector/src/ai_inspector/web/', 'ai_inspector/cloudflare/frontend/')) for p in files)
+          backend = all_components or any(p.startswith(('ai_inspector/src/ai_inspector/', 'ai_inspector/cloudflare/')) and not p.startswith(('ai_inspector/src/ai_inspector/web/', 'ai_inspector/cloudflare/frontend/')) for p in files)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'web={str(web).lower()}\nbackend={str(backend).lower()}\n')
+          PYCODE
+      - uses: astral-sh/setup-uv@v7
+        if: steps.changes.outputs.backend == 'true'
+        with:
+          version: '0.13.6'
+          python-version: '3.14'
+      - name: Deploy Python runtime first
+        if: steps.changes.outputs.backend == 'true'
+        working-directory: ai_inspector/cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npm install --no-save --package-lock=false wrangler@4.154.0
+          uv sync --locked
+          ./deploy.sh
       - name: Check JavaScript
+        if: steps.changes.outputs.web == 'true'
         run: |
           node --check index.js
           node --check ../../src/ai_inspector/web/app.js
       - name: Deploy existing web Worker
+        if: steps.changes.outputs.web == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

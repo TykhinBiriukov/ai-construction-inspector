@@ -1,4 +1,4 @@
-"""Cloudflare entrypoint. Shared HTTP contract; Supabase owns all persistent data."""
+"""Cloudflare entrypoint: Geometry ZIP parts v1. Supabase owns persistent data."""
 from contextvars import ContextVar
 from pathlib import Path
 from workers import WorkerEntrypoint, DurableObject, Response, asgi
