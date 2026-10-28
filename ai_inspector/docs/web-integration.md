@@ -61,7 +61,7 @@ bundle: keep it in the authenticated operator environment or web backend.
 
 ```powershell
 .\scripts\start-remote-test.ps1 -MockGeometry
-.\.venv\Scripts\python.exe scripts/simulate_iphone.py
+.\.venv\Scripts\python.exe -B ../../local-checks/inspector/scripts/simulate_iphone.py
 .\scripts\stop-remote-test.ps1
 ```
 
@@ -79,3 +79,8 @@ access through the fixed Inspector service routes; the phone never calls G.
 Temporary Cloudflare URLs change when the tunnel restarts, so create new test
 sessions after changing the public origin. For a permanent deployment use a stable
 HTTPS hostname. The test URL exists only while this computer and tunnel run.
+
+Codex verification tests, diagnostic scripts and their temporary data live
+outside this checkout in the workspace's local-checks/inspector/ directory.
+These optional local files are not part of the distributed backend or its
+runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.

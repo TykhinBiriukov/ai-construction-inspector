@@ -1,5 +1,11 @@
 # AI Inspector — first capture-to-geometry case
 
+Product and architecture documentation (Russian):
+
+- [First test-run overview](docs/project-overview-v1.ru.md): scope, components, session lifecycle, and current implementation boundary
+- [Agent and service contracts](docs/agent-tools-contracts-v1.ru.md): proposed tools, chat/events, iPhone recovery, BIM, and Geometry handoff
+- [Research and implementation roadmap](docs/research-and-implementation-v1.ru.md): source-backed findings, remaining experiments, dependencies, and acceptance scenarios
+
 Current developer handoff:
 
 - [Cloudflare + Supabase deployment](docs/cloudflare-deployment.md) — permanent HTTPS, no Mac required
@@ -16,7 +22,7 @@ The complete implemented first case is: device WebSocket connection -> server
 session/folder creation -> device acknowledgement and capture -> signed Supabase
 uploads -> source snapshot -> Geometry job -> saved final Geometry response.
 `POST /v1/capture-sessions` can start it without requiring a reference BIM upload.
-`scripts/simulate_iphone.py` exercises the full network path with synthetic data.
+`../../local-checks/inspector/scripts/simulate_iphone.py` exercises the full network path with synthetic data.
 Add `--zip` to upload the entire capture as one ZIP. Individual-photo uploads
 remain available. ZIP captures are verified and normalized to the same Geometry
 source interface before processing.
@@ -163,7 +169,7 @@ Operators can also retrieve inspection metadata with
 In another terminal from the same directory, the client reads the same `.env`:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/smoke_test.py --bim "C:\path\room.ifc" --prompt "Inspect the doorway dimensions."
+.\.venv\Scripts\python.exe -B ../../local-checks/inspector/scripts/smoke_test.py --bim "C:\path\room.ifc" --prompt "Inspect the doorway dimensions."
 ```
 
 The script acts as the phone over HTTP: it uploads intake, creates a session,
@@ -171,10 +177,10 @@ retrieves the assignment, acknowledges it, and checks retry behavior. It leaves
 capture in `assigned`; it does not operate an actual iPhone camera.
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+..\..\local-checks\inspector\run-tests.ps1
 ```
 
-Integration tests cover persistence across app restart, concurrent session
+The optional local verification suite covers persistence across app restart, concurrent session
 creation, transactional rollback, pagination, replay/conflicts, project/device
 access, closed-session rules, bounded BIM intake, exact S3 versions/checksums,
 incomplete capture rejection, generator delivery/timeouts, and background recovery.
@@ -245,10 +251,7 @@ this checkout includes a Swift transport reference and remote connection files.
 
 See [the first-increment contract additions](docs/first-increment-contract.md).
 
-## Operator UI and deployment
-
-The service now serves an operator console at `/`: capture assignments, BIM
-intake, device status, persistent session history and Geometry results. See
-[operator-console.md](docs/operator-console.md) for authentication, supported
-operations, local/container launch, verification and the Oracle Always Free
-hosting target. LLM execution and BIM comparison remain future work.
+Codex verification tests, diagnostic scripts and their temporary data live
+outside this checkout in the workspace's local-checks/inspector/ directory.
+These optional local files are not part of the distributed backend or its
+runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.

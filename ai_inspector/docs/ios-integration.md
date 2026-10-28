@@ -247,7 +247,12 @@ network connection; it does not need an inbound HTTP server or a public phone IP
 - `examples/InspectorConnection.swift`: small URLSession transport helper; integrate
   capture generation/state handling in the actual app. It is a reference example,
   not an Xcode project validated on this Windows host.
-- `scripts/simulate_iphone.py`: owner-side synthetic full-case network test.
+- `../../local-checks/inspector/scripts/simulate_iphone.py`: owner-side synthetic full-case network test.
 - API schema: `<BASE_URL>/openapi.json`; interactive HTTP docs: `<BASE_URL>/docs`.
 - [Apple URLSessionWebSocketTask](https://developer.apple.com/documentation/foundation/urlsessionwebsockettask)
 - [Supabase signed upload URLs](https://supabase.com/docs/reference/swift/storage-from-uploadtosignedurl)
+
+Codex verification tests, diagnostic scripts and their temporary data live
+outside this checkout in the workspace's local-checks/inspector/ directory.
+These optional local files are not part of the distributed backend or its
+runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.
