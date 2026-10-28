@@ -16,6 +16,23 @@ def canonical_json(value: dict) -> str:
 
 
 SCHEMA_SQL = """
+                CREATE TABLE IF NOT EXISTS chats (
+                    chat_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    data TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS agent_runs (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL UNIQUE,
+                    chat_id TEXT NOT NULL REFERENCES chats(chat_id),
+                    request_id TEXT NOT NULL,
+                    request_body TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    lease_until REAL NOT NULL DEFAULT 0,
+                    lease_token TEXT,
+                    UNIQUE(chat_id, request_id)
+                );
+                CREATE INDEX IF NOT EXISTS runs_by_chat ON agent_runs(chat_id, sequence);
                 CREATE TABLE IF NOT EXISTS inspections (
                     inspection_id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,
@@ -113,7 +130,7 @@ class Database:
         path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1, 2, 3, 4):
+            if version not in (0, 1, 2, 3, 4, 5):
                 raise RuntimeError("Unsupported database schema version")
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(SCHEMA_SQL)
@@ -122,7 +139,7 @@ class Database:
                 columns = {row["name"] for row in connection.execute("PRAGMA table_info(sessions)")}
                 if "storage_ready" not in columns:
                     connection.execute("ALTER TABLE sessions ADD COLUMN storage_ready INTEGER NOT NULL DEFAULT 1")
-                connection.execute("PRAGMA user_version=4")
+                connection.execute("PRAGMA user_version=5")
                 connection.commit()
             except BaseException:
                 connection.rollback()

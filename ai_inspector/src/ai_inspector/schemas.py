@@ -99,6 +99,11 @@ class CaptureStorage(APIModel):
     folder_status: Literal["pending", "ready"] | None = None
 
 
+class CaptureTask(APIModel):
+    text: Annotated[str, Field(min_length=1, max_length=8000)]
+    source: Literal["operator_request"]
+
+
 class Session(APIModel):
     schema_version: Literal["0.1"]
     session_id: UUID
@@ -121,6 +126,7 @@ class Session(APIModel):
     ]
     storage: CaptureStorage
     device_acknowledged_at: str | None
+    capture_task: CaptureTask | None = None
     completion: dict | None = None
     source: dict | None = None
     geometry_job: dict | None = None

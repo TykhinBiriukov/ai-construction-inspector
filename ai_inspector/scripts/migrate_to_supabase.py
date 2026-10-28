@@ -15,7 +15,14 @@ def migrate(source, destination, store=None):
         db.row_factory = sqlite3.Row
         if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
             raise RuntimeError('Source SQLite integrity check failed')
-        records = {table:[dict(row) for row in db.execute('SELECT * FROM '+table)] for table in TABLES}
+        existing = {row['name'] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        records = {}
+        for table in TABLES:
+            # Backups from before agent chat have no chat tables yet.
+            if table not in existing and table in ('chats', 'agent_runs'):
+                records[table] = []
+            else:
+                records[table] = [dict(row) for row in db.execute('SELECT * FROM '+table)]
         # Preserve the previously implicit ordering too.
         for table in ('inspections','work_items'):
             records[table] = [dict(row) for row in db.execute('SELECT rowid, * FROM '+table)]
@@ -39,7 +46,7 @@ def migrate(source, destination, store=None):
             canonical = lambda rows: sorted(json.dumps(r, sort_keys=True) for r in rows)
             if canonical(restored) != canonical(records[table]):
                 raise RuntimeError('Readback mismatch for '+table)
-        for table,column in (('sessions','assignment_order'),('device_events','sequence'),('inspections','rowid'),('work_items','rowid')):
+        for table,column in (('sessions','assignment_order'),('device_events','sequence'),('inspections','rowid'),('work_items','rowid'),('agent_runs','sequence')):
             target.execute("SELECT setval(pg_get_serial_sequence(?, ?), COALESCE((SELECT MAX("+column+") FROM "+table+"), 1), EXISTS(SELECT 1 FROM "+table+"))", ('inspector.'+table,column))
     return {table:len(rows) for table,rows in records.items()}
 

@@ -31,7 +31,7 @@ def require_role(principal: Principal, role: str) -> None:
 
 
 class InspectorService:
-    def __init__(self, settings: Settings, *, database=None, bim_store=None) -> None:
+    def __init__(self, settings: Settings, *, database=None, bim_store=None, model_client=None) -> None:
         self.settings = settings
         if database is not None:
             self.database = database
@@ -54,6 +54,8 @@ class InspectorService:
         from .device_events import DeviceEvents
         self.device_events = DeviceEvents(self)
         self._geometry_results = None
+        from .agent import ChatAgent
+        self.agent = ChatAgent(self, model_client=model_client)
 
     @property
     def geometry_results(self):
@@ -186,6 +188,7 @@ class InspectorService:
                 "key_prefix": f"projects/{inspection['project_id']}/sessions/{session_id}/",
             },
             "device_acknowledged_at": None,
+            "capture_task": {"text": inspection["prompt"], "source": "operator_request"},
             "completion": None, "source": None, "geometry_job": None,
             "display_view_id": None, "result": None, "error": None,
             "geometry_result": None, "processing_scope": "geometry_only_v1",

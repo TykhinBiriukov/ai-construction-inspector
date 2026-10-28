@@ -7,6 +7,11 @@ separate iOS config contains only the device identity. API documentation is at
 
 ## Start the first capture case
 
+For natural-language requests through Meta Model API / Muse Spark 1.3, use the
+console's **Ask Inspector** or the new `/v1/chats` API. See
+[agent chat configuration, requests and recovery](agent-chat.md). Direct session
+creation below remains available.
+
 The phone may already be connected, or it can connect later. Create a server-owned
 session without requiring a reference BIM upload:
 

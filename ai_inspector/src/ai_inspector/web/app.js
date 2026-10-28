@@ -4,6 +4,7 @@ let token = '', generation = 0, overview, capabilities, selected = null, session
 let pending = null, busy = false, polling = false;
 const aborting = new Set();
 let abortCandidate = null;
+let agentChat = null, agentPending = null, agentCreate = null, agentSending = false;
 const pretty = value => JSON.stringify(value, null, 2);
 const date = value => value ? new Date(value).toLocaleString() : 'Never';
 function notice(message = '') { $('notice').textContent = message; $('notice').hidden = !message; }
@@ -26,6 +27,7 @@ function lock() {
   $('logout').hidden = true; $('refresh').disabled = true; $('connection').textContent = 'Locked';
   $('session-json').textContent = ''; $('geometry-result').textContent = ''; $('inspection-json').textContent = '';
   $('detail').hidden = true; abortCandidate = null; $('abort-dialog').close();
+  agentChat = null; $('agent-runs').replaceChildren(); $('agent-room').value = ''; $('agent-text').value = '';
   // Retain the pending request ID in this tab to allow safe retry after reauthentication.
 }
 function fields() {
@@ -105,6 +107,7 @@ async function refresh() {
     sessions = [...data.sessions, ...older];
     if (!sessions.length || older.length === 0) nextBefore = data.next_before;
     renderSessions();
+    await refreshAgent();
     if (selected) await showSession(selected, false);
   } catch (error) {
     if (epoch === generation) { $('connection').textContent = 'Connection issue'; notice(`Refresh failed: ${error.message}. Displayed data may be stale.`); }
@@ -188,6 +191,83 @@ $('capture-form').addEventListener('submit', async event => {
   } catch (e) { notice(`${e.message}${pending ? ' · Retry the pending request to reuse its original operation ID.' : ''}`); }
   finally { busy = false; $('submit').disabled = false; $('abandon').disabled = false; fields(); }
 });
-window.addEventListener('beforeunload', event => { if (pending) { event.preventDefault(); event.returnValue = ''; } });
+function agentKey() { return `inspector-chat:${overview.project_id}`; }
+function rememberChat(value) { try { localStorage.setItem(agentKey(), JSON.stringify(value)); } catch { /* Server history remains authoritative. */ } }
+function renderAgent() {
+  const history = $('agent-runs'); history.replaceChildren();
+  const append = (label, text, style) => {
+    const item = document.createElement('div'); item.className = `chat-message ${style}`;
+    const author = document.createElement('strong'); author.textContent = label;
+    const content = document.createElement('span'); content.textContent = text; item.append(author, content); history.append(item);
+  };
+  for (const run of agentChat?.runs || []) {
+    append('You', run.text, 'user');
+    if (run.reply) append('Inspector', run.reply, 'assistant');
+    else append('Inspector', run.error?.message || 'Request saved. Waiting for the agent response.', 'pending');
+  }
+  const last = agentChat?.runs?.at(-1);
+  const unfinished = last && !['completed', 'failed'].includes(last.status);
+  if (unfinished) agentPending = {schema_version:'0.1', request_id:last.request_id, text:last.text};
+  else if (last && agentPending?.request_id === last.request_id) agentPending = null;
+  $('agent-state').textContent = capabilities?.agent_model_configured ? 'Muse Spark 1.3 · configured' : 'Model access needed';
+  $('agent-hint').textContent = capabilities?.agent_model_configured ? 'Ask a question or request a capture. An assignment waits for the phone to connect and acknowledge.' : 'An administrator needs to configure Meta Model API access on the server. Your request can be saved and resumed.';
+  $('agent-room').readOnly = !!agentChat || !!agentCreate;
+  if (agentChat) $('agent-room').value = agentChat.room_id;
+  $('agent-text').disabled = agentSending || !!agentPending;
+  $('agent-send').disabled = agentSending || !!agentPending;
+  $('agent-new').disabled = agentSending || !!agentPending;
+  $('agent-retry').hidden = !agentPending;
+  $('agent-retry').disabled = agentSending;
+  $('agent-progress').textContent = agentSending ? 'Request saved as it is received. You can resume after a connection issue.' : unfinished ? 'This message is pending. Resume it to keep the same request and session.' : 'Messages and sessions are saved on the server.';
+}
+async function refreshAgent() {
+  if (agentSending || !token || !overview) return;
+  if (!agentChat && !agentCreate) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(agentKey()) || 'null');
+      if (saved?.chat_id) agentChat = {chat_id:saved.chat_id};
+      else if (saved?.create_request) { agentCreate = saved.create_request; $('agent-room').value = agentCreate.room_id; }
+    } catch { /* A malformed local pointer does not change server state. */ }
+  }
+  if (agentChat) {
+    const epoch = generation, id = agentChat.chat_id;
+    const result = await api(`/v1/chats/${encodeURIComponent(id)}`);
+    if (epoch !== generation || agentChat?.chat_id !== id) return;
+    agentChat = result;
+  }
+  renderAgent();
+}
+async function sendAgent() {
+  if (agentSending || !token) return;
+  const epoch = generation; agentSending = true; notice();
+  if (!agentPending) agentPending = {schema_version:'0.1', request_id:uuid(), text:$('agent-text').value};
+  const message = agentPending;
+  renderAgent();
+  try {
+    if (!agentChat) {
+      if (!agentCreate) agentCreate = {schema_version:'0.1', request_id:uuid(), room_id:$('agent-room').value};
+      rememberChat({create_request:agentCreate});
+      const created = await api('/v1/chats', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(agentCreate)});
+      if (epoch !== generation) return;
+      agentChat = created; agentCreate = null; rememberChat({chat_id:created.chat_id});
+    }
+    const result = await api(`/v1/chats/${agentChat.chat_id}/messages`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(message)});
+    if (epoch !== generation) return;
+    if (['completed', 'failed'].includes(result.status)) { agentPending = null; $('agent-text').value = ''; }
+    if (result.error) notice(result.error.message);
+  } catch (error) {
+    if (epoch === generation) notice(`Request confirmation is pending: ${error.message}. Resume the saved request.`);
+  } finally {
+    agentSending = false;
+    if (epoch === generation) { renderAgent(); await refresh().catch(() => {}); }
+  }
+}
+$('agent-form').addEventListener('submit', event => { event.preventDefault(); sendAgent(); });
+$('agent-retry').addEventListener('click', sendAgent);
+$('agent-new').addEventListener('click', () => {
+  if (agentSending || agentPending) return;
+  agentChat = null; agentCreate = null; rememberChat(null); $('agent-room').value = ''; $('agent-text').value = ''; renderAgent();
+});
+window.addEventListener('beforeunload', event => { if (pending || agentPending) { event.preventDefault(); event.returnValue = ''; } });
 setInterval(() => { if (token && !document.hidden && !busy) refresh().catch(() => {}); }, 5000);
 fields();

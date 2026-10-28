@@ -8,6 +8,9 @@ Product and architecture documentation (Russian):
 
 Current developer handoff:
 
+- [Web agent → iPhone assignment](docs/agent-chat.md) — Meta Model API / Muse Spark 1.3, durable chat and predefined tools
+- [Cloudflare agent deployment handoff](docs/cloudflare-agent-handoff.md) — completed preparation and remaining account-owner steps
+
 - [Cloudflare + Supabase deployment](docs/cloudflare-deployment.md) — permanent HTTPS, no Mac required
 
 - [iPhone API and connection guide](docs/ios-integration.md)
@@ -240,10 +243,14 @@ The BIM file is **stored, not parsed or normalized**. Its status is
 `stored_unvalidated`; `upload-sha256:...` is an immutable intake version, not a
 normalized geometry package. `room_id` is caller-supplied context and is checked
 against the inspection, not extracted from the BIM. The prompt is stored as user
-input and is not automatically converted into phone instructions.
+input and included in new assignments as `capture_task` with
+`source=operator_request`. It is not converted into remote camera commands or
+verified measurements.
 
-Remote BIM integration, measured coverage, rendering, and LLM execution belong to
-later increments. Source access is available only to the configured Geometry
+The web agent accepts text through `/v1/chats` and uses Meta Model API / Muse Spark
+1.3 with predefined session/device tools; see [configuration and recovery](docs/agent-chat.md).
+Remote BIM integration, measured coverage and rendering belong to later increments.
+Source access is available only to the configured Geometry
 identity and only for accepted source copies/versions. The first case completes
 with `geometry_result` and `processing_scope=geometry_only_v1`, without creating an
 inspection verdict. The actual iPhone app still needs to wire these network calls;

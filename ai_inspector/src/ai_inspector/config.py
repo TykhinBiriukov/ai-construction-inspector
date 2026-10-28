@@ -1,5 +1,6 @@
 import os
 import re
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
@@ -47,8 +48,29 @@ class Settings:
 
     database_url: str = field(default="", repr=False)
     bim_storage: str = "local"
+    meta_base_url: str = "https://api.meta.ai/v1"
+    meta_model: str = "muse-spark-1.3"
+    meta_api_key: str = field(default="", repr=False)
+    meta_timeout_s: float = 30.0
+    agent_max_steps: int = 6
 
     def __post_init__(self) -> None:
+        if not math.isfinite(self.meta_timeout_s) or not 1 <= self.meta_timeout_s <= 120:
+            raise ValueError("INSPECTOR_META_TIMEOUT_S must be between 1 and 120")
+        if not 1 <= self.agent_max_steps <= 12:
+            raise ValueError("INSPECTOR_AGENT_MAX_STEPS must be between 1 and 12")
+        if self.meta_base_url:
+            parsed_meta = urlsplit(self.meta_base_url)
+            if (parsed_meta.scheme not in ("https", "http") or not parsed_meta.hostname
+                    or parsed_meta.username is not None or parsed_meta.password is not None
+                    or parsed_meta.query or parsed_meta.fragment
+                    or (parsed_meta.scheme == "http" and parsed_meta.hostname not in ("localhost", "127.0.0.1", "::1"))):
+                raise ValueError("INSPECTOR_META_BASE_URL requires HTTPS (HTTP is allowed on loopback only)")
+            parsed_meta.port
+        if self.meta_api_key and (not self.meta_api_key.isascii() or any(ord(c) < 33 or ord(c) > 126 for c in self.meta_api_key)):
+            raise ValueError("Invalid INSPECTOR_META_API_KEY format")
+        if len(self.meta_model) > 200 or any(ord(c) < 32 for c in self.meta_model):
+            raise ValueError("Invalid INSPECTOR_META_MODEL")
         if not self.operator_token.strip() or not self.device_token.strip():
             raise ValueError("Set INSPECTOR_OPERATOR_TOKEN and INSPECTOR_DEVICE_TOKEN")
         if self.operator_token == self.device_token:
@@ -135,6 +157,11 @@ class Settings:
         values.update(os.environ)
         get = values.get
         return cls(
+            meta_base_url=get("INSPECTOR_META_BASE_URL", "https://api.meta.ai/v1"),
+            meta_model=get("INSPECTOR_META_MODEL", "muse-spark-1.3"),
+            meta_api_key=get("INSPECTOR_META_API_KEY", ""),
+            meta_timeout_s=float(get("INSPECTOR_META_TIMEOUT_S", "30")),
+            agent_max_steps=int(get("INSPECTOR_AGENT_MAX_STEPS", "6")),
             database_url=get("INSPECTOR_DATABASE_URL", ""),
             bim_storage=get("INSPECTOR_BIM_STORAGE", "local"),
             data_dir=Path(get("INSPECTOR_DATA_DIR", "data")).resolve(),

@@ -21,6 +21,14 @@ tunnel must stay running. Re-export the connection files after changing it.
 
 ## 1. Connect before a capture session exists
 
+New session assignments optionally include `capture_task` with `text` (the
+original operator request) and `source="operator_request"`. Display it as task
+context; receiving it does not mean the camera should start automatically.
+Older sessions may have no task. The field is delivered through both snapshot
+and `session.assigned` events and persists across reconnect. Web-agent details:
+[agent-chat.md](agent-chat.md). This backend increment does not implement the
+corresponding iOS UI change.
+
 Open the exact `device_websocket_url` from the connection JSON:
 
 ```text

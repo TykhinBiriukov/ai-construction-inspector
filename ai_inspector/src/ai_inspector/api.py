@@ -22,6 +22,7 @@ from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
 from .config import Settings
+from .agent import CreateChatRequest, ChatMessageRequest
 from .errors import APIError
 from .schemas import (
     Acknowledgement, AcknowledgeRequest, AssignmentList, CaptureStartReceipt,
@@ -230,7 +231,25 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
                 "max_unpacked_archive_bytes": settings.max_unpacked_archive_bytes,
                 "max_capture_file_bytes": settings.max_capture_file_bytes, "max_manifest_bytes": settings.max_manifest_bytes,
                 "geometry_configured": bool(settings.geometry_base_url),
-                "geometry_mode": settings.geometry_mode if settings.geometry_base_url else "unconfigured"}
+                "geometry_mode": settings.geometry_mode if settings.geometry_base_url else "unconfigured",
+                "agent_chat": True, "agent_model_configured": bool(settings.meta_base_url and settings.meta_model and settings.meta_api_key)}
+
+    @app.post("/v1/chats", status_code=201, tags=["agent chat"])
+    def create_chat(request: CreateChatRequest, response: Response, principal: Annotated[Principal, Depends(operator)]):
+        result, response.status_code = service.agent.create_chat(principal, request)
+        return result
+
+    @app.get("/v1/chats/{chat_id}", tags=["agent chat"])
+    def get_chat(chat_id: UUID, principal: Annotated[Principal, Depends(operator)],
+                 before: Annotated[int | None, Query(ge=1, le=9223372036854775807)] = None,
+                 limit: Annotated[int, Query(ge=1, le=100)] = 30):
+        return service.agent.get_chat(principal, str(chat_id), before, limit)
+
+    @app.post("/v1/chats/{chat_id}/messages", status_code=201, tags=["agent chat"])
+    def chat_message(chat_id: UUID, request: ChatMessageRequest, response: Response,
+                     principal: Annotated[Principal, Depends(operator)]):
+        result, response.status_code = service.agent.submit(principal, str(chat_id), request)
+        return result
 
     @app.post("/v1/inspections", response_model=Inspection, status_code=201, tags=["inspection intake"])
     async def create_inspection(

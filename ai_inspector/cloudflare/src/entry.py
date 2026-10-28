@@ -6,6 +6,9 @@ from ai_inspector.api import create_app
 from ai_inspector.config import Settings
 from ai_inspector.service import InspectorService
 from database import WorkerDatabase
+from runtime_settings import meta_settings
+from model_transport import WorkerModelTransport
+from ai_inspector.model_client import MetaModelClient
 
 CLOUD_LIMITS = dict(max_bim_bytes=8 * 1024**2, max_archive_bytes=16 * 1024**2,
                     max_unpacked_archive_bytes=64 * 1024**2, max_capture_file_bytes=16 * 1024**2,
@@ -30,7 +33,7 @@ class InspectorRuntime(DurableObject):
     def service(self):
         env = self.env
         settings = Settings(
-            data_dir=Path('/tmp/inspector'), **CLOUD_LIMITS,
+            data_dir=Path('/tmp/inspector'), **CLOUD_LIMITS, **meta_settings(env),
             operator_token=env.INSPECTOR_OPERATOR_TOKEN,
             device_token=env.INSPECTOR_DEVICE_TOKEN,
             database_url=env.INSPECTOR_DATABASE_URL,
@@ -43,7 +46,9 @@ class InspectorRuntime(DurableObject):
             geometry_api_token=getattr(env,'INSPECTOR_GEOMETRY_API_TOKEN',''),
             geometry_service_token=getattr(env,'INSPECTOR_GEOMETRY_SERVICE_TOKEN',''),
         )
-        service = InspectorService(settings, database=WorkerDatabase(env.HYPERDRIVE.connectionString, hyperdrive=True))
+        service = InspectorService(settings,
+            database=WorkerDatabase(env.HYPERDRIVE.connectionString, hyperdrive=True),
+            model_client=MetaModelClient(settings, transport=WorkerModelTransport()))
         return service
 
     async def fetch(self, request):

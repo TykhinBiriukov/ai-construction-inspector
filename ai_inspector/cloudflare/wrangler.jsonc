@@ -6,6 +6,12 @@
     "python_workers"
   ],
   "workers_dev": false,
+  "vars": {
+    "INSPECTOR_META_BASE_URL": "https://api.meta.ai/v1",
+    "INSPECTOR_META_MODEL": "muse-spark-1.3",
+    "INSPECTOR_META_TIMEOUT_S": "30",
+    "INSPECTOR_AGENT_MAX_STEPS": "6"
+  },
   "observability": {
     "enabled": true
   },

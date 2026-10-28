@@ -52,6 +52,46 @@ Do not put any credential in Wrangler config, source control, logs, or the brows
 Only the operator token belongs in the operator login form; only the device token
 belongs in the phone settings.
 
+## Agent integration: local preparation
+
+On 28 October 2026, the local runtime entry was updated to read
+`INSPECTOR_META_BASE_URL`, `INSPECTOR_META_MODEL`, `INSPECTOR_META_API_KEY`,
+`INSPECTOR_META_TIMEOUT_S` and `INSPECTOR_AGENT_MAX_STEPS` from Worker bindings.
+`src/runtime_settings.py` supplies the shared Settings defaults and rejects invalid
+binding types/numbers without echoing their values. The API key belongs in a
+Secret on `ai-inspector-runtime`; other model/limit settings can be plain Variables.
+Once the chat schema is available, missing model credentials leave chat runs
+resumable as model_not_configured.
+
+The Workers SQL adapter now qualifies `chats` and `agent_runs` in the private
+`inspector` schema. This does not create those tables or grant database access.
+The additive [agent chat SQL migration](../scripts/sql/001_agent_chat.sql) and its
+[application notes](../scripts/sql/README.md) were tested against isolated
+PostgreSQL/WASM, then applied to the configured Supabase project with the owner's
+confirmation on 28 October 2026. Live PostgreSQL 17.11 contains both empty tables;
+effective runtime/browser permissions passed and row counts of all eleven prior
+Inspector tables were unchanged. The client connection used TLS. The available
+administrator cannot SET ROLE inspector_app; permissions were checked through
+catalog functions, not by connecting as the restricted role or through Hyperdrive.
+Model transport now uses `src/model_transport.py`: Workers Fetch with manual
+redirects, one request/response deadline and streamed response reading. This avoids
+the vendored HTTPX Fetch transport's automatic redirects, which can forward
+authorization headers. [Workers redirect behavior](https://developers.cloudflare.com/workers/runtime-apis/request/).
+The model adapter and production entry bootstrap passed thirteen synthetic
+scenarios in real local workerd/Python/WASM, including redirect refusal, timeout,
+oversize and malformed responses. Both production-source Workers passed dry-run
+builds; the full external suite passed 150 tests (146 executed, four skipped).
+Restricted runtime connectivity, real Meta access and a new deployment remain
+unverified. See [the agent contract](agent-chat.md).
+
+The owner requested checkpoints between tasks. Stages 1 (settings/SQL adapter),
+2 (SQL preparation/local verification), and 3 (hosted schema/effective grants)
+are complete within the verification limits above. Stage 4 build/HTTP preparation
+is complete locally. Cloudflare login was not completed; the workspace owner
+clarified that the account belongs to a teammate and requested pushing the code
+for that teammate to finish. Use [the deployment handoff](cloudflare-agent-handoff.md)
+for pulling, private key configuration, publication and live acceptance.
+
 ## Deploy an update
 
 From `ai_inspector/cloudflare`, with Node, Python 3.14 and uv >= 0.13.4 available:

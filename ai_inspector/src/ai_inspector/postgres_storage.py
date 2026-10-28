@@ -12,7 +12,7 @@ from .storage import Database, SCHEMA_SQL
 WRITE_LOCK = 7341202601
 TABLES = ('inspections', 'sessions', 'receipts', 'capture_completions', 'geometry_jobs',
           'work_items', 'device_events', 'device_connections', 'upload_requests',
-          'upload_objects', 'geometry_events')
+          'upload_objects', 'geometry_events', 'chats', 'agent_runs')
 
 
 class Row(dict):
