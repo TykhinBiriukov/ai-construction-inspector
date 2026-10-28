@@ -4,6 +4,7 @@ import asyncio
 import threading
 import json
 import time
+from pathlib import Path
 import anyio
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -14,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
@@ -135,6 +137,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response = await call_next(request)
         response.headers["Cache-Control"] = "private, no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
+        if request.url.path == "/" or request.url.path.startswith("/ui/"):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self'; style-src 'self'; "
+                "connect-src 'self'; img-src 'self' blob:; object-src 'none'; "
+                "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+            )
+            response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
     @app.exception_handler(APIError)
@@ -176,6 +185,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with service.database.connection() as connection:
             connection.execute("SELECT 1")
         return {"status": "ok"}
+
+    @app.get("/", include_in_schema=False)
+    def operator_ui():
+        return FileResponse(Path(__file__).parent / "web" / "index.html")
+
+    app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "web"), name="operator-ui")
+
+    @app.get("/v1/operator/overview", tags=["operations"])
+    def operator_overview(
+        principal: Annotated[Principal, Depends(operator)],
+        before: Annotated[int | None, Query(ge=1, le=9223372036854775807)] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    ):
+        # Include pending storage folders and terminal sessions, unlike device assignments.
+        with service.database.connection() as connection:
+            rows = connection.execute(
+                "SELECT assignment_order, data FROM sessions WHERE project_id=? "
+                "AND (? IS NULL OR assignment_order<?) ORDER BY assignment_order DESC LIMIT ?",
+                (principal.project_id, before, before, limit + 1),
+            ).fetchall()
+            inspections = connection.execute(
+                "SELECT data FROM inspections WHERE project_id=? ORDER BY rowid DESC LIMIT 100",
+                (principal.project_id,),
+            ).fetchall()
+        return {
+            "project_id": principal.project_id, "device_id": settings.device_id,
+            "max_bim_bytes": settings.max_bim_bytes,
+            "supabase_configured": settings.supabase_enabled,
+            "sessions": [json.loads(row["data"]) for row in rows[:limit]],
+            "next_before": rows[limit - 1]["assignment_order"] if len(rows) > limit else None,
+            "inspections": [json.loads(row["data"]) for row in inspections],
+        }
 
     @app.get("/v1/capabilities", tags=["operations"])
     def capabilities():

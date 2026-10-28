@@ -6,6 +6,7 @@ Current developer handoff:
 - [Operator / web application guide](docs/web-integration.md)
 - [Single-ZIP capture format and upload examples](docs/zip-capture.md)
 - `scripts/start-remote-test.ps1 -MockGeometry`: external HTTPS/WSS test environment
+- `.venv/bin/python scripts/host_mac.py start`: macOS background Inspector + temporary HTTPS (use `status` / `stop` to manage it)
 - `.local/ios-connection.json`: private phone URL/device credentials
 - `.local/web-connection.json`: private operator connection settings
 
@@ -239,3 +240,11 @@ inspection verdict. The actual iPhone app still needs to wire these network call
 this checkout includes a Swift transport reference and remote connection files.
 
 See [the first-increment contract additions](docs/first-increment-contract.md).
+
+## Operator UI and deployment
+
+The service now serves an operator console at `/`: capture assignments, BIM
+intake, device status, persistent session history and Geometry results. See
+[operator-console.md](docs/operator-console.md) for authentication, supported
+operations, local/container launch, verification and the Oracle Always Free
+hosting target. LLM execution and BIM comparison remain future work.
