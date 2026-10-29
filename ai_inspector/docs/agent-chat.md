@@ -199,8 +199,8 @@ service configuration and conversation snapshot are omitted from this user view.
 Work-plan data is retained but its controls remain hidden in the demo.
 
 Opening a file does not send it to the model. Selecting a drawing region or IFC
-element attaches a visible context chip to the next message. One selection per
-message; clear it with ×. PDF/image selection contains normalized `[x,y,width,height]`
+element attaches a visible context chip to the next message. One drawing region or up to 20 IFC elements per
+message; use Multi-select or Shift-click to add/remove elements, clear with ×. PDF/image selection contains normalized `[x,y,width,height]`
 (top-left origin, current page), file ID, and a bounded JPEG preview. IFC selection
 contains STEP express_id, GlobalId, basic properties and the highlighted model view.
 The server binds the IFC STEP identity to the stored source and rejects mismatches.
@@ -210,7 +210,7 @@ No external viewer service receives files. Imported files remain private in Stor
 
 `POST /v1/chats/{chat_id}/messages` accepts optional `document_selection`:
 `file_id`, `kind` (`region` or `ifc`), `label`, optional `page`, `bbox`, `express_id`,
-`global_id`, `properties`, `image_data` (JPEG data URL, <=350000 characters).
+`global_id`, `properties`, optional `elements` (up to 20 IFC identity/property records), `image_data` (JPEG data URL, <=350000 characters).
 The file must also be in `file_ids` and available to this chat/operator. Selection
 and preview freeze with the durable request for exact retries; public run history
 contains reference metadata but not the image payload. No DB migration is required.
@@ -225,3 +225,17 @@ workers and WASM compilation only; it does not allow arbitrary JS eval or remote
 Supported: IFC displayable geometry, PDF pages, PNG/JPEG/WebP. Native DWG/RVT are not
 supported; export to PDF/IFC. IFC rendering is capped at 1.5 million vertices. Existing
 8 MiB upload limits apply. The browser may reject more complex or malformed models.
+
+The demo shows Capture Devices as an always-open list (currently the single
+configured device); multi-device backend registration is not implemented by this UI.
+No last-seen or connection counters are displayed. The Room input is removed from
+the composer; new chats use internal room_id `unspecified`, not a claimed real room.
+File context chips can be removed independently of deleting the stored file. Clearing
+a document selection also unchecks its file for the next message. Upload success
+does not produce a persistent banner.
+
+Activity is a compact current-action button opening a modal timeline of loaded chat
+runs and completed tools, without raw JSON. Public runs expose `active_tool` as only
+the pending validated tool name, or null. The UI polls at its existing interval; short
+tool calls may only appear in completed history. No invented progress or internal
+reasoning is shown. Reduced-motion preferences disable decorative animations.

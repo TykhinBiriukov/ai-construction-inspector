@@ -38,7 +38,7 @@
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;chosenFiles.clear();uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
-    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); $('selection').hidden=true; historySignature=''; resetDocument();
+    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); delete $('activity').dataset.signature; $('selection').hidden=true; historySignature=''; resetDocument();
   }
   function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
@@ -54,6 +54,7 @@
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
     $('resume').hidden=!pending || sending; $('resume').disabled=sending;
     $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    updateActivityStatus();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
   function renderRails() {
@@ -66,7 +67,7 @@
     }
     if(!scopedSessions.length) $('tasks').append(node('p','muted','No capture tasks yet. Ask Inspector to create one.'));
     $('device-state').textContent=device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',device.online);
-    $('device-name').textContent=device.device_id; $('device-seen').textContent=`Last seen · ${timestamp(device.last_seen_at)}`;
+    $('device-name').textContent=device.device_id;
     if(selected) { const session=scopedSessions.find(s=>s.session_id===selected); if(session) showTask(session); }
   }
   function showTask(session) {
@@ -82,6 +83,13 @@
   }
   function renderArtifact(item) {
     if(!['metric','bar_chart','table'].includes(item.type)) return null;
+    if(item.type==='table'&&String(item.source).includes('device_status')){
+      const online=(item.rows||[]).find(r=>String(r[0]).toLowerCase()==='online');
+      if(online&&['true','false'].includes(String(online[1]).toLowerCase())){
+        const card=node('section','artifact');const name=(item.rows||[]).find(r=>String(r[0]).toLowerCase()==='device_id');
+        card.append(node('h4','',name?.[1]||'Capture device'),node('div','device-status-result',String(online[1]).toLowerCase()==='true'?'Online':'Offline'));return card;
+      }
+    }
     const box=node('section',`artifact${item.type==='table'?' artifact-wide':''}`); box.append(node('h4','',item.title));
     if(item.type==='metric') box.append(node('div','metric-value',`${item.value}${item.unit?' '+item.unit:''}`));
     if(item.type==='bar_chart') {
@@ -93,6 +101,30 @@
       const body=node('tbody'); for(const values of item.rows||[]) { const tr=node('tr'); for(const value of values) tr.append(node('td','',value??'—')); body.append(tr); } table.append(body); box.append(table);
     }
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
+  }
+  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task'};
+  function updateActivityStatus(){
+    const last=chat?.runs?.at(-1),busy=sending||!!(last&&!['completed','failed'].includes(last.status));
+    const text=busy?(last?.active_tool?toolLabels[last.active_tool]||`Running ${last.active_tool}`:'Preparing response…'):last?.status==='failed'?'Request needs attention':last?'Response ready':'Inspector is ready';
+    $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',busy);
+  }
+  function toolSummary(tool){const r=tool.result||{};if(r.error)return r.error.message||'This action could not be completed.';
+    if(tool.name==='device_status')return `${r.device_id||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
+    const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
+    if(tool.name==='session_create'||tool.name==='session_get')return session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
+    return 'Completed';
+  }
+  function renderActivity(runs){
+    const signature=JSON.stringify(runs.map(r=>[r.run_id,r.status,r.active_tool,r.tool_results]));if($('activity').dataset.signature===signature)return;
+    $('activity').dataset.signature=signature;$('activity').replaceChildren();
+    if(!runs.length){$('activity').append(node('p','process-empty','Actions will appear here when you send a request.'));return;}
+    for(const run of [...runs].reverse()){
+      const group=node('section','process-run');group.append(node('h3','',run.text.slice(0,140)),node('small','process-date',timestamp(run.created_at)));
+      const steps=node('ol','process-steps');
+      for(const tool of run.tool_results||[]){const step=node('li',tool.result?.error?'step-error':'step-done');step.append(node('strong','',toolLabels[tool.name]||tool.name),node('p','',toolSummary(tool)));steps.append(step);}
+      if(run.active_tool){const step=node('li','step-running');step.append(node('strong','',toolLabels[run.active_tool]||run.active_tool),node('p','','In progress'));steps.append(step);}
+      const final=node('li',run.status==='completed'?'step-done':run.status==='failed'?'step-error':'step-running');final.append(node('strong','',run.status==='completed'?'Response delivered':run.status==='failed'?'Unable to complete request':'Preparing response'),node('p','',run.error?.message||(!(run.tool_results||[]).length&&run.status==='completed'?'Answered without calling tools.':'')));steps.append(final);group.append(steps);$('activity').append(group);
+    }
   }
   function renderConversation() {
     const runs=chat?.runs||[], signature=JSON.stringify(runs);
@@ -113,18 +145,16 @@
       }
       if(follow) $('messages').scrollTop=$('messages').scrollHeight;
     }
-    $('activity').replaceChildren();
+    renderActivity(runs);
     const last=runs.at(-1);
-    if(last) {
-      const state=node('div','activity-item',`Agent · ${last.status}`); state.append(node('small','',timestamp(last.updated_at))); $('activity').append(state);
-      for(const tool of last.tool_results||[]) {
-        const event=node('div','activity-item',`${tool.result?.error?'!':'✓'} ${tool.name}`); event.append(node('small','',tool.result?.error?'Tool reported an error':'Tool result saved'));
-        const detail=node('details'); detail.append(node('summary','','View result'),node('pre','',JSON.stringify(tool.result,null,2))); event.append(detail); $('activity').append(event);
+    if(last&&!['completed','failed'].includes(last.status)) {
+      if(!pending||pending.request_id!==last.request_id){
+        // Preserve an existing frozen payload, including its image, on refresh.
+        pending={schema_version:'0.1',request_id:last.request_id,text:last.text,file_ids:last.file_ids||[]};
+        if(last.document_selection) { notify('This request is still running. Resume from the browser tab that sent its document selection.'); pending=null; }
+        remember();
       }
-      if(!(last.tool_results||[]).length) $('activity').append(node('p','muted',last.status==='completed'?'Answered without a tool call.':'No completed tool calls reported yet.'));
-      if(!['completed','failed'].includes(last.status)) { pending={schema_version:'0.1',request_id:last.request_id,text:last.text,file_ids:last.file_ids||[]}; remember(); }
-      else if(pending?.request_id===last.request_id) { pending=null; remember(); if(!sending) $('message').value=''; }
-    } else $('activity').append(node('p','muted','No agent request in this conversation yet.'));
+    } else if(last&&pending?.request_id===last.request_id){pending=null;remember();if(!sending)$('message').value='';}
     controls();
   }
   async function refresh() {
@@ -229,7 +259,9 @@
       });row.append(remove);$('files').append(row);
     }
     if(!$('files').childNodes.length)$('files').append(node('p','muted',showTrash?'Trash is empty.':'No files yet. Attach a file beside the message input.'));
-    for(const id of chosenFiles){const file=files.find(f=>f.file_id===id);if(file)$('selected-files').append(node('span','selected-chip',`${file.name} · ${documentContext?.file_id===file.file_id?'selected preview + reference':file.content_available?'text':'metadata only'}`));}
+    for(const id of chosenFiles){const file=files.find(f=>f.file_id===id);if(!file||documentContext?.file_id===id)continue;
+      const chip=node('span','selected-chip');chip.append(node('span','',file.name));const remove=node('button','','×');remove.type='button';remove.setAttribute('aria-label',`Remove ${file.name} from message`);remove.disabled=sending||!!pending;remove.onclick=()=>{chosenFiles.delete(id);renderFiles();};chip.append(remove);$('selected-files').append(chip);
+    }
   }
   async function downloadFile(file) {
     const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});
@@ -247,7 +279,7 @@
         uploadQueue.shift();await loadWorkspace(); if(chosenFiles.size<8)chosenFiles.add(entry.id);renderFiles();
         const uploaded=workState?.files?.find(f=>f.file_id===entry.id);if(uploaded&&/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
       }
-      $('file-input').value='';notify('Files uploaded. Checked files will be included with your next message.');
+      $('file-input').value='';notify();
     }catch(error){if(error.status>=400&&error.status<500&&![408,429].includes(error.status)){uploadQueue=[];$('file-input').value='';notify(`Upload rejected: ${error.message}. Choose a file again.`);}else notify(`Upload was not confirmed: ${error.message}. Use Retry upload to reuse the same upload ID.`);}
     finally{workspaceBusy=false;controls();$('attach-file').textContent=uploadQueue.length?'Retry upload':'＋';}
   }
@@ -332,7 +364,8 @@
   },text=>{$('document-status').textContent=text;});
   function resetDocument(){documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
   async function openDocument(file){if(file.deleted||sending||pending)return;const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
-  $('clear-document-context').onclick=()=>{viewer.clearSelection();renderFiles();};
+  $('clear-document-context').onclick=()=>{if(documentContext)chosenFiles.delete(documentContext.file_id);viewer.clearSelection();renderFiles();};
+  $('multi-select').onclick=()=>{viewer.multiSelect=!viewer.multiSelect;$('multi-select').setAttribute('aria-pressed',String(viewer.multiSelect));};
   $('document-download').onclick=()=>{const file=workState?.files?.find(f=>f.file_id===documentOpenId);if(file)downloadFile(file).catch(e=>notify(e.message));};
   $('zoom-in').onclick=()=>viewer.zoom(1.2);$('zoom-out').onclick=()=>viewer.zoom(1/1.2);$('zoom-fit').onclick=()=>viewer.zoom(1);
   $('page-prev').onclick=()=>viewer.next(-1).catch(e=>notify(e.message));$('page-next').onclick=()=>viewer.next(1).catch(e=>notify(e.message));
@@ -342,6 +375,7 @@
   function applyLayout(){layout.files=Math.max(150,Math.min(340,Number(layout.files)||210));layout.dialogue=Math.max(280,Math.min(innerWidth*.5,Number(layout.dialogue)||360));layout.scale=Math.max(.85,Math.min(1.3,Number(layout.scale)||1));root.style.setProperty('--files-width',layout.files+'px');root.style.setProperty('--dialogue-width',layout.dialogue+'px');root.style.setProperty('--ui-scale',layout.scale);$('ui-scale').value=String(layout.scale);write(localStorage,layoutKey,JSON.stringify(layout));}
   for(const [id,key,direction] of [['resize-files','files',1],['resize-dialogue','dialogue',-1]]){const handle=$(id);let drag=null;handle.onpointerdown=e=>{if(e.button!==0)return;drag={x:e.clientX,width:layout[key]};handle.setPointerCapture(e.pointerId);};handle.onpointermove=e=>{if(!drag)return;layout[key]=drag.width+(e.clientX-drag.x)*direction;applyLayout();};handle.onpointerup=handle.onpointercancel=()=>{drag=null;};handle.onkeydown=e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();layout[key]+=(e.key==='ArrowRight'?20:-20)*direction;applyLayout();};}
   $('ui-scale').onchange=()=>{layout.scale=Number($('ui-scale').value);applyLayout();};$('reset-layout').onclick=()=>{layout={files:210,dialogue:360,scale:1};applyLayout();viewer.zoom(1);};applyLayout();
+  $('activity-open').onclick=()=>$('activity-dialog').showModal();
   $('plan-template').addEventListener('click',()=>downloadBlob(new Blob(['title,location,reference\n'],{type:'text/csv'}),'plan-template.csv'));
   $('import-plan').addEventListener('click',async()=>{
     if(workspaceBusy)return;
