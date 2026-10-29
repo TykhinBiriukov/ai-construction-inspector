@@ -13,8 +13,8 @@
 .workspace-panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin:12px 0;flex-shrink:0;align-items:start}
 .workspace-panel{border:1px solid var(--line);border-radius:10px;min-width:0;background:#f7f8f2}
 .workspace-panel summary{padding:12px 14px;cursor:pointer;font-size:11px;font-weight:600;color:#43553b}
-.panel-body{padding:0 14px 12px;max-height:225px;overflow:auto;scrollbar-width:thin}
+.panel-body{padding:0 14px 12px;max-height:min(200px,18dvh);overflow:auto;scrollbar-width:thin}
 .panel-body .insight-heading{margin-top:16px}.panel-body .services{margin-bottom:12px;padding-bottom:12px}.panel-body #work-progress{margin-bottom:0}.plan-toolbar{display:flex;justify-content:flex-end}.panel-body .snapshot{margin-bottom:0}.panel-body .activity{margin-top:0}
 .device-view{margin-top:24px}.device-view h3{font-size:11px;font-weight:600;margin:0 0 12px}.camera-placeholder,.location-placeholder{border:1px dashed #d7dccf;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;text-align:center;color:#89917f;background:#f1f3ec}.camera-placeholder{aspect-ratio:4/3}.camera-placeholder span{font-size:28px}.location-placeholder{min-height:175px}.device-view p{font-size:11px;line-height:1.7;margin:8px 0}
-@media(max-width:1150px){.workspace-panels{gap:8px}.panel-body{padding:0 10px 10px;max-height:180px}}
+@media(max-width:1150px){.workspace-panels{gap:8px}.panel-body{padding:0 10px 10px;max-height:min(180px,18dvh)}}
 @media(max-width:600px){.workspace-panels{grid-template-columns:1fr}.panel-body{max-height:200px}}
