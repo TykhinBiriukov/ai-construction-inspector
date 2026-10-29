@@ -189,6 +189,7 @@ final class InspectorConnection: ObservableObject {
             }
             if let current = active {
                 let latest = try JSONDecoder().decode(InspectorAssignment.self, from: await request("v1/sessions/\(current.id)"))
+                guard active?.id == current.id, !busy else { return false }
                 try latest.validate(device: device)
                 guard latest.sameContext(as: current), latest.revision >= current.revision else { throw CaptureError.invalid("Изменился закреплённый контекст") }
                 if latest.capture_state == "cancelled" { try close(current.id); status = "Сессия отменена Inspector" }
@@ -423,6 +424,21 @@ final class InspectorConnection: ObservableObject {
         guard let pending = journal.pending, pending.transportFormat != "zip", pending.manifestBytes == nil else { uploadProgress = nil; return }
         uploadProgress = pending.fileUploadFraction
     }
+    func cancelActive() async -> String? {
+        guard !busy, let current = active else { return "Дождитесь завершения текущей операции" }
+        busy = true; defer { busy = false }
+        do {
+            let data = try await request("v1/sessions/\(current.id)/abort", method: "POST")
+            let cancelled = try JSONDecoder().decode(InspectorAssignment.self, from: data)
+            guard sameUUID(cancelled.id, current.id), cancelled.capture_state == "cancelled" else {
+                throw CaptureError.invalid("Inspector ещё не подтвердил отмену")
+            }
+            try close(current.id)
+            status = "Задание отменено. Фото сохранены на телефоне."
+            return nil
+        } catch { return "Не удалось отменить задание: " + error.localizedDescription }
+    }
+
     private func close(_ id: String) throws {
         uploadProgress = nil
         journal.closedSessionIDs.append(id); journal.active = nil; journal.pending = nil; journal.completionRejected = false

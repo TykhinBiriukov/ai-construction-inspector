@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        0000000000000000000000D7 = {isa = PBXBuildFile; fileRef = 000000000000000000000073; };
         0000000000000000000000D6 = {isa = PBXBuildFile; fileRef = 000000000000000000000072; };
         0000000000000000000000D5 = {isa = PBXBuildFile; fileRef = 000000000000000000000071; };
 		0000000000000000000000D4 = {isa = PBXBuildFile; fileRef = 000000000000000000000070; };
@@ -25,6 +26,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        000000000000000000000073 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
         000000000000000000000072 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabRoom3D.swift; sourceTree = "<group>"; };
         000000000000000000000071 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationLab.swift; sourceTree = "<group>"; };
 		000000000000000000000070 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialCapture.swift; sourceTree = "<group>"; };
@@ -65,7 +67,8 @@
 		000000000000000000000003 /* AIInspector */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000064 /* AIInspectorApp.swift */,
+				000000000000000000000073 /* Assets.xcassets */,
+                000000000000000000000064 /* AIInspectorApp.swift */,
 				000000000000000000000065 /* InspectorModel.swift */,
 				000000000000000000000066 /* CaptureService.swift */,
 				000000000000000000000067 /* Observation.swift */,
@@ -143,6 +146,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                0000000000000000000000D7 /* Assets.xcassets */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -200,6 +204,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INSPECTOR_PUSH_ENABLED = NO;
 				APNS_ENVIRONMENT = development;
 				CURRENT_PROJECT_VERSION = 1;
@@ -220,6 +225,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+                ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INSPECTOR_PUSH_ENABLED = NO;
 				APNS_ENVIRONMENT = development;
 				CURRENT_PROJECT_VERSION = 1;
