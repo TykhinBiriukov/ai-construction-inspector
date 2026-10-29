@@ -101,6 +101,7 @@
   }
   function renderConversation() {
     const runs=chat?.runs||[], signature=JSON.stringify(runs);
+    $('suggestions').hidden=runs.length>0;
     if(historySignature!==signature) {
       const follow = $('messages').scrollHeight - $('messages').scrollTop - $('messages').clientHeight < 100;
       historySignature=signature;
