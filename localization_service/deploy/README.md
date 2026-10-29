@@ -61,9 +61,12 @@ rotation; this prototype does not implement immediate token revocation on abort.
 BIM storage is capped at50MiB and per-file IFC at8MiB. Existing evidence budget100MiB.
 
 Current importer: one axis-aligned rectangular room, four walls, one floor, one
-space and one door/opening on min-X, metre units. New compatible IFC versions are
-accepted per session; whole buildings, other door walls and rotated rooms remain
-unsupported. This does not implement the Inspector LLM instruction-ownership
+space, metre units. Supports multiple doors on any wall and window openings.
+For multiple doors the phone must select an entry before starting capture.
+The selected entry defines a right-handed room frame (entry wall at X=0);
+selection persists for the session and cannot change after capture starts.
+All wall apertures are excluded from registration wall evidence and coverage.
+Whole buildings, non-rectangular and rotated rooms remain unsupported. This does not implement the Inspector LLM instruction-ownership
 handoff or a drift monitor.
 
 ## Verification

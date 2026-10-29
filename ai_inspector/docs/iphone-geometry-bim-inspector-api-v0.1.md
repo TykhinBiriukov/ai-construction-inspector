@@ -1294,6 +1294,39 @@ pose, finish and GET session retain the existing lab JSON shapes. An observation
 is one RGB/depth/frame bundle. Geometry and final capture uploads are unchanged.
 Unsupported IFC returns422; unavailable service returns503, with local captures
 preserved. Current importer supports one axis-aligned rectangular room, four walls,
-one floor/space and one doorway on min-X, metre units. No fixed model is bundled.
+one floor/space, one or more doorways on any wall, optional windows, metre units. No fixed model is bundled.
 Tokens are session scoped but do not yet expire on Inspector abort. Inspector LLM
 instruction-owner handoff remains separate from this capture/localization adapter.
+
+
+### Rectangular room openings and entry selection — 29 October
+
+`GET /v1/localization/sessions/{id}/config` additionally returns
+`entry_selection_required` and `room.doors`, `room.openings`, `room.entry_element_id`,
+`room.entry_confirmed`, `room.bim_frame_id`, `room.T_bim_ifc`.
+Each door has `element_id`, `label`, `name`, `opening_id`, `axis`, `plane`, `low`, `high`.
+Bounds and meshes use the same right-handed Y-up room coordinates in metres.
+Each aperture has `opening_id`, `kind`, `axis`, `plane`, `low`, `high`.
+
+For one door, entry is selected automatically. For multiple doors, iPhone shows
+numbered doors on the 3D model and requires explicit choice before capturing:
+`POST /v1/localization/sessions/{id}/entry` with `{"entry_element_id":"<IfcDoor GlobalId>"}`.
+It returns the same configuration shape, with updated meshes/room and
+`entry_selection_required:false`. Phone refreshes session state then calls `start`.
+Repeated choice is idempotent. A different entry after segment start or evidence
+submission is rejected (422); create a new session to change entry. A finished
+session rejects selection. Provision retries and service restart preserve the choice.
+
+Selecting an entry rotates/translates IFC into the solver frame, putting that
+wall at X=0 without reflection. `T_bim_ifc` maps original IFC coordinates into this
+frame; `bim_frame_id` identifies the selected entry. All poses, meshes, opening bounds
+and coverage in this session use that same frame. Consumers must not reuse another
+session's frame merely because the IFC hash matches.
+
+Windows are displayed as IfcWindow meshes. Window and door apertures on every wall
+are excluded from wall coverage and from points at/beyond openings used in wall
+registration. This is not verification of window/door installation or glazing.
+The operator still aims the first photo at the selected door from inside; automatic
+visual recognition of which door is being viewed is not implemented. Complex room
+shapes and whole-building extraction remain out of scope. Final Supabase upload,
+Geometry formats and Inspector completion are unchanged.

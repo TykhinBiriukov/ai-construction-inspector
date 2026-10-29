@@ -8,6 +8,7 @@ from pathlib import Path
 import json
 import numpy as np
 from localization_service.core import rigid
+from localization_service.openings import aperture_points
 
 POLICY = 'known-door-rgbd-experimental-v1'
 
@@ -118,7 +119,7 @@ def fit_room(points, cameras, first_pose, room, observation_count):
             if not .25<distance<4.5 or not -off-dw-.3<aim[2]<-off+.3 or not -.2<aim[1]<room['door_height']+.3:continue
             cloud=points@r.T+t
             # Do not penalize measured points beyond an open doorway as wall deviations.
-            portal=(cloud[:,0]<.08)&(cloud[:,2]<-off+.1)&(cloud[:,2]>-off-dw-.1)&(cloud[:,1]<room['door_height']+.2)
+            portal=aperture_points(cloud,room,margin=.10)
             tested=cloud[~portal]
             if len(tested)<600:continue
             distances=np.stack([abs(tested[:,0]),abs(tested[:,0]-L),abs(tested[:,2]),abs(tested[:,2]+W),abs(tested[:,1])],axis=1)

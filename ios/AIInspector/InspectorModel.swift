@@ -111,6 +111,7 @@ final class InspectorModel: ObservableObject {
         busy = true
         defer { busy = false }
         do {
+            if localization.choosingEntry { throw CaptureError.invalid("Сначала выберите входную дверь на плане") }
             if synthetic && segment == nil { try await InspectorConnection.shared.startCapture(); try newSegment() }
             guard let session = manifest, let segment else { throw CaptureError.invalid("Сначала включите камеру") }
             let spatialInstruction = localization.enabled ? localization.instruction : InspectorConnection.shared.liveInstruction(segment: segment)

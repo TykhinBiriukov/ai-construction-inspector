@@ -12,6 +12,7 @@ struct LabDisplayMesh: Decodable {
 struct LabDisplayConfiguration: Decodable {
     let room: LabState.Room
     let meshes: [LabDisplayMesh]
+    let entry_selection_required: Bool?
 }
 
 struct LabRoom3DPanel: View {
@@ -58,7 +59,7 @@ struct LabRoom3D: UIViewRepresentable {
     }
     func updateUIView(_ view: SCNView, context: Context) {
         let coordinator = context.coordinator
-        if coordinator.version != state.room.model_version { coordinator.configure(view, state: state, meshes: meshes) }
+        if coordinator.version != state.room.model_version + (state.room.bim_frame_id ?? "") + String(state.room.entry_confirmed ?? true) { coordinator.configure(view, state: state, meshes: meshes) }
         if coordinator.lastReset != reset { coordinator.resetCamera(view, room: state.room); coordinator.lastReset = reset }
         coordinator.update(state: state, live: live)
     }
@@ -76,7 +77,7 @@ struct LabRoom3D: UIViewRepresentable {
             return m
         }
         func configure(_ view: SCNView, state: LabState, meshes: [LabDisplayMesh]) {
-            let scene = SCNScene();view.scene = scene;version = state.room.model_version
+            let scene = SCNScene();view.scene = scene;version = state.room.model_version + (state.room.bim_frame_id ?? "") + String(state.room.entry_confirmed ?? true)
             for mesh in meshes {
                 guard mesh.vertices.count == mesh.normals.count, !mesh.vertices.isEmpty,
                       mesh.vertices.allSatisfy({ $0.count == 3 && $0.allSatisfy(\.isFinite) }),
@@ -87,11 +88,13 @@ struct LabRoom3D: UIViewRepresentable {
                 let normals = mesh.normals.map { SCNVector3(Float($0[0]),Float($0[1]),Float($0[2])) }
                 let element = SCNGeometryElement(indices: mesh.triangles, primitiveType: .triangles)
                 let geometry = SCNGeometry(sources: [SCNGeometrySource(vertices: vertices), SCNGeometrySource(normals: normals)], elements: [element])
-                let color: UIColor = mesh.kind == "IfcDoor" ? .systemBlue : (mesh.kind == "IfcSlab" ? .white : .systemGray3)
+                let selected = mesh.element_id == state.room.entry_element_id && state.room.entry_confirmed != false
+                let color: UIColor = mesh.kind == "IfcWindow" ? .systemCyan : (mesh.kind == "IfcDoor" ? (selected ? .systemBlue : .systemOrange) : (mesh.kind == "IfcSlab" ? .white : .systemGray3))
                 geometry.materials = [material(color)]
                 let node = SCNNode(geometry: geometry);node.name = mesh.element_id
                 if mesh.kind == "IfcWall" { node.opacity = 0.24; node.geometry?.firstMaterial?.writesToDepthBuffer = false }
-                if mesh.kind == "IfcDoor" { node.opacity = 0.5 }
+                if mesh.kind == "IfcDoor" { node.opacity = 0.7 }
+                if mesh.kind == "IfcWindow" { node.opacity = 0.45 }
                 scene.rootNode.addChildNode(node)
             }
             // Everything below stays in the same right-handed BIM coordinates as IFC meshes.
@@ -105,11 +108,17 @@ struct LabRoom3D: UIViewRepresentable {
             tip.eulerAngles.x = -.pi/2;tip.position.z = -0.65;tip.geometry?.materials = [material(.systemBlue)];device.addChildNode(tip)
             scene.rootNode.addChildNode(device)
             photos = SCNNode();scene.rootNode.addChildNode(photos);photoPositions = []
-            let label = SCNText(string: "Вход", extrusionDepth: 0.001);label.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-            label.materials = [material(.systemBlue)]
-            let text = SCNNode(geometry: label);text.scale = SCNVector3(0.018,0.018,0.018)
-            text.position = SCNVector3(0.05,Float(state.room.door_height+0.15),Float(-state.room.door_offset-state.room.door_width/2))
-            text.constraints = [SCNBillboardConstraint()];scene.rootNode.addChildNode(text)
+            if let doors = state.room.doors {
+                for door in doors where door.low.count == 3 && door.high.count == 3 {
+                    let selected = door.id == state.room.entry_element_id && state.room.entry_confirmed != false
+                    let label = SCNText(string: (selected ? "Вход · " : "") + door.label, extrusionDepth: 0.001)
+                    label.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+                    label.materials = [material(selected ? .systemBlue : .systemOrange)]
+                    let text = SCNNode(geometry: label); text.scale = SCNVector3(0.018,0.018,0.018)
+                    text.position = SCNVector3(Float((door.low[0]+door.high[0])/2),Float(door.high[1]+0.15),Float((door.low[2]+door.high[2])/2))
+                    text.constraints = [SCNBillboardConstraint()]; scene.rootNode.addChildNode(text)
+                }
+            }
             eye = SCNNode();eye.camera = SCNCamera();eye.camera?.fieldOfView = 48;eye.camera?.zNear = 0.02;eye.camera?.zFar = 100
             scene.rootNode.addChildNode(eye);resetCamera(view, room: state.room)
             update(state: state, live: false)

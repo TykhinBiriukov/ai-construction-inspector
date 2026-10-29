@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import numpy as np
 from localization_service.registration import backproject
+from localization_service.openings import tile_intersects_opening
 
 CELL = .10
 TOLERANCE = .06
@@ -28,9 +29,7 @@ def surface_tiles(points, camera, room):
             # Entire tile must fit within the measured room surface.
             lo=center.copy();hi=center.copy();lo[[u,v]]-=CELL/2;hi[[u,v]]+=CELL/2
             if lo[0]<-1e-6 or hi[0]>length+1e-6 or lo[1]<-1e-6 or hi[1]>height+1e-6 or lo[2]<-width-1e-6 or hi[2]>1e-6: continue
-            if axis==0 and plane==0:
-                door_min=-room['door_offset']-room['door_width'];door_max=-room['door_offset']
-                if lo[1]<room['door_height'] and hi[2]>door_min and lo[2]<door_max: continue
+            if axis!=1 and tile_intersects_opening(room,axis,plane,lo,hi):continue
             key=f'{axis}:{plane}:{iu}:{iv}'
             size=[CELL,CELL,CELL];size[axis]=.006
             tiles[key]={'id':key,'center':center.tolist(),'size':size}

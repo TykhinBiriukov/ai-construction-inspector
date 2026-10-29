@@ -4,6 +4,7 @@ import hashlib
 import numpy as np
 import ifcopenshell
 import ifcopenshell.geom
+from localization_service.openings import bounds_after, wall_for, select_entry
 
 
 def load_room(path):
@@ -13,8 +14,8 @@ def load_room(path):
     if len(units)!=1 or not units[0].is_a('IfcSIUnit') or units[0].Name!='METRE' or units[0].Prefix is not None:
         raise ValueError('First test supports IFC metre units only')
     walls, doors, openings, spaces = [model.by_type(t) for t in ('IfcWall','IfcDoor','IfcOpeningElement','IfcSpace')]
-    if len(walls) != 4 or len(doors) != 1 or len(openings) != 1 or len(spaces) != 1:
-        raise ValueError('First test requires one rectangular room, four walls and one door/opening')
+    if len(walls) != 4 or not doors or not openings or len(spaces) != 1:
+        raise ValueError('Requires one rectangular room, four walls and at least one door/opening')
     settings = ifcopenshell.geom.settings()
     settings.set(settings.USE_WORLD_COORDS, True)
     def bounds(element):
@@ -32,19 +33,43 @@ def load_room(path):
     if len(floors) != 1: raise ValueError('Expected one floor')
     floor = bounds(floors[0])[1][2]
     height = min(b[1][2] for b in boxes)-floor
-    low, high = bounds(openings[0])
-    if not low[0] <= xmin <= high[0] or abs(low[2]-floor) > .05:
-        raise ValueError('First test requires the selected door in the min-X wall at floor level')
     length, width = xmax-xmin, ymax-ymin
     if min(length,width,height) <= 0: raise ValueError('Invalid interior room bounds')
-    transform = [[1,0,0,-xmin],[0,0,1,-floor],[0,-1,0,ymin],[0,0,0,1]]
-    return {'model_version':hashlib.sha256(path.read_bytes()).hexdigest(), 'room_id':spaces[0].GlobalId,
-            'entry_element_id':doors[0].GlobalId, 'bim_frame_id':'local-meters-y-up',
-            'units':'m', 'T_bim_ifc':np.array(transform).tolist(),
-            'length':float(length), 'width':float(width), 'height':float(height),
-            'door_offset':float(low[1]-ymin), 'door_width':float(high[1]-low[1]),
-            'door_height':float(high[2]-floor), 'door_dimensions_approximate':True,
-            'assumption':'First image is centered on the selected door from inside the room.'}
+    # Full rectangular boundary required; rotated/partial walls remain unsupported.
+    if any(b[0][1]>ymin+.06 or b[1][1]<ymax-.06 for b in xs) or any(b[0][0]>xmin+.06 or b[1][0]<xmax-.06 for b in ys):
+        raise ValueError('Walls do not enclose a complete rectangle')
+    transform=np.array([[1,0,0,-xmin],[0,0,1,-floor],[0,-1,0,ymin],[0,0,0,1]])
+    apertures=[]
+    for opening in openings:
+        hosts=[rel.RelatingBuildingElement for rel in opening.VoidsElements]
+        if hosts and (len(hosts)!=1 or hosts[0] not in walls):raise ValueError('Only wall openings in this room are supported')
+        lo,hi=bounds_after(*bounds(opening),transform)
+        axis,plane=wall_for(lo,hi,length,width)
+        other=2 if axis==0 else 0
+        if lo[1]<-.06 or hi[1]>height+.06 or hi[other]-lo[other]<.05:raise ValueError('Invalid opening bounds')
+        fills=[rel.RelatedBuildingElement for rel in opening.HasFillings]
+        kind=fills[0].is_a() if len(fills)==1 else 'IfcOpeningElement'
+        apertures.append(dict(opening_id=opening.GlobalId,kind=kind,axis=axis,plane=plane,low=lo,high=hi))
+    candidates=[]
+    for door in sorted(doors,key=lambda d:d.GlobalId):
+        linked=[rel.RelatingOpeningElement.GlobalId for rel in door.FillsVoids]
+        if linked:
+            matches=[o for o in apertures if o['opening_id'] in linked]
+        else:
+            # Legacy simple IFCs may omit IfcRelFillsElement; only a unique geometric match is accepted.
+            lo,hi=bounds_after(*bounds(door),transform)
+            matches=[o for o in apertures if all(hi[i]>=o['low'][i]-.06 and lo[i]<=o['high'][i]+.06 for i in range(3))]
+        if len(matches)!=1:raise ValueError('Door must reference exactly one identifiable opening')
+        opening=matches[0]
+        if abs(opening['low'][1])>.05:raise ValueError('Entry doors must start at floor level')
+        if any(d['opening_id']==opening['opening_id'] for d in candidates):raise ValueError('Multiple doors share one opening')
+        opening['kind']='IfcDoor'
+        candidates.append(dict(opening,element_id=door.GlobalId,label='Дверь '+str(len(candidates)+1),name=door.Name or ''))
+    room={'import_version':2,'model_version':hashlib.sha256(path.read_bytes()).hexdigest(), 'room_id':spaces[0].GlobalId,
+          'units':'m','T_bim_ifc':transform.tolist(),'length':float(length),'width':float(width),'height':float(height),
+          'openings':apertures,'doors':candidates,'door_dimensions_approximate':True,
+          'assumption':'First image is centered on the selected door from inside the room.'}
+    return select_entry(room,candidates[0]['element_id'],confirmed=len(candidates)==1)
 
 
 def load_display_meshes(path, room):
@@ -52,7 +77,7 @@ def load_display_meshes(path, room):
     model=ifcopenshell.open(str(path));settings=ifcopenshell.geom.settings()
     settings.set(settings.USE_WORLD_COORDS,True)
     transform=np.array(room['T_bim_ifc']);meshes=[]
-    for element in model.by_type('IfcWall')+model.by_type('IfcSlab')+model.by_type('IfcDoor'):
+    for element in model.by_type('IfcWall')+model.by_type('IfcSlab')+model.by_type('IfcDoor')+model.by_type('IfcWindow'):
         shape=ifcopenshell.geom.create_shape(settings,element)
         vertices=np.array(shape.geometry.verts).reshape(-1,3)
         vertices=vertices@transform[:3,:3].T+transform[:3,3]

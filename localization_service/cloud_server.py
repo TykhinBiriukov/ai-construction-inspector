@@ -12,6 +12,7 @@ from uuid import UUID
 from localization_service.lab_server import Handler, Lab
 from localization_service.cloud_store import PostgresStore
 from localization_service.room_model import load_room, load_display_meshes
+from localization_service.openings import select_entry, reframe_meshes
 
 
 class CloudRegistry:
@@ -33,7 +34,7 @@ class CloudRegistry:
         try:
             room=load_room(path);meshes=load_display_meshes(path,room)
         except Exception as error:
-            raise ValueError('Unsupported IFC: requires one axis-aligned rectangular room, four walls, one floor and one door/opening on the min-X wall, in metres') from error
+            raise ValueError('Unsupported IFC: requires one axis-aligned rectangular room, four walls, one floor, wall openings and at least one entry door, in metres') from error
         finally:path.unlink(missing_ok=True)
         with self.store.connect() as db:
             used=db.execute('SELECT COALESCE(sum(octet_length(content)),0) FROM localization.models').fetchone()[0]
@@ -42,14 +43,22 @@ class CloudRegistry:
                        (digest,content,json.dumps(room),json.dumps(meshes)))
         return room,meshes
 
-    def lab(self,digest,content=None):
-        if digest in self.labs:
-            self.labs.move_to_end(digest);return self.labs[digest]
-        room,meshes=self.model(digest,content)
+    def lab(self,digest,content=None,context=None):
+        base,meshes=self.model(digest,content)
+        room=context if context is not None else base
+        key=hashlib.sha256(json.dumps(room,sort_keys=True).encode()).hexdigest()
+        if key in self.labs:
+            self.labs.move_to_end(key);return self.labs[key]
+        if room!=base:meshes=reframe_meshes(meshes,base,room)
         lab=Lab(self.data/'evidence',room,'unused',meshes,store=self.store)
-        self.labs[digest]=lab
+        self.labs[key]=lab
         while len(self.labs)>2:self.labs.popitem(last=False)
         return lab
+
+    @staticmethod
+    def configuration_for(lab):
+        return {'room':lab.room,'meshes':lab.meshes,
+                'entry_selection_required':not lab.room.get('entry_confirmed',True)}
 
     def provision(self,body):
         with self.lock:
@@ -59,7 +68,10 @@ class CloudRegistry:
             if len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest):raise ValueError('BIM SHA256 required')
             content=base64.b64decode(body['ifc_base64'],validate=True)
             if hashlib.sha256(content).hexdigest()!=digest:raise ValueError('IFC hash mismatch')
-            lab=self.lab(digest,content)
+            with self.store.connect() as db:
+                prior=db.execute('SELECT state FROM sessions WHERE id=?',(binding['session_id'],)).fetchone()
+            context=json.loads(prior[0])['context'] if prior else None
+            lab=self.lab(digest,content,context=context)
             state=lab.request('POST',['v1','localization','sessions'],binding)
             return {'session_id':state['session_id'],'model_version':binding['model_version'],
                     'session_token':self.session_token(state['session_id'])}
@@ -71,9 +83,24 @@ class CloudRegistry:
             with self.store.connect() as db:
                 row=db.execute('SELECT state FROM sessions WHERE id=?',(sid,)).fetchone()
             if not row:raise LookupError('session')
-            state=json.loads(row[0]);lab=self.lab(state['context']['model_version'])
+            state=json.loads(row[0]);room=state['context']
+            if len(parts)==5 and parts[4]=='entry' and method=='POST':
+                chosen=body['entry_element_id']
+                if state['completed']:raise ValueError('Session finished')
+                if chosen!=room.get('entry_element_id') or not room.get('entry_confirmed',True):
+                    if state['segment'] is not None or state['batches'] or state['evidence']:raise ValueError('Choose entry before starting capture; create a new session to change it')
+                    room=select_entry(room,chosen)
+                    state['context']=room;state['revision']+=1
+                    with self.store.connect() as db:
+                        current=db.execute('SELECT state FROM sessions WHERE id=?',(sid,)).fetchone()
+                        if current[0]!=row[0]:raise ValueError('Session changed; reload before choosing entry')
+                        db.execute('UPDATE sessions SET state=? WHERE id=?',(json.dumps(state),sid))
+                return self.configuration_for(self.lab(room['model_version'],context=room))
+            lab=self.lab(room['model_version'],context=room)
             if len(parts)==5 and parts[4]=='config' and method=='GET':
-                return {'room':lab.room,'meshes':lab.meshes}
+                return self.configuration_for(lab)
+            if method=='POST' and parts[-1] in ('start','observations','pose') and not room.get('entry_confirmed',True):
+                raise ValueError('Select the entry door before starting localization')
             return lab.request(method,parts,body)
 
 
@@ -81,7 +108,7 @@ class CloudHandler(Handler):
     def handle_request(self):
         self.connection.settimeout(30)
         if self.path=='/healthz' and self.command=='GET':
-            self.reply(200,{'status':'ready','model_mode':'per_session_ifc'});return
+            self.reply(200,{'status':'ready','model_mode':'per_session_ifc','room_features':'rectangular_openings_v2'});return
         parts=self.path.strip('/').split('/')
         internal=parts==['internal','localization','sessions'] and self.command=='POST'
         registry=self.server.registry
