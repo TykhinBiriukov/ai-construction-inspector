@@ -8,7 +8,7 @@ const SECURITY_HEADERS = {
 };
 export default {
   async scheduled(controller, env, ctx) {
-    await env.INSPECTOR.getByName('main-geometry-parts-v1').process();
+    await env.INSPECTOR.getByName('main-device-cancel-v2').process();
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -19,7 +19,7 @@ export default {
       for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value);
       return response;
     }
-    const inspector = env.INSPECTOR.getByName('main-geometry-parts-v1');
+    const inspector = env.INSPECTOR.getByName('main-device-cancel-v2');
     const response = await inspector.fetch(request);
     if (request.method === 'POST' && response.ok && /^\/v1\/sessions\/[^/]+\/complete$/.test(url.pathname)) {
       ctx.waitUntil(inspector.process());

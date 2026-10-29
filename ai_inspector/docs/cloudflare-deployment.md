@@ -173,9 +173,11 @@ cloud archive limit. Validation handles one part at a time. Legacy formats remai
 supported. The iOS client currently uses a 15 MiB ceiling, separates ARKit segments
 and RGB-only/test-only parts, and preserves raw depth values and frame IDs.
 
-The gateway and recovery cron target `main-geometry-parts-v1` rather than `main`.
+The gateway and recovery cron target `main-device-cancel-v2` rather than `main`.
 This fresh runtime instance was needed to observe the updated Python contract;
 persistent sessions/work queues remain in the same Supabase schema. Do not reset
 or migrate the database for this change. Live capabilities were checked, but a
 real phone multipart completion is still pending. This is storage handoff, not a
 claim that the external Geometry service consumes the new index yet.
+
+29 October: device cancellation still returned the former operator-only gate after successful runtime deployments. Gateway fetch and cron now target a fresh main-device-cancel-v2 instance; application persistence remains the same Supabase database. Verify device abort against a nonexistent UUID (404, not 403) after deployment.
