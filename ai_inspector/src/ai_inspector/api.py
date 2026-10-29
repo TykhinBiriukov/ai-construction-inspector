@@ -382,7 +382,7 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         return prepare_localization(service, principal, str(session_id))
 
     @app.post("/v1/sessions/{session_id}/abort", response_model=Session, tags=["capture sessions"])
-    def abort_session(session_id: UUID, principal: Annotated[Principal, Depends(operator)]):
+    def abort_session(session_id: UUID, principal: Annotated[Principal, Depends(authenticate)]):
         return service.abort_session(principal, str(session_id))
 
     @app.post("/v1/standalone-captures/{session_id}/upload-plans", tags=["capture completion"])

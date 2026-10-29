@@ -266,7 +266,8 @@ class InspectorService:
             return session
 
     def abort_session(self, principal: Principal, session_id: str) -> dict:
-        require_role(principal, "operator")
+        if principal.role not in ("operator", "device"):
+            raise APIError(403, "forbidden", "Only operators and the assigned device can cancel a session")
         with self.database.transaction() as connection:
             session = self._load(connection, "sessions", session_id)
             self._check_access(principal, session)
@@ -274,7 +275,7 @@ class InspectorService:
                 return session
             if session["processing_state"] in ("completed", "failed"):
                 raise APIError(409, "session_terminal", "Finished sessions cannot be aborted")
-            error = APIError(409, "session_cancelled", "Session aborted by the operator").body
+            error = APIError(409, "session_cancelled", "Session cancelled by " + principal.role).body
             # Revoke leases atomically: an in-flight worker cannot publish a late result.
             connection.execute(
                 "UPDATE work_items SET status='cancelled', lease_until=0, lease_token=NULL "
