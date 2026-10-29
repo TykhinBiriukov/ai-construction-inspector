@@ -1,5 +1,14 @@
 'use strict';
 const $ = id => document.getElementById(id);
+const AUTH_STORAGE_KEY = 'inspector-operator-session';
+function savedToken() { try { return sessionStorage.getItem(AUTH_STORAGE_KEY) || ''; } catch { return ''; } }
+function saveToken(value) {
+  try { if (value) sessionStorage.setItem(AUTH_STORAGE_KEY, value); else sessionStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* Storage may be disabled. */ }
+}
+function unlock() {
+  $('token').value = ''; $('login').hidden = true; $('workspace').hidden = false;
+  $('logout').hidden = false; $('refresh').disabled = false; fields();
+}
 let token = '', generation = 0, overview, capabilities, selected = null, sessions = [], nextBefore = null;
 let pending = null, busy = false, polling = false;
 const aborting = new Set();
@@ -17,12 +26,15 @@ async function api(path, options = {}) {
   if (!response.ok) {
     let body; try { body = await response.json(); } catch { body = {}; }
     if (response.status === 401) lock();
-    throw new Error(`${response.status} · ${body.message || response.statusText}${body.code ? ` (${body.code})` : ''}`);
+    const details = (body.details?.errors || []).map(item => `${item.location?.filter(x => x !== 'body').join('.')}: ${item.message}`).join('; ');
+    const error = new Error(`${response.status} · ${body.message || response.statusText}${body.code ? ` (${body.code})` : ''}${details ? ` · ${details}` : ''}`);
+    error.status = response.status; error.code = body.code;
+    throw error;
   }
   return options.blob ? response.blob() : response.json();
 }
 function lock() {
-  token = ''; generation++; selected = null; sessions = []; overview = null; capabilities = null;
+  saveToken(''); token = ''; generation++; selected = null; sessions = []; overview = null; capabilities = null;
   $('token').value = ''; $('login').hidden = false; $('workspace').hidden = true;
   $('logout').hidden = true; $('refresh').disabled = true; $('connection').textContent = 'Locked';
   $('session-json').textContent = ''; $('geometry-result').textContent = ''; $('inspection-json').textContent = '';
@@ -145,8 +157,8 @@ $('abort-dialog').addEventListener('cancel', () => { abortCandidate = null; });
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault(); if (polling) return; token = $('token').value.trim(); generation++; notice();
   const button = event.submitter; button.disabled = true;
-  try { await refresh(); if (token) { $('token').value = ''; $('login').hidden = true; $('workspace').hidden = false; $('logout').hidden = false; $('refresh').disabled = false; fields(); } }
-  catch (e) { token = ''; notice(`Could not connect: ${e.message}`); }
+  try { await refresh(); if (token) { saveToken(token); unlock(); } }
+  catch (e) { token = ''; saveToken(''); notice(`Could not connect: ${e.message}`); }
   finally { button.disabled = false; }
 });
 $('logout').addEventListener('click', lock);
@@ -239,6 +251,8 @@ async function refreshAgent() {
 }
 async function sendAgent() {
   if (agentSending || !token) return;
+  if (!agentPending && !agentCreate && !$('agent-form').reportValidity()) return;
+  if (!agentPending && !$('agent-text').value.trim()) { notice('Enter a message before sending.'); return; }
   const epoch = generation; agentSending = true; notice();
   if (!agentPending) agentPending = {schema_version:'0.1', request_id:uuid(), text:$('agent-text').value};
   const message = agentPending;
@@ -256,7 +270,17 @@ async function sendAgent() {
     if (['completed', 'failed'].includes(result.status)) { agentPending = null; $('agent-text').value = ''; }
     if (result.error) notice(result.error.message);
   } catch (error) {
-    if (epoch === generation) notice(`Request confirmation is pending: ${error.message}. Resume the saved request.`);
+    if (epoch === generation) {
+      if (error.status === 422 && error.code === 'validation_error') {
+        // FastAPI rejected the body before executing the handler: editing is safe.
+        $('agent-text').value = message.text;
+        agentPending = null;
+        if (!agentChat) { agentCreate = null; rememberChat(null); }
+        notice(`Request was not accepted. Correct the fields and send again: ${error.message}`);
+      } else {
+        notice(`Request confirmation is pending: ${error.message}. Resume the saved request.`);
+      }
+    }
   } finally {
     agentSending = false;
     if (epoch === generation) { renderAgent(); await refresh().catch(() => {}); }
@@ -271,3 +295,11 @@ $('agent-new').addEventListener('click', () => {
 window.addEventListener('beforeunload', event => { if (pending || agentPending) { event.preventDefault(); event.returnValue = ''; } });
 setInterval(() => { if (token && !document.hidden && !busy) refresh().catch(() => {}); }, 5000);
 fields();
+
+// Keep authentication through reloads in this tab; logout/401 clears it.
+(async function restoreLogin() {
+  const saved = savedToken();
+  if (!saved) return;
+  token = saved; generation++; unlock(); $('connection').textContent = 'Reconnecting…';
+  try { await refresh(); } catch { /* Transient errors keep the session for the next refresh. 401 calls lock(). */ }
+})();

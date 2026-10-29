@@ -25,11 +25,13 @@ class CaptureUploads:
                 raise APIError(409, "session_closed", "Start capture before requesting uploads; closed sessions reject new plans")
             objects = []
             for item in body["objects"]:
-                maximum = (self.service.settings.max_archive_bytes if request.kind == "capture_archive" else
+                maximum = (self.service.settings.max_archive_bytes if request.kind in ("capture_archive", "geometry_archive") else
                            self.service.settings.max_manifest_bytes if item["name"].endswith("json") else self.service.settings.max_capture_file_bytes)
                 if item["byte_length"] > maximum:
                     raise APIError(413, "capture_file_too_large", "Capture file exceeds the configured limit")
-                if request.kind == "capture_archive":
+                if request.kind == "geometry_archive":
+                    key = session["storage"]["key_prefix"] + f"geometry/{request.completion_id}/{item['name']}"
+                elif request.kind == "capture_archive":
                     key = session["storage"]["key_prefix"] + f"archives/{request.completion_id}.zip"
                 elif request.kind == "capture_manifest":
                     key = session["storage"]["key_prefix"] + f"manifests/{request.completion_id}.json"

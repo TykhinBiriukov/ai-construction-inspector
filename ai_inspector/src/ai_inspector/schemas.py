@@ -172,7 +172,7 @@ class CaptureReference(APIModel):
 class CompleteCaptureRequest(APIModel):
     schema_version: Literal["0.1"]
     completion_id: UUID
-    capture_ref: "CaptureReference | SupabaseCaptureReference | SupabaseArchiveReference"
+    capture_ref: "CaptureReference | SupabaseCaptureReference | SupabaseArchiveReference | SupabaseGeometryPartsReference"
 
 
 class SupabaseCaptureReference(APIModel):
@@ -181,6 +181,10 @@ class SupabaseCaptureReference(APIModel):
     manifest_key: Annotated[str, Field(min_length=1, max_length=1024)]
     manifest_byte_length: Annotated[int, Field(gt=0, strict=True)]
     manifest_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class SupabaseGeometryPartsReference(SupabaseCaptureReference):
+    format: Literal["supabase_geometry_parts_v1"]
 
 
 class SupabaseArchiveReference(APIModel):
@@ -193,7 +197,7 @@ class SupabaseArchiveReference(APIModel):
 
 class UploadObject(APIModel):
     observation_id: UUID | None = None
-    name: Literal["frame.json", "rgb.jpg", "depth.f32", "confidence.u8", "capture-manifest.json", "capture.zip"]
+    name: Annotated[str, Field(pattern=r"^(frame\.json|rgb\.jpg|depth\.f32|confidence\.u8|capture-manifest\.json|capture\.zip|capture-[0-9]{4}\.zip)$")]
     media_type: Literal["application/json", "image/jpeg", "application/octet-stream", "application/zip"]
     byte_length: Annotated[int, Field(gt=0, strict=True)]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -202,17 +206,20 @@ class UploadObject(APIModel):
 class UploadPlanRequest(APIModel):
     schema_version: Literal["0.1"]
     request_id: UUID
-    kind: Literal["observation_files", "capture_manifest", "capture_archive"]
+    kind: Literal["observation_files", "capture_manifest", "capture_archive", "geometry_archive"]
     completion_id: UUID | None = None
     objects: Annotated[list[UploadObject], Field(min_length=1, max_length=50)]
 
     @model_validator(mode="after")
     def validate_objects(self) -> "UploadPlanRequest":
-        if self.kind in ("capture_manifest", "capture_archive"):
+        if self.kind == "geometry_archive":
+            if self.completion_id is None or any(item.observation_id is not None or not item.name.startswith("capture-") or not item.name.endswith(".zip") for item in self.objects):
+                raise ValueError("Geometry parts require completion_id and numbered ZIPs")
+        elif self.kind in ("capture_manifest", "capture_archive"):
             expected_name = "capture.zip" if self.kind == "capture_archive" else "capture-manifest.json"
             if self.completion_id is None or len(self.objects) != 1 or self.objects[0].name != expected_name or self.objects[0].observation_id is not None:
                 raise ValueError("Manifest/archive upload requires one matching object and completion_id")
-        elif self.completion_id is not None or any(item.observation_id is None or item.name in ("capture-manifest.json", "capture.zip") for item in self.objects):
+        elif self.completion_id is not None or any(item.observation_id is None or item.name not in ("frame.json", "rgb.jpg", "depth.f32", "confidence.u8") for item in self.objects):
             raise ValueError("Observation upload objects require observation_id and no completion_id")
         seen = set()
         for item in self.objects:
@@ -220,7 +227,7 @@ class UploadPlanRequest(APIModel):
             if identity in seen:
                 raise ValueError("Duplicate upload object")
             seen.add(identity)
-            expected = ("application/zip" if item.name == "capture.zip" else "application/json" if item.name.endswith("json")
+            expected = ("application/zip" if item.name.endswith(".zip") else "application/json" if item.name.endswith("json")
                         else "image/jpeg" if item.name == "rgb.jpg" else "application/octet-stream")
             if item.media_type != expected:
                 raise ValueError("Media type does not match filename")
