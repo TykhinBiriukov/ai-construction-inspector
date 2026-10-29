@@ -79,7 +79,7 @@ claim follows from these local tests and unsigned build.
 
 ## Standalone test capture (29 October 2026)
 
-The waiting screen offers **Тестовая съёмка без задания**. The phone generates and retains a random session UUID, captures RGB + frame metadata (and depth/confidence when available), with no assignment, BIM localization, early evidence or Geometry dispatch. Each camera restart remains a separate ARKit segment. Closing/reopening resumes the same local test session; after a successful upload, **Новая тестовая сессия** clears only the pointer, preserving originals.
+The waiting screen offers **Тестовая съёмка без задания**. The phone generates and retains a random session UUID, captures RGB + frame metadata (and depth/confidence when available), with no assignment, BIM localization, early evidence or Geometry dispatch. Each camera restart remains a separate ARKit segment. After verified upload, a success card shows the session UUID, a copy-ID button with confirmation, and the Storage folder navigation; it also appears when reopening a completed session. Closing/reopening resumes the same local test session; after a successful upload, **Новая тестовая сессия** clears only the pointer, preserving originals.
 
 Uploading still requires the configured Inspector HTTPS endpoint/device token, solely to obtain signed Storage permissions from `POST /v1/standalone-captures/{session_id}/upload-plans`. No Supabase secret is embedded in iOS. The backend must include `standalone_capture.py` and its API route before use. This endpoint accepts the existing `observation_files` and `capture_manifest` request schemas and enforces device authentication and configured file-size limits.
 

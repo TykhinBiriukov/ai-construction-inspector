@@ -230,6 +230,7 @@ private struct StandaloneCaptureView: View {
     @State private var showModel = false
     @State private var showEvidence = false
     @State private var showSettings = false
+    @State private var copiedSessionID = false
     @Environment(\.scenePhase) private var scenePhase
     let close: () -> Void
     init(assignment: InspectorAssignment, close: @escaping () -> Void) {
@@ -248,6 +249,22 @@ private struct StandaloneCaptureView: View {
                     Text(upload.status).font(.footnote)
                     if upload.busy { ProgressView(value: upload.progress) }
                     if let key = upload.manifestKey {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Данные сохранены в Supabase", systemImage: "checkmark.circle.fill")
+                                .font(.headline).foregroundStyle(.green)
+                            Text("ID сессии").font(.subheadline.bold())
+                            Text(model.assignment.id).font(.body.monospaced()).textSelection(.enabled)
+                            Button {
+                                UIPasteboard.general.string = model.assignment.id
+                                copiedSessionID = true
+                            } label: {
+                                Label(copiedSessionID ? "ID скопирован" : "Скопировать ID",
+                                      systemImage: copiedSessionID ? "checkmark" : "doc.on.doc")
+                            }.buttonStyle(.bordered)
+                            Text("В bucket inspection-captures откройте standalone → проект → устройство → папку с этим ID.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.padding().frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
                         Text("Bucket: inspection-captures").font(.caption)
                         Text(key).font(.caption.monospaced()).textSelection(.enabled)
                         ShareLink(item: key) { Label("Поделиться путём к данным", systemImage: "square.and.arrow.up") }
