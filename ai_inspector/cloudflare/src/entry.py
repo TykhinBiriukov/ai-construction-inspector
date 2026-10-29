@@ -1,4 +1,4 @@
-"""Cloudflare entrypoint: shared operator backlog and Geometry ZIP parts v1."""
+"""Cloudflare entrypoint: document selection and image context v1."""
 from contextvars import ContextVar
 from pathlib import Path
 from workers import WorkerEntrypoint, DurableObject, Response, asgi
