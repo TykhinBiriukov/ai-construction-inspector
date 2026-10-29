@@ -38,7 +38,7 @@
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;chosenFiles.clear();uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
-    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); delete $('activity').dataset.signature; $('selection').hidden=true; historySignature=''; resetDocument();
+    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
   function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
@@ -103,27 +103,85 @@
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
   const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task'};
+  let activitySync=0,activitySignature='',activityExpanded=new Map();
+  function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
   function updateActivityStatus(){
-    const last=chat?.runs?.at(-1),busy=sending||!!(last&&!['completed','failed'].includes(last.status));
-    const text=busy?(last?.active_tool?toolLabels[last.active_tool]||`Running ${last.active_tool}`:'Preparing response…'):last?.status==='failed'?'Request needs attention':last?'Response ready':'Inspector is ready';
-    $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',busy);
+    const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event);
+    let text=last?'Response ready':'Inspector is ready';
+    if(last?.status==='retryable')text='Waiting for retry';
+    else if(last?.status==='failed')text='Request failed';
+    else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||event.name:'Preparing response'):'Waiting for server update';
+    else if(sending)text='Sending request';
+    else if(last&&!['completed','failed'].includes(last.status))text='Waiting for server';
+    $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',live);
+    $('activity-graph').classList.toggle('live',live);$('activity-feed').classList.toggle('live',live);
+    for(const clock of document.querySelectorAll('[data-action-start]')){
+      const running=clock.dataset.actionStatus==='running',duration=clock.dataset.duration;
+      clock.textContent=duration!==''?formatDuration(Number(duration)):running&&live&&clock.dataset.eventId===event?.event_id?formatDuration(Date.now()-Date.parse(clock.dataset.actionStart))+' elapsed':'Duration not recorded';
+    }
+    const contextual=live&&last?.document_selection?.file_id===documentOpenId;
+    viewer.setActivity(last?.document_selection,!!contextual);
   }
+  function formatDuration(ms){return ms<1000?`${Math.round(ms)} ms`:`${(ms/1000).toFixed(1)} s`;}
   function toolSummary(tool){const r=tool.result||{};if(r.error)return r.error.message||'This action could not be completed.';
     if(tool.name==='device_status')return `${r.device_id||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
     const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
     if(tool.name==='session_create'||tool.name==='session_get')return session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
     return 'Completed';
   }
+  function actionEvents(run){
+    if(run.activity_events?.length)return run.activity_events;
+    return (run.tool_results||[]).map((tool,i)=>({event_id:`legacy-${run.run_id}-${i}`,kind:'tool',name:tool.name,operation_id:tool.operation_id,status:tool.result?.error?'failed':'completed',origin:'unrecorded',summary:toolSummary(tool),duration_ms:null}));
+  }
+  async function openActionContext(run,fileId){
+    const file=workState?.files?.find(f=>f.file_id===fileId&&!f.deleted);
+    if(!file){notify('This file is no longer available in the dialogue.');return;}
+    $('activity-dialog').close();await openDocument(file,true);
+    if(run.document_selection?.file_id===fileId)await viewer.focusSelection(run.document_selection);
+  }
+  function actionCard(run,event,inline=false){
+    const tool=(run.tool_results||[]).find(t=>t.event_id?t.event_id===event.event_id:t.operation_id===event.operation_id);
+    const details=node('details',`action-card action-${event.status}`);const key=(inline?'inline:':'history:')+event.event_id;
+    details.open=activityExpanded.get(key)??['running','waiting','failed'].includes(event.status);
+    details.addEventListener('click',e=>{if(e.target.closest('summary'))activityExpanded.set(key,!details.open);});
+    const summary=node('summary'),icon=node('span','action-icon',event.status==='completed'?'✓':event.status==='failed'?'!':event.status==='waiting'?'Ⅱ':'◌');
+    const label=node('span','action-label',event.kind==='model'?'Preparing response':toolLabels[event.name]||event.name);
+    const badge=node('span','action-state',({completed:'Done',running:'Running',waiting:'Waiting',failed:'Failed',interrupted:'Interrupted'})[event.status]||event.status);
+    summary.append(icon,label,badge);details.append(summary);
+    const body=node('div','action-body');const meta=node('div','action-meta');meta.append(node('code','',event.kind==='model'?'model request':event.name));
+    const clock=node('span');clock.dataset.eventId=event.event_id;clock.dataset.actionStart=event.started_at||'';clock.dataset.actionStatus=event.status;clock.dataset.duration=event.duration_ms==null?'':String(event.duration_ms);clock.textContent=event.duration_ms==null?'Duration not recorded':formatDuration(event.duration_ms);meta.append(clock);body.append(meta);
+    if(event.attempt>1)body.append(node('p','action-retry',`Retry · attempt ${event.attempt}`));
+    const result=tool?toolSummary(tool):event.summary||'Waiting for a result from the server.';body.append(node('p','',result));
+    const synthetic=event.origin==='synthetic'||tool?.result?.analysis_origin==='synthetic'||tool?.result?.geometry_mode==='mock';if(synthetic)body.append(node('strong','action-synthetic','Synthetic result'));
+    if(event.status==='waiting')body.append(node('p','action-retry','Paused. Use Resume to retry the saved request.'));
+    const links=node('div','action-links');
+    if(tool?.name==='device_status'){const link=node('button','quiet','Show device');link.onclick=()=>{$('activity-dialog').close();document.querySelector('.device-card').scrollIntoView({block:'nearest'});};links.append(link);}
+    const sessionId=tool?.result?.session?.session_id;if(sessionId){const session=scopedSessions.find(s=>s.session_id===sessionId);if(session){const link=node('button','quiet','Open capture task');link.onclick=()=>{$('activity-dialog').close();showTask(session);$('selection').scrollIntoView({block:'nearest'});};links.append(link);}}
+    const selection=run.document_selection;
+    if(selection){const link=node('button','quiet',selection.kind==='ifc'?'Open selected BIM elements':'Open selected document area');link.onclick=()=>openActionContext(run,selection.file_id).catch(e=>notify(e.message));links.append(link);}
+    else for(const id of (run.file_ids||[]).slice(0,3)){const file=workState?.files?.find(f=>f.file_id===id&&!f.deleted);if(file){const link=node('button','quiet',file.name);link.onclick=()=>openActionContext(run,id).catch(e=>notify(e.message));links.append(link);}}
+    if(event.kind==='model'&&event.status==='completed'&&run.reply){const link=node('button','quiet','View response');link.onclick=()=>{$('activity-dialog').close();document.getElementById('reply-'+run.run_id)?.scrollIntoView({block:'nearest'});};links.append(link);}
+    body.append(links);details.append(body);return details;
+  }
   function renderActivity(runs){
-    const signature=JSON.stringify(runs.map(r=>[r.run_id,r.status,r.active_tool,r.tool_results]));if($('activity').dataset.signature===signature)return;
-    $('activity').dataset.signature=signature;$('activity').replaceChildren();
+    const signature=JSON.stringify(runs.map(r=>[r.run_id,r.status,r.activity_events,r.tool_results]));if(activitySignature===signature)return;activitySignature=signature;
+    $('activity').replaceChildren();$('activity-feed').replaceChildren();$('activity-graph').replaceChildren();
+    const last=runs.at(-1),events=last?actionEvents(last):[];
+    $('activity-feed').hidden=!events.length;$('activity-graph').hidden=!events.length;
     if(!runs.length){$('activity').append(node('p','process-empty','Actions will appear here when you send a request.'));return;}
+    if(events.length){
+      const agent=node('span','graph-agent','Inspector');$('activity-graph').append(agent);
+      const tools=[...new Set(events.filter(e=>e.kind==='tool').map(e=>e.name))];
+      const branches=node('div','graph-branches');
+      for(const name of tools){const event=events.filter(e=>e.name===name).at(-1);const branch=node('div',`graph-branch${event.status==='running'?' graph-active':''}`);branch.append(node('i','graph-link'),node('span','graph-tool',name));branches.append(branch);}
+      if(!tools.length)branches.append(node('span','graph-no-tools','No tool calls'));$('activity-graph').append(branches);
+      for(const event of events.slice(-4))$('activity-feed').append(actionCard(last,event,true));
+    }
     for(const run of [...runs].reverse()){
       const group=node('section','process-run');group.append(node('h3','',run.text.slice(0,140)),node('small','process-date',timestamp(run.created_at)));
-      const steps=node('ol','process-steps');
-      for(const tool of run.tool_results||[]){const step=node('li',tool.result?.error?'step-error':'step-done');step.append(node('strong','',toolLabels[tool.name]||tool.name),node('p','',toolSummary(tool)));steps.append(step);}
-      if(run.active_tool){const step=node('li','step-running');step.append(node('strong','',toolLabels[run.active_tool]||run.active_tool),node('p','','In progress'));steps.append(step);}
-      const final=node('li',run.status==='completed'?'step-done':run.status==='failed'?'step-error':'step-running');final.append(node('strong','',run.status==='completed'?'Response delivered':run.status==='failed'?'Unable to complete request':'Preparing response'),node('p','',run.error?.message||(!(run.tool_results||[]).length&&run.status==='completed'?'Answered without calling tools.':'')));steps.append(final);group.append(steps);$('activity').append(group);
+      const history=actionEvents(run);for(const event of history)group.append(actionCard(run,event));
+      if(!history.length)group.append(node('p','process-empty',run.status==='completed'?'Response delivered. Step timing was not recorded for this request.':run.error?.message||'Waiting for server events.'));
+      $('activity').append(group);
     }
   }
   function renderConversation() {
@@ -136,7 +194,7 @@
         $('messages').replaceChildren();
         for(const run of runs) {
           const user=node('article','message user'); user.append(node('div','message-author','YOU'),messageText(run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
-          const assistant=node('article','message assistant'); assistant.append(node('div','message-author','✳ INSPECTOR'));
+          const assistant=node('article','message assistant'); assistant.id='reply-'+run.run_id; assistant.append(node('div','message-author','✳ INSPECTOR'));
           assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
           const grid=node('div','artifact-grid'); for(const item of run.artifacts||[]) { const artifact=renderArtifact(item); if(artifact) grid.append(artifact); } if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
         }
@@ -185,8 +243,8 @@
       if(chat?.chat_id&&!chatChoices.some(c=>c.chat_id===chat.chat_id))chatChoices.unshift(chat);
       renderChatPicker();
       workState=workspaceData; scopedSessions = linkedSessions; scopedInspections = linkedInspections;
-      if(current!==epoch) return; $('connection').textContent='● Connected'; renderRails(); renderConversation(); unlock();
-    } catch(error) { if(current===epoch) { $('connection').textContent='Connection issue'; notify(`Could not refresh: ${error.message}. Displayed data may be stale.`); } }
+      if(current!==epoch) return; $('connection').textContent='● Connected'; activitySync=Date.now(); renderRails(); renderConversation(); unlock();
+    } catch(error) { if(current===epoch) { activitySync=0;updateActivityStatus();$('connection').textContent='Connection issue'; notify(`Could not refresh: ${error.message}. Displayed data may be stale.`); } }
     finally { refreshing=false; }
   }
   async function send() {
@@ -363,7 +421,7 @@
     if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
   },text=>{$('document-status').textContent=text;});
   function resetDocument(){documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
-  async function openDocument(file){if(file.deleted||sending||pending)return;const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  async function openDocument(file,inspect=false){if(file.deleted||(!inspect&&(sending||pending)))return;const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
   $('clear-document-context').onclick=()=>{if(documentContext)chosenFiles.delete(documentContext.file_id);viewer.clearSelection();renderFiles();};
   $('multi-select').onclick=()=>{viewer.multiSelect=!viewer.multiSelect;$('multi-select').setAttribute('aria-pressed',String(viewer.multiSelect));};
   $('document-download').onclick=()=>{const file=workState?.files?.find(f=>f.file_id===documentOpenId);if(file)downloadFile(file).catch(e=>notify(e.message));};
@@ -409,5 +467,6 @@
   for(const button of $('suggestions').querySelectorAll('button')) button.addEventListener('click',()=>{$('message').value=button.dataset.prompt;$('message').focus();});
   $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();send();}});
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);
+  setInterval(()=>{if(token)updateActivityStatus();},1000);
   if(token) refresh();
 })();

@@ -5,8 +5,23 @@ import * as pdfjs from 'pdfjs-dist';
 pdfjs.GlobalWorkerOptions.workerSrc='/ui/vendor/pdf.worker.min.mjs';
 export class Viewer {
  constructor(host,onSelect,onStatus){this.host=host;this.onSelect=onSelect;this.status=onStatus;this.generation=0;this.page=1;this.scale=1;this.resize=new ResizeObserver(()=>this.resize3d());this.resize.observe(host);}
+ async focusSelection(selection){
+  if(!selection||selection.file_id!==this.file?.file_id)return;
+  if(selection.kind==='ifc'){this.restoreIfc?.(selection.elements?.length?selection.elements:[selection]);return;}
+  if(this.pdf&&selection.page!==this.page){this.page=selection.page;await this.drawPage();}
+  if(!this.wrap||!selection.bbox)return;this.wrap.querySelector('.context-selection')?.remove();const [x,y,w,h]=selection.bbox;
+  const box=document.createElement('div');box.className='drawing-selection context-selection';Object.assign(box.style,{left:x*100+'%',top:y*100+'%',width:w*100+'%',height:h*100+'%'});this.wrap.append(box);box.scrollIntoView({block:'nearest',inline:'nearest'});
+ }
+ setActivity(selection,active){
+  const key=active&&selection?.file_id===this.file?.file_id?JSON.stringify([selection.file_id,selection.elements?.map(e=>e.express_id)||selection.express_id,selection.bbox]):null;
+  if(key===this.activityKey)return;this.activityKey=key;
+  for(const [mesh,color] of this.activityMeshes||[])mesh.material.emissive.copy(color);this.activityMeshes=[];
+  this.host.classList.toggle('document-active',!!key);
+  if(!key)return;
+  if(selection.kind==='ifc'&&this.model){const ids=new Set(selection.elements?.length?selection.elements.map(e=>e.express_id):[selection.express_id]);this.activityMeshes=this.model.children.filter(m=>ids.has(m.userData.expressID)).map(m=>[m,m.material.emissive.clone()]);}
+ }
  clearSelection(){this.deselect?.();this.onSelect(null);}
- clear(){this.deselect=null;this.generation++;this.renderTask?.cancel();this.renderTask=null;this.pdf?.destroy();this.pdf=null;this.cleanup?.();this.cleanup=null;this.scene=null;this.renderer=null;this.file=null;this.source=null;this.host.replaceChildren();this.onSelect(null);}
+ clear(){this.setActivity(null,false);this.restoreIfc=null;this.deselect=null;this.generation++;this.renderTask?.cancel();this.renderTask=null;this.pdf?.destroy();this.pdf=null;this.cleanup?.();this.cleanup=null;this.scene=null;this.renderer=null;this.file=null;this.source=null;this.host.replaceChildren();this.onSelect(null);}
  async open(file,blob){this.clear();const generation=this.generation;this.file=file;this.scale=1;this.page=1;this.status('Loading '+file.name+'…');try{
  const ext=file.name.split('.').pop().toLowerCase();
  if(ext==='ifc'){await this.ifc(new Uint8Array(await blob.arrayBuffer()),generation);}
@@ -29,7 +44,7 @@ export class Viewer {
  async ifc(data,generation){const api=new IfcAPI();api.SetWasmPath('/ui/vendor/',true);await api.Init();if(generation!==this.generation)return;const id=api.OpenModel(data,{COORDINATE_TO_ORIGIN:true});if(id<0)throw Error('Unsupported IFC');const scene=new THREE.Scene();scene.background=new THREE.Color('#eef0e9');const model=new THREE.Group();scene.add(model);scene.add(new THREE.HemisphereLight(0xffffff,0x65715a,2));const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(5,10,8);scene.add(light);let vertices=0;
  try{api.StreamAllMeshes(id,mesh=>{for(let i=0;i<mesh.geometries.size();i++){const placed=mesh.geometries.get(i),g=api.GetGeometry(id,placed.geometryExpressID);try{const v=api.GetVertexArray(g.GetVertexData(),g.GetVertexDataSize());vertices+=v.length/6;if(vertices>1500000)throw Error('Model too complex for this browser viewer');const geometry=new THREE.BufferGeometry();const pos=new Float32Array(v.length/2),norm=new Float32Array(v.length/2);for(let j=0,k=0;j<v.length;j+=6,k+=3){pos.set(v.subarray(j,j+3),k);norm.set(v.subarray(j+3,j+6),k);}geometry.setAttribute('position',new THREE.BufferAttribute(pos,3));geometry.setAttribute('normal',new THREE.BufferAttribute(norm,3));geometry.setIndex(new THREE.BufferAttribute(api.GetIndexArray(g.GetIndexData(),g.GetIndexDataSize()).slice(),1));const c=placed.color;const material=new THREE.MeshStandardMaterial({color:new THREE.Color(c.x,c.y,c.z),side:THREE.DoubleSide,roughness:.8,transparent:c.w<1,opacity:Math.max(.3,c.w)});const object=new THREE.Mesh(geometry,material);object.applyMatrix4(new THREE.Matrix4().fromArray(placed.flatTransformation));object.userData.expressID=mesh.expressID;model.add(object);}finally{g.delete();}}});}catch(error){api.CloseModel(id);model.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});throw error;}
  if(!model.children.length){api.CloseModel(id);throw Error('No displayable geometry in IFC');}
- const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));const camera=new THREE.PerspectiveCamera(45,1,.01,10000);this.host.replaceChildren(renderer.domElement);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;this.scene=scene;this.model=model;this.renderer=renderer;this.camera=camera;this.controls=controls;this.resize3d();this.fit();let raf;const draw=()=>{controls.update();renderer.render(scene,camera);raf=requestAnimationFrame(draw);};draw();const ray=new THREE.Raycaster();let down,highlight=[],selected=new Map();this.deselect=()=>{highlight.forEach(m=>m.material.emissive.set(0));highlight=[];selected.clear();};
+ const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));const camera=new THREE.PerspectiveCamera(45,1,.01,10000);this.host.replaceChildren(renderer.domElement);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;this.scene=scene;this.model=model;this.renderer=renderer;this.camera=camera;this.controls=controls;this.resize3d();this.fit();let raf;const draw=()=>{controls.update();const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;for(const [mesh] of this.activityMeshes||[])mesh.material.emissive.setRGB(.08,.13+(reduced?0:.06*Math.sin(performance.now()/450)),.025);renderer.render(scene,camera);raf=requestAnimationFrame(draw);};draw();const ray=new THREE.Raycaster();let down,highlight=[],selected=new Map();this.deselect=()=>{highlight.forEach(m=>m.material.emissive.set(0));highlight=[];selected.clear();};
  renderer.domElement.onpointerdown=e=>{down=[e.clientX,e.clientY];};renderer.domElement.onpointerup=e=>{
  if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;
  const r=renderer.domElement.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);
@@ -44,6 +59,7 @@ export class Viewer {
  const elements=[...selected.values()];this.onSelect(elements.length?{file_id:this.file.file_id,kind:'ifc',...elements[0],label:elements.length===1?elements[0].label:`${elements.length} BIM elements selected`,elements,image_data:this.image(renderer.domElement)}:null);
  };
 
+ this.restoreIfc=elements=>{this.deselect();const ids=new Set(elements.map(e=>e.express_id));highlight=model.children.filter(m=>ids.has(m.userData.expressID));highlight.forEach(m=>m.material.emissive.set('#547e36'));renderer.render(scene,camera);};
  this.cleanup=()=>{cancelAnimationFrame(raf);controls.dispose();model.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.dispose();api.CloseModel(id);};this.status('Rotate: drag · pan: right-drag · zoom: scroll · select: click · add/remove: Shift + click');
  }
 }

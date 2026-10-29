@@ -143,7 +143,7 @@ class ChatAgent:
     def public_run(run):
         return {key: run.get(key) for key in (
             "schema_version", "run_id", "chat_id", "request_id", "text", "status", "reply",
-            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection",
+            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection", "activity_events",
         )} | {"active_tool": (run.get("pending_tool") or {}).get("name")} | presentation(run.get("reply"))
 
     def get_chat(self, principal, chat_id, before=None, limit=30):
@@ -268,6 +268,26 @@ class ChatAgent:
             session = self.service.get_session(principal, plan["session_id"])
         return {"session": session_summary(session)}, session["session_id"]
 
+    def _start_activity(self, run, kind, name, operation_id):
+        events = run.setdefault('activity_events', [])
+        for old in events:
+            if old['status'] == 'running':
+                old.update(status='interrupted', finished_at=utc_now(), duration_ms=None,
+                           summary='Previous attempt stopped reporting; duration unknown.')
+        previous = [event for event in events if event['operation_id'] == operation_id]
+        event = dict(event_id=str(uuid4()), kind=kind, name=name, operation_id=operation_id,
+                     attempt=len(previous)+1, retry_of=previous[-1]['event_id'] if previous else None,
+                     status='running', started_at=utc_now(), finished_at=None, duration_ms=None,
+                     origin='live', summary=None)
+        events.append(event)
+        run['activity_events'] = events[-64:]
+        return event, time.monotonic()
+
+    @staticmethod
+    def _finish_activity(event, started, status, summary):
+        event.update(status=status, finished_at=utc_now(),
+                     duration_ms=max(0, round((time.monotonic()-started)*1000)), summary=summary)
+
     def _advance(self, principal, run_id):
         with self.database.transaction() as connection:
             row = connection.execute("SELECT * FROM agent_runs WHERE run_id=?", (run_id,)).fetchone()
@@ -278,10 +298,13 @@ class ChatAgent:
             run.update(status="running", error=None)
             connection.execute("UPDATE agent_runs SET lease_token=?, lease_until=?, data=? WHERE run_id=?",
                                (lease, time.time() + self.settings.meta_timeout_s + 60, canonical_json(run), run_id))
+        activity = None
+        activity_started = None
         try:
             while True:
                 if run["pending_tool"]:
                     plan = run["pending_tool"]
+                    activity, activity_started = self._start_activity(run, "tool", plan["name"], plan["operation_id"])
                     self._save(run, lease)  # Fence and renew ownership before a side effect.
                     try:
                         result, session_id = self._execute(principal, run, plan)
@@ -289,8 +312,10 @@ class ChatAgent:
                         if error.body["retryable"]:
                             raise
                         result, session_id = {"error": error.body}, None
+                    self._finish_activity(activity, activity_started, 'failed' if result.get('error') else 'completed',
+                                          result['error']['message'] if result.get('error') else 'Tool completed')
                     run["messages"].append({"role": "tool", "tool_call_id": plan["tool_call_id"], "content": canonical_json(result)})
-                    run["tool_results"].append({"name": plan["name"], "operation_id": plan["operation_id"], "result": result})
+                    run["tool_results"].append({"name": plan["name"], "operation_id": plan["operation_id"], "event_id": activity["event_id"], "result": result})
                     run["pending_tool"] = None
                     if session_id:
                         run["session_id"] = session_id
@@ -301,11 +326,13 @@ class ChatAgent:
                 chat, session = self._context(principal, run)
                 context = {"project_id": chat["project_id"], "device_id": chat["device_id"],
                            "room_id": chat["room_id"], "session": session_summary(session)}
+                activity, activity_started = self._start_activity(run, "model", "model_request", f"model-{run['steps']}")
                 self._save(run, lease)
                 message = validated_message(self.model.complete(
                     [{"role": "developer", "content": SYSTEM_PROMPT + "\nServer context: " + canonical_json(context)}]
                     + run["history"] + run["messages"], TOOLS,
                 ))
+                self._finish_activity(activity, activity_started, "completed", "Tool call selected" if message.get("tool_calls") else "Response prepared")
                 run["steps"] += 1
                 if message.get("tool_calls"):
                     # Persist concrete command + server operation ID before executing it.
@@ -321,6 +348,8 @@ class ChatAgent:
         except APIError as error:
             if error.body["code"] == "agent_lease_lost":
                 raise
+            if activity and activity['status'] == 'running':
+                self._finish_activity(activity, activity_started, 'waiting' if error.body['retryable'] else 'failed', error.body['message'])
             run.update(status="retryable" if error.body["retryable"] else "failed", error=error.body)
             self._save(run, lease, release=True)
             return self.public_run(run)

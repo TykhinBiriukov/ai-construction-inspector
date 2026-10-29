@@ -239,3 +239,14 @@ runs and completed tools, without raw JSON. Public runs expose `active_tool` as 
 the pending validated tool name, or null. The UI polls at its existing interval; short
 tool calls may only appear in completed history. No invented progress or internal
 reasoning is shown. Reduced-motion preferences disable decorative animations.
+
+Activity events are persisted with each run (`activity_events`, up to 64 entries).
+Each model/tool attempt has event_id, operation_id, attempt/retry_of, status,
+started_at, finished_at and measured duration_ms. Tool results bind by event_id.
+Retryable failures become waiting; a resumed orphaned running event becomes
+interrupted with unknown duration. These are operational events, not model reasoning.
+The demo shows the latest four steps beside the document and full history in a modal.
+Only fresh running events animate actual tool links and the run's selected document
+context. Polling is every five seconds; quick calls may first appear completed.
+Historical calls without timestamps have no invented duration. Result links open
+available selected files/regions/elements or capture/device context.
