@@ -42,6 +42,8 @@ class InspectorRuntime(DurableObject):
             supabase_storage_bucket=env.SUPABASE_STORAGE_BUCKET,
             supabase_secret_key=env.SUPABASE_SECRET_KEY,
             inspector_public_base_url=getattr(env,'INSPECTOR_PUBLIC_BASE_URL',''),
+            localization_base_url=getattr(env,'INSPECTOR_LOCALIZATION_BASE_URL',''),
+            localization_service_token=getattr(env,'INSPECTOR_LOCALIZATION_SERVICE_TOKEN',''),
             geometry_base_url=getattr(env,'INSPECTOR_GEOMETRY_BASE_URL',''),
             geometry_api_token=getattr(env,'INSPECTOR_GEOMETRY_API_TOKEN',''),
             geometry_service_token=getattr(env,'INSPECTOR_GEOMETRY_SERVICE_TOKEN',''),
@@ -49,6 +51,7 @@ class InspectorRuntime(DurableObject):
         service = InspectorService(settings,
             database=WorkerDatabase(env.HYPERDRIVE.connectionString, hyperdrive=True),
             model_client=MetaModelClient(settings, transport=WorkerModelTransport()))
+        service.localization_transport = WorkerModelTransport()
         return service
 
     async def fetch(self, request):

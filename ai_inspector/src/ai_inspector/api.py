@@ -328,6 +328,11 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     def get_session(session_id: UUID, principal: Annotated[Principal, Depends(authenticate)]):
         return service.get_session(principal, str(session_id))
 
+    @app.post("/v1/sessions/{session_id}/localization", tags=["iPhone handoff"])
+    def prepare_localization(session_id: UUID, principal: Annotated[Principal, Depends(authenticate)]):
+        from .localization import prepare_localization
+        return prepare_localization(service, principal, str(session_id))
+
     @app.post("/v1/sessions/{session_id}/abort", response_model=Session, tags=["capture sessions"])
     def abort_session(session_id: UUID, principal: Annotated[Principal, Depends(operator)]):
         return service.abort_session(principal, str(session_id))
