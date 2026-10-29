@@ -19,7 +19,7 @@ def migrate(source, destination, store=None):
         records = {}
         for table in TABLES:
             # Backups from before agent chat have no chat tables yet.
-            if table not in existing and table in ('chats', 'agent_runs'):
+            if table not in existing and table in ('chats', 'agent_runs', 'backlog_items'):
                 records[table] = []
             else:
                 records[table] = [dict(row) for row in db.execute('SELECT * FROM '+table)]

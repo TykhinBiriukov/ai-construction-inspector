@@ -256,3 +256,30 @@ Codex verification tests, diagnostic scripts and their temporary data live
 outside this checkout in the workspace's local-checks/inspector/ directory.
 These optional local files are not part of the distributed backend or its
 runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.
+
+## Shared Web / Backend backlog
+
+Open **Backlog** in the operator sidebar. Every feature has independent Web and
+Backend statuses (`planned`, `in_progress`, `done`, `not_needed`), implementation
+notes for each side, a shared API/contract field, and a self-reported editor name.
+Use the filters to find unfinished work on either side; archive obsolete entries.
+This is a manually maintained handoff board, not automatic GitHub/commit tracking.
+Mark a side done only when its implementation is available, and record the API
+or commit and remaining integration work. Geometry ZIP support is separate from
+a connected Geometry service.
+
+Records are private project-scoped Supabase metadata, accessible with the existing
+operator token; device tokens cannot read or write the board. Apply
+`scripts/sql/002_backlog.sql` as database owner before deploying this feature.
+The restricted runtime can SELECT/INSERT/UPDATE these records, not change schema.
+Local SQLite creates the matching table on startup.
+
+API: `GET /v1/operator/backlog` returns `{items: [...]}`.
+`POST /v1/operator/backlog/{UUID}` creates with `revision: 0` or updates with the
+last read revision. Required fields: `title`, `updated_by`; optional fields:
+`description`, `contract`, `web_status`, `backend_status`, `web_notes`,
+`backend_notes`, `archived`. This is a full-record save, not a partial patch.
+Responses include `item_id`, incremented `revision`, `created_at`, `updated_at`.
+An exact retry returns the already-saved version. A stale edit returns 409;
+the UI retains the draft until the operator chooses to load the latest record.
+Names are self-reported because this workspace uses a shared operator credential.

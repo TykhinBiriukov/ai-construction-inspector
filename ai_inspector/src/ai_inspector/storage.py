@@ -16,6 +16,14 @@ def canonical_json(value: dict) -> str:
 
 
 SCHEMA_SQL = """
+                CREATE TABLE IF NOT EXISTS backlog_items (
+                    item_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    data TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS backlog_by_project ON backlog_items(project_id, updated_at);
+
                 CREATE TABLE IF NOT EXISTS chats (
                     chat_id TEXT PRIMARY KEY,
                     project_id TEXT NOT NULL,

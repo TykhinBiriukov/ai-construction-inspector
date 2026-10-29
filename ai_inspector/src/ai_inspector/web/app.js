@@ -34,6 +34,7 @@ async function api(path, options = {}) {
   return options.blob ? response.blob() : response.json();
 }
 function lock() {
+  if (typeof resetBacklog === 'function') resetBacklog();
   saveToken(''); token = ''; generation++; selected = null; sessions = []; overview = null; capabilities = null;
   $('token').value = ''; $('login').hidden = false; $('workspace').hidden = true;
   $('logout').hidden = true; $('refresh').disabled = true; $('connection').textContent = 'Locked';
@@ -119,6 +120,7 @@ async function refresh() {
     sessions = [...data.sessions, ...older];
     if (!sessions.length || older.length === 0) nextBefore = data.next_before;
     renderSessions();
+    if (location.hash === '#backlog' && typeof refreshBacklog === 'function') await refreshBacklog();
     await refreshAgent();
     if (selected) await showSession(selected, false);
   } catch (error) {

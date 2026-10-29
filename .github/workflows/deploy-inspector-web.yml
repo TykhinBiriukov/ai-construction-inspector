@@ -73,6 +73,7 @@ jobs:
         run: |
           node --check index.js
           node --check ../../src/ai_inspector/web/app.js
+          node --check ../../src/ai_inspector/web/backlog.js
       - name: Deploy existing web Worker
         if: steps.changes.outputs.web == 'true'
         env:

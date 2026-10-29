@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
+from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
 from .agent import CreateChatRequest, ChatMessageRequest
 from .errors import APIError
@@ -196,6 +197,14 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
 
     if static_ui:
         app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "web"), name="operator-ui")
+
+    @app.get("/v1/operator/backlog", tags=["operations"])
+    def backlog_list(principal: Annotated[Principal, Depends(operator)]):
+        return list_items(service.database, principal.project_id)
+
+    @app.post("/v1/operator/backlog/{item_id}", tags=["operations"])
+    def backlog_save(item_id: UUID, body: BacklogWrite, principal: Annotated[Principal, Depends(operator)]):
+        return save_item(service.database, principal.project_id, item_id, body)
 
     @app.get("/v1/operator/overview", tags=["operations"])
     def operator_overview(

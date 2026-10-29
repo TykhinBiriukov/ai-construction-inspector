@@ -13,3 +13,13 @@ dialog .header-actions { justify-content: flex-end; margin-top: 24px; }
 .chat-message.user { background: #e7f0e9; }
 .chat-message strong { display: block; font-size: 10px; color: #648076; margin-bottom: 5px; }
 .chat-message.pending { border: 1px solid #dfc7a4; background: #fff5e8; }
+
+.backlog-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; margin-top: 20px; }
+.backlog-card { padding: 20px; border: 1px solid #d5ded9; border-radius: 10px; overflow-wrap: anywhere; }
+.backlog-card h3 { margin-top: 0; }
+.backlog-card small { display: block; margin: 16px 0; color: #648076; }
+.backlog-text { white-space: pre-wrap; }
+#backlog-editor { margin-top: 24px; }
+#backlog-save-state { white-space: pre-wrap; }
+
+@media(max-width:700px) { aside .nav { display: inline-block; margin: 12px 10px 0 0; } }
