@@ -1,0 +1,5 @@
+# Independent CPU RGB-D reconstruction. No SAM, Supabase or GPU packages needed.
+numpy==2.4.3
+scipy==1.17.1
+Pillow==12.1.1
+open3d==0.20.0

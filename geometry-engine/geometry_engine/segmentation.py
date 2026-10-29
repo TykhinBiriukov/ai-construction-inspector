@@ -14,6 +14,7 @@ from uuid import uuid4
 import numpy as np
 from PIL import Image, ImageDraw
 
+from .session_layout import prepare_session, original_directory, session_reference
 from .validation import read_object, session_file
 
 
@@ -135,9 +136,9 @@ class SegmentationService:
         self.settings = settings or SegmentationSettings()
 
     def segment(self, directory, output_dir=None, *, max_frames=None, selected_frames=None, progress=None, resume=False) -> dict:
-        session = Path(directory).resolve()
-        original = (session / "original").resolve()
-        if not session.is_dir() or not original.is_dir() or not original.is_relative_to(session):
+        session = prepare_session(directory)
+        original = original_directory(session)
+        if not session.is_dir() or not original.is_dir():
             raise ValueError("Session must contain an original directory")
         output = Path(output_dir).resolve() if output_dir is not None else session / "segmentation"
         if output.parent != session or output == original:
@@ -250,8 +251,8 @@ class SegmentationService:
                 overlay_relative = Path("overlays") / f"{identity}.jpg"
                 _overlay(image, rendered, self.settings.prompts).save(staging / overlay_relative, quality=90)
                 results.append({"frame_id": identity, "timestamp_s": row.get("timestamp_s"),
-                                "rgb": rgb_path.relative_to(session).as_posix(),
-                                "metadata": metadata_path.relative_to(session).as_posix(),
+                                "rgb": session_reference(rgb_path, session),
+                                "metadata": session_reference(metadata_path, session),
                                 "rgb_sha256": hashlib.sha256(rgb_path.read_bytes()).hexdigest(),
                                 "metadata_sha256": hashlib.sha256(metadata_path.read_bytes()).hexdigest(),
                                 "width": image.width, "height": image.height,
@@ -267,7 +268,7 @@ class SegmentationService:
                       "reused_count": len(cached), "newly_processed_count": len(results)-len(cached),
                       "detection_count": sum(counts.values()), "class_counts": dict(counts),
                       "rejected_counts": dict(rejected), "frames_without_detections": empty_frames,
-                      "source_manifest": index_path.relative_to(session).as_posix(),
+                      "source_manifest": session_reference(index_path, session),
                       "source_manifest_sha256": manifest_hash,
                       "warnings": ["No detections passed the filters"] if not counts else [],
                       "outputs": {"detections": "detections.json", "masks": "masks", "overlays": "overlays"}}

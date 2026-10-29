@@ -12,6 +12,7 @@ from .mask_projection import MaskProjectionService, ProjectionSettings, file_has
 from .mesh import read_mesh
 from .segmentation import _rename
 from .segmented_mesh_export import UNKNOWN_COLOR, class_colors, export_segmented_mesh
+from .session_layout import prepare_session, original_directory, session_reference
 from .validation import read_object, session_file
 
 
@@ -100,7 +101,7 @@ def _preview(session, projection, staging, manifest, result):
         known = labels >= 0
         pixels[known] = palette[labels[known]]
         y = 58+row_index*(height+caption)
-        with Image.open(session_file(session/"original", session, frame["rgb"])) as photo:
+        with Image.open(session_file(original_directory(session), session, frame["rgb"])) as photo:
             photo = ImageOps.contain(photo.convert("RGB"), (width, height), Image.Resampling.LANCZOS)
             canvas.paste(photo, ((width-photo.width)//2, y+(height-photo.height)//2))
         colored = ImageOps.contain(Image.fromarray(pixels), (width, height), Image.Resampling.NEAREST)
@@ -117,11 +118,11 @@ class MeshSegmentationService:
         self.fusion_settings = fusion_settings or FusionSettings()
 
     def segment(self, directory, output_dir=None, *, projection_dir=None, max_frames=None, progress=None):
-        session = Path(directory).resolve()
-        original = (session/"original").resolve()
+        session = prepare_session(directory)
+        original = original_directory(session)
         output = Path(output_dir).resolve() if output_dir is not None else session/"mesh_segmentation"
         projection = Path(projection_dir).resolve() if projection_dir is not None else session/"mask_projection"
-        if (not original.is_dir() or original.parent != session or output.parent != session
+        if (not original.is_dir() or output.parent != session
                 or projection.parent != session or output == original or projection == original or output == projection):
             raise ValueError("Stage directories must be distinct direct children of the session, outside original")
         if output.exists():
@@ -176,7 +177,7 @@ class MeshSegmentationService:
             _preview(session, projection, staging, manifest, result)
             report = {"schema_version": "1.0", "status": "completed", "session_id": session.name,
                       "processed_frames": expected_count, "projection_reused": reused_projection,
-                      "projection": projection.relative_to(session).as_posix(), "mesh": mesh_path.relative_to(session).as_posix(),
+                      "projection": session_reference(projection, session), "mesh": session_reference(mesh_path, session),
                       "source_mesh_sha256": projection_report["mesh_sha256"], "parameters": asdict(self.fusion_settings),
                       "total_vertices": len(vertices), "total_faces": len(faces), "labeled_faces": int(known.sum()),
                       "unknown_faces": int((~known).sum()), "labeled_surface_area_m2": float(areas[known].sum()),

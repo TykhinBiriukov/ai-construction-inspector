@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
+from .session_layout import prepare_session, original_directory, session_reference
 from .validation import SessionValidationService, read_object, session_file
 
 
@@ -70,10 +71,10 @@ class FrameFilterService:
         self.settings = settings or FrameFilterSettings()
 
     def filter(self, directory, output_dir=None) -> dict:
-        session = Path(directory).resolve()
-        original = (session / "original").resolve()
+        session = prepare_session(directory)
+        original = original_directory(session)
         output = Path(output_dir).resolve() if output_dir is not None else session / "selected_frames"
-        if not original.is_relative_to(session) or not original.is_dir():
+        if not original.is_dir():
             raise ValueError("Session must contain an original directory")
         if not output.is_relative_to(session) or output.is_relative_to(original):
             raise ValueError("Frame filter output must be inside the session and outside original")
@@ -117,8 +118,8 @@ class FrameFilterService:
                 rgb_path = session_file(original, path.parent, rgb["path"])
                 if type(rgb.get("width")) is not int or type(rgb.get("height")) is not int:
                     raise ValueError("Missing RGB dimensions")
-                decision.update(timestamp_s=float(timestamp), metadata=path.relative_to(session).as_posix(),
-                                rgb=rgb_path.relative_to(session).as_posix())
+                decision.update(timestamp_s=float(timestamp), metadata=session_reference(path, session),
+                                rgb=session_reference(rgb_path, session))
                 candidates.append((float(timestamp), identity, metadata, rgb_path, decision))
             except (OSError, ValueError, TypeError, KeyError) as error:
                 decision.update(reason="invalid_metadata", detail=str(error))

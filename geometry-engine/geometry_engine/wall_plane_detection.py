@@ -13,6 +13,8 @@ import math
 
 import numpy as np
 
+from .plane_merging import merge_planes
+
 
 @dataclass(frozen=True)
 class WallPlaneSettings:
@@ -27,6 +29,13 @@ class WallPlaneSettings:
     num_iterations: int = 1500
     seed: int = 17
     ransac_probability: float = .999
+    merge_enabled: bool = True
+    merge_max_angle_deg: float = 3.
+    merge_max_gap_m: float = .10
+    merge_distance_m: float = .03
+    merge_min_area_fraction: float = .95
+    merge_min_contact_length_m: float = .10
+    merge_step_offset_m: float = .015
 
     def __post_init__(self):
         for name in ("distance_threshold_m", "min_support_area_m2", "min_height_m", "min_width_m"):
@@ -44,6 +53,18 @@ class WallPlaneSettings:
                 raise ValueError(f"Invalid {name}")
         if not np.isfinite(self.ransac_probability) or not 0 < self.ransac_probability < 1:
             raise ValueError("ransac_probability must be in (0,1)")
+        if type(self.merge_enabled) is not bool:
+            raise ValueError('merge_enabled must be boolean')
+        for name in ('merge_max_gap_m', 'merge_distance_m', 'merge_step_offset_m', 'merge_min_contact_length_m'):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not np.isfinite(value) or value <= 0:
+                raise ValueError(f'Invalid {name}')
+        for name in ('merge_max_angle_deg',):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not np.isfinite(value) or not 0 < value < 90:
+                raise ValueError(f'Invalid {name}')
+        if isinstance(self.merge_min_area_fraction, bool) or not np.isfinite(self.merge_min_area_fraction) or not 0 < self.merge_min_area_fraction <= 1:
+            raise ValueError('merge_min_area_fraction must be in (0,1]')
 
 
 def _canonical(normal, offset):
@@ -271,6 +292,15 @@ def detect_wall_planes(vertices, faces, wall_mask=None, *, up_axis="z", settings
         record["plane_id"] = len(planes)
         labels[ids] = len(planes)
         planes.append(record)
+    if settings.merge_enabled:
+        planes, labels, merging = merge_planes(
+            planes, labels, triangles, areas, normals, up, settings, fit=_fit,
+            record=lambda n, d, ids: _plane_record(n, d, ids, triangles, areas, wall_mask, up, settings))
+        diagnostics['merging'] = merging
+        if progress:
+            progress(f"Plane merging: {merging['input_plane_count']} -> {merging['output_plane_count']}")
+    else:
+        diagnostics['merging'] = {'enabled': False}
     diagnostics["assigned_face_count"] = int((labels >= 0).sum())
     diagnostics["unassigned_face_count"] = int((labels < 0).sum())
     diagnostics["assigned_area_m2"] = float(areas[labels >= 0].sum())

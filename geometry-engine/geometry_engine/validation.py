@@ -6,12 +6,21 @@ from pathlib import Path, PureWindowsPath
 import numpy as np
 
 from .mesh import read_mesh
+from .session_layout import original_directory, prepare_session, processed_session
 
 
 def session_file(root: Path, base: Path, value) -> Path:
     if not isinstance(value, str) or not value or PureWindowsPath(value).drive:
         raise ValueError("Expected a relative file path")
     relative = Path(value.replace("\\", "/"))
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("Path must stay inside the session directory")
+    # ``original`` is a logical namespace; raw inputs may live beside processed/.
+    if relative.parts and relative.parts[0] == 'original':
+        original = original_directory(base)
+        if root.resolve() in (base.resolve(), original):
+            base, root = original, original
+            relative = Path(*relative.parts[1:])
     path = (base / relative).resolve()
     if relative.is_absolute() or ".." in relative.parts or not path.is_relative_to(root):
         raise ValueError("Path must stay inside the session directory")
@@ -29,15 +38,16 @@ def read_object(path: Path) -> dict:
 
 class SessionValidationService:
     def validate(self, directory) -> dict:
-        session = Path(directory).resolve()
-        if not session.is_dir():
+        session = processed_session(directory)
+        if not session.is_dir() and not original_directory(session).is_dir():
             raise ValueError(f"Session directory does not exist: {session}")
-        root = (session / "original").resolve()
+        session.mkdir(parents=True, exist_ok=True)
+        root = original_directory(session)
         report = {
             "status": "invalid", "errors": [], "mesh": None,
             "frames": {"total": 0, "usable": 0, "incomplete": 0, "issues": []},
         }
-        if not root.is_relative_to(session):
+        if not root.is_dir():
             report["errors"].append("original directory must stay inside the session")
             return self._save(session, report)
         try:

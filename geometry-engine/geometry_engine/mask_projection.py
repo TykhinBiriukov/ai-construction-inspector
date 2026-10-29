@@ -17,6 +17,7 @@ from scipy.ndimage import binary_erosion
 
 from .mesh import read_mesh
 from .segmentation import _rename
+from .session_layout import prepare_session, original_directory, session_reference
 from .validation import read_object, session_file
 from .visibility import render_visibility
 
@@ -128,10 +129,10 @@ class MaskProjectionService:
         self.settings = settings or ProjectionSettings()
 
     def project(self, directory, output_dir=None, *, max_frames=None, segmentation_dir=None, mesh_dir=None, progress=None):
-        session = Path(directory).resolve()
-        original = (session/"original").resolve()
+        session = prepare_session(directory)
+        original = original_directory(session)
         output = Path(output_dir).resolve() if output_dir is not None else session/"mask_projection"
-        if not original.is_dir() or original.parent != session or output.parent != session or output == original:
+        if not original.is_dir() or output.parent != session or output == original:
             raise ValueError("Expected session/original and a stage output directly inside the session")
         if output.exists():
             raise FileExistsError(f"Output exists: {output}")
@@ -163,7 +164,7 @@ class MaskProjectionService:
             raise ValueError("No segmented frames")
         fingerprints = {}
         def fingerprint(path):
-            fingerprints[path.relative_to(session).as_posix()] = file_hash(path)
+            fingerprints[session_reference(path, session)] = file_hash(path)
         for path in (capture_path, source_mesh, mesh_path, prepared/"report.json", detections_path):
             fingerprint(path)
         observations, frame_results, all_ids, all_weights, offsets = [], [], [], [], [0]
@@ -181,7 +182,7 @@ class MaskProjectionService:
                 rgb_path = session_file(original, session, frame.get("rgb"))
                 for path, field in ((metadata_path, "metadata_sha256"), (rgb_path, "rgb_sha256")):
                     fingerprint(path)
-                    if fingerprints[path.relative_to(session).as_posix()] != frame.get(field):
+                    if fingerprints[session_reference(path, session)] != frame.get(field):
                         raise ValueError(f"Source changed after SAM segmentation: {identity}")
                 metadata = read_object(metadata_path)
                 size = (frame.get("width"), frame.get("height"))
@@ -248,7 +249,7 @@ class MaskProjectionService:
                     if fraction < self.settings.min_observation_support or not len(ids):
                         ids, weights = np.array([], dtype=np.int32), np.array([], dtype=float)
                     record = {"observation_id": observation_id, "frame_id": identity, "label": label, "score": score,
-                              "status": "supported" if len(ids) else "unconfirmed", "mask": mask_path.relative_to(session).as_posix(),
+                              "status": "supported" if len(ids) else "unconfirmed", "mask": session_reference(mask_path, session),
                               "mask_pixels": mask_pixels, "supported_pixels": supported_pixels,
                               "support_fraction": fraction, "face_count": len(ids),
                               "no_mesh_pixels": int((mask & ~visible).sum()),
@@ -275,7 +276,7 @@ class MaskProjectionService:
             report = {"schema_version": "1.0", "status": "completed", "parameters": asdict(self.settings),
                       "processed_frames": len(inputs), "available_segmented_frames": len(manifest["frames"]),
                       "observation_count": len(observations), "supported_observations": sum(r["status"] == "supported" for r in observations),
-                      "mesh": mesh_path.relative_to(session).as_posix(), "mesh_sha256": file_hash(mesh_path),
+                      "mesh": session_reference(mesh_path, session), "mesh_sha256": file_hash(mesh_path),
                       "mesh_faces": len(faces), "input_fingerprints": fingerprints,
                       "artifact_fingerprints": {path.relative_to(staging).as_posix(): file_hash(path)
                                                 for path in sorted(staging.rglob("*")) if path.is_file()},

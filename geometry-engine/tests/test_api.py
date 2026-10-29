@@ -64,13 +64,13 @@ class ApiTests(unittest.TestCase):
         with self.client() as client:
             response = client.post("/sessions/extract", json=self.payload())
         self.assertEqual(response.status_code, 201, response.text)
-        destination = self.settings.data_dir / "scan-001"
-        self.assertEqual(response.json(), {"session_id": "scan-001", "directory": str(destination.resolve()), "validation": {"status": "valid"}})
+        destination = self.settings.data_dir / "raw" / "scan-001"
+        self.assertEqual(response.json(), {"session_id": "scan-001", "directory": str(destination.resolve()), "validation": {"status": "not_run", "reason": "Validation runs in /sessions/process"}})
         self.assertEqual((destination / "original/mesh.ply").read_bytes(), b"original mesh")
         self.assertEqual((destination / "original/frames/000001/rgb.png").read_bytes(), b"image")
-        self.assertEqual([p.name for p in destination.iterdir()], ["original"])
+        self.assertEqual(sorted(p.name for p in destination.iterdir()), ["archives", "original"])
         self.assertFalse((destination / "prepared").exists())
-        self.assertEqual([p.name for p in self.settings.data_dir.iterdir()], ["scan-001"])
+        self.assertEqual([p.name for p in (self.settings.data_dir / "raw").iterdir()], ["scan-001"])
         self.assertEqual(self.requests[0].url.path, "/storage/v1/object/sign/inspection-captures/scan-001.zip")
         self.assertEqual(self.requests[0].headers["apikey"], "test-secret")
         self.assertEqual(self.requests[1].url.path, "/storage/v1/object/sign/inspection-captures/scan-001.zip")
@@ -93,12 +93,12 @@ class ApiTests(unittest.TestCase):
         with self.client() as client:
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 201)
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 409)
-        self.assertEqual((self.settings.data_dir / "scan-001/original/mesh.ply").read_bytes(), b"original mesh")
+        self.assertEqual((self.settings.data_dir / "raw" / "scan-001/original/mesh.ply").read_bytes(), b"original mesh")
 
     def test_archive_service_does_not_require_or_process_a_mesh(self):
         with self.client(self.archive({"notes.txt": b"plain archive"})) as client:
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 201)
-        self.assertEqual((self.settings.data_dir / "scan-001/original/notes.txt").read_bytes(), b"plain archive")
+        self.assertEqual((self.settings.data_dir / "raw" / "scan-001/original/notes.txt").read_bytes(), b"plain archive")
 
     def test_unconfigured_storage_is_rejected(self):
         app = create_app()
@@ -134,21 +134,21 @@ class ApiTests(unittest.TestCase):
     def test_zip_traversal_is_rejected_without_partial_session_folder(self):
         with self.client(self.archive({"../escape.txt": b"bad"})) as client:
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 422)
-        self.assertEqual(list(self.settings.data_dir.iterdir()), [])
+        self.assertEqual(list((self.settings.data_dir / "raw").iterdir()), [])
 
     def test_download_and_extraction_limits(self):
         with self.client(settings=replace(self.settings, max_download_bytes=10)) as client:
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 502)
         with self.client(settings=replace(self.settings, max_extract_bytes=10)) as client:
             self.assertEqual(client.post("/sessions/extract", json=self.payload()).status_code, 422)
-        self.assertEqual(list(self.settings.data_dir.iterdir()), [])
+        self.assertEqual(list((self.settings.data_dir / "raw").iterdir()), [])
 
     def test_failed_download_is_cleaned_up_and_does_not_expose_signed_url(self):
         with self.client(response_status=403) as client:
             response = client.post("/sessions/extract", json=self.payload())
         self.assertEqual(response.status_code, 502)
         self.assertNotIn("hidden", response.text)
-        self.assertEqual(list(self.settings.data_dir.iterdir()), [])
+        self.assertEqual(list((self.settings.data_dir / "raw").iterdir()), [])
 
     def test_supabase_signing_failure_is_cleaned_up(self):
         with self.client(signing_status=403) as client:
@@ -156,12 +156,12 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertNotIn("hidden", response.text)
         self.assertEqual(len(self.requests), 1)
-        self.assertEqual(list(self.settings.data_dir.iterdir()), [])
+        self.assertEqual(list((self.settings.data_dir / "raw").iterdir()), [])
 
     def test_session_stage_endpoints_are_exposed(self):
         with self.client() as client:
             paths = client.get("/openapi.json").json()["paths"]
-        self.assertEqual(set(paths), {"/sessions/extract", "/sessions/segment", "/sessions/segment-mesh"})
+        self.assertEqual(set(paths), {"/sessions/extract", "/sessions/process"})
 
 
 if __name__ == "__main__":

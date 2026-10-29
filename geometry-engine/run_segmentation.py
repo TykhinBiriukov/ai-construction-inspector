@@ -3,6 +3,7 @@
 import argparse
 import os
 from pathlib import Path
+from geometry_engine.session_layout import processed_session, original_directory
 
 from dotenv import load_dotenv
 
@@ -13,7 +14,7 @@ from geometry_engine.segmentation import SegmentationService, SegmentationSettin
 def main():
     root = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description="Segment selected session photos with the hosted Meta SAM API.")
-    parser.add_argument("--session", type=Path, default=root / "data" / "47333462")
+    parser.add_argument("--session", type=Path, default=root / "data" / "processed" / "47333462")
     parser.add_argument("--output", type=Path, help="New output folder directly inside the session; defaults to SESSION/segmentation")
     parser.add_argument("--selected-frames", type=Path, help="Alternative selected_frames.json inside the session")
     parser.add_argument("--max-frames", type=int, help="Process only the first N selected frames")
@@ -30,7 +31,7 @@ def main():
         settings = SegmentationSettings(tuple(args.prompts), args.min_confidence, args.min_mask_pixels)
         backend = Sam3Backend(api_key=api_key)
         service = SegmentationService(backend, settings)
-        print(f"Segmenting selected frames: {args.session.resolve()}", flush=True)
+        print(f"Segmenting selected frames: {processed_session(args.session)}", flush=True)
         print(f"Concepts: {', '.join(settings.prompts)}", flush=True)
         def progress(done, total, frame_id, detections):
             print(f"Frame {done}/{total} ({frame_id}): {detections} detections", flush=True)
@@ -42,7 +43,7 @@ def main():
         parser.exit(1, f"Error: {error}\n")
     print(f"Segmented frames: {report['processed_count']}/{report['selected_count']}; detections: {report['detection_count']}", flush=True)
     print(f"Reused: {report['reused_count']}; new: {report['newly_processed_count']}", flush=True)
-    output = args.output.resolve() if args.output is not None else args.session.resolve() / "segmentation"
+    output = args.output.resolve() if args.output is not None else processed_session(args.session) / "segmentation"
     print(f"Results: {output}", flush=True)
 
 

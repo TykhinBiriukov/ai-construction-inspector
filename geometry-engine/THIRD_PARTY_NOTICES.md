@@ -1,5 +1,17 @@
 # Open-source algorithms used by Geometry Engine
 
+## Open3D: RGB-D surface reconstruction
+
+`geometry_engine/reconstruction.py` calls the Open3D 0.20.0 CPU
+`VoxelBlockGrid` TSDF integration and Marching Cubes extraction APIs. The
+application adds ARKit input adaptation, confidence filtering, conservative
+cross-view diagnostics, stage reports and exports. Open3D is an MIT-licensed
+dependency; its license is included in the installed distribution.
+
+- [Upstream TSDF integration example](https://www.open3d.org/docs/latest/tutorial/t_reconstruction_system/integration.html)
+- [VoxelBlockGrid API](https://www.open3d.org/docs/latest/python_api/open3d.t.geometry.VoxelBlockGrid.html)
+- [Open3D source and license](https://github.com/isl-org/Open3D)
+
 ## Open3D: RANSAC plane detection
 
 `geometry_engine/wall_plane_detection.py` adapts the three-point RANSAC

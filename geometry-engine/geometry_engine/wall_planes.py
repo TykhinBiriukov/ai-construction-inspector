@@ -9,6 +9,7 @@ import numpy as np
 from .mask_projection import file_hash, save_json
 from .mesh import read_mesh
 from .segmentation import _rename
+from .session_layout import prepare_session, original_directory, session_reference
 from .validation import read_object, session_file
 from .wall_plane_detection import WallPlaneSettings, detect_wall_planes
 from .wall_plane_viewer import export_wall_plane_viewer
@@ -35,10 +36,10 @@ class WallPlaneService:
         self.settings = settings or WallPlaneSettings()
 
     def detect(self, directory, output_dir=None, *, up_axis=None, progress=None):
-        session = Path(directory).resolve()
-        original = (session / "original").resolve()
+        session = prepare_session(directory)
+        original = original_directory(session)
         output = Path(output_dir).resolve() if output_dir is not None else session / "wall_planes"
-        if not original.is_dir() or original.parent != session or output.parent != session or output == original:
+        if not original.is_dir() or output.parent != session or output == original:
             raise ValueError("Expected session/original and a stage output directly inside the session")
         if output.exists():
             raise FileExistsError(f"Output exists: {output}; choose a new --output directory")
@@ -61,7 +62,7 @@ class WallPlaneService:
         if preparation.get("source_sha256") != file_hash(source_mesh):
             raise ValueError("Prepared mesh belongs to a different original mesh")
         mesh_sha256 = file_hash(mesh_path)
-        inputs = {path.relative_to(session).as_posix(): file_hash(path)
+        inputs = {session_reference(path, session): file_hash(path)
                   for path in (capture_path, source_mesh, mesh_path, prepared_report_path)}
         vertices, _, faces = read_mesh(mesh_path)
         semantic_classes, labels, wall_mask = None, None, None
@@ -89,7 +90,7 @@ class WallPlaneService:
             wall_ids = [index for index, name in enumerate(labels) if name.casefold() == "wall"]
             wall_mask = np.isin(semantic_classes, wall_ids)
             for path in (report_path, object_path, label_path):
-                inputs[path.relative_to(session).as_posix()] = file_hash(path)
+                inputs[session_reference(path, session)] = file_hash(path)
         if progress:
             progress(f"Mesh: {len(vertices)} vertices, {len(faces)} triangles; up axis: {up_axis.upper()}")
         result = detect_wall_planes(vertices, faces, wall_mask, up_axis=up_axis,
@@ -104,7 +105,7 @@ class WallPlaneService:
                 "schema_version": "1.0", "unit": "meter", "up_axis": up_axis,
                 "plane_equation": "normal dot point_world + offset_m = 0",
                 "extent_policy": "support_rectangle_for_visualization_not_physical_wall_boundary",
-                "mesh": mesh_path.relative_to(session).as_posix(), "mesh_sha256": mesh_sha256,
+                "mesh": session_reference(mesh_path, session), "mesh_sha256": mesh_sha256,
                 "planes": planes,
             })
             np.savez_compressed(staging / "face_labels.npz", face_plane_id=assignments)

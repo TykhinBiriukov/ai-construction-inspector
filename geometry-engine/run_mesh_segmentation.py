@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+from geometry_engine.session_layout import processed_session, original_directory
 
 from geometry_engine.mask_fusion import FusionSettings
 from geometry_engine.mesh_segmentation import MeshSegmentationService
@@ -10,7 +11,7 @@ from geometry_engine.mesh_segmentation import MeshSegmentationService
 def main():
     root = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description="Project saved SAM masks onto the prepared mesh and fuse observations from multiple views.")
-    parser.add_argument("--session", type=Path, default=root / "data" / "47333462")
+    parser.add_argument("--session", type=Path, default=root / "data" / "processed" / "47333462")
     parser.add_argument("--output", type=Path, help="New folder directly inside the session; defaults to SESSION/mesh_segmentation")
     parser.add_argument("--projection-dir", type=Path, help="New or reusable projection folder directly inside the session; defaults to SESSION/mask_projection")
     parser.add_argument("--max-frames", type=int, help="Use only the first N already segmented frames")
@@ -20,7 +21,7 @@ def main():
     try:
         settings = FusionSettings(min_views=args.min_views, min_class_purity=args.min_class_purity)
         service = MeshSegmentationService(fusion_settings=settings)
-        print(f"Labeling mesh from saved masks: {args.session.resolve()}", flush=True)
+        print(f"Labeling mesh from saved masks: {processed_session(args.session)}", flush=True)
 
         def progress(done, total, frame_id, supported_observations):
             print(f"Frame {done}/{total} ({frame_id}): {supported_observations} supported masks", flush=True)
@@ -31,7 +32,7 @@ def main():
         parser.exit(1, f"Error: {error}\n")
     print(f"Processed frames: {report['processed_frames']}; labeled faces: {report['labeled_faces']}/{report['total_faces']}", flush=True)
     print(f"Candidate objects: {report['candidate_objects']}", flush=True)
-    output = args.output.resolve() if args.output is not None else args.session.resolve() / "mesh_segmentation"
+    output = args.output.resolve() if args.output is not None else processed_session(args.session) / "mesh_segmentation"
     print(f"Results: {output}", flush=True)
 
 

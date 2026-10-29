@@ -4,25 +4,25 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from .dependencies import (
     get_archive_service,
-    get_mesh_segmentation_service,
-    get_validation_service,
-    get_segmentation_service,
+    get_pipeline_service,
     get_settings,
 )
 from .services.archive import ArchiveService, ArchiveServiceError, Settings
-from geometry_engine.mesh_segmentation import MeshSegmentationService
+from geometry_engine.pipeline import PipelineService
 from geometry_engine.sam_backend import Sam3UnavailableError
-from geometry_engine.segmentation import SegmentationService
-from geometry_engine.validation import SessionValidationService
 
 
-class ExtractRequest(BaseModel):
+class SessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")]
+
+
+class ExtractRequest(SessionRequest):
+    project_id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")] | None = None
 
 
 class ExtractResponse(BaseModel):
@@ -31,25 +31,10 @@ class ExtractResponse(BaseModel):
     validation: dict
 
 
-class SegmentRequest(ExtractRequest):
-    max_frames: Annotated[int, Field(strict=True, ge=1)] | None = None
-    resume: Annotated[bool, Field(strict=True)] = False
-
-
-class SegmentResponse(BaseModel):
+class PipelineResponse(BaseModel):
     session_id: str
     directory: str
-    segmentation: dict
-
-
-class SegmentMeshRequest(ExtractRequest):
-    max_frames: Annotated[int, Field(strict=True, ge=1)] | None = None
-
-
-class SegmentMeshResponse(BaseModel):
-    session_id: str
-    directory: str
-    mesh_segmentation: dict
+    pipeline: dict
 
 
 def create_app():
@@ -70,56 +55,33 @@ def create_app():
     def extract(
         payload: ExtractRequest,
         service: Annotated[ArchiveService, Depends(get_archive_service)],
-        validator: Annotated[SessionValidationService, Depends(get_validation_service)],
     ):
-        result = service.extract(payload.session_id)
-        validation = validator.validate(result.directory)
-        if validation["status"] == "invalid":
-            raise HTTPException(status_code=422, detail={"session_id": result.session_id, "validation": validation})
+        if payload.project_id is not None:
+            result = service.extract(payload.session_id, project_id=payload.project_id)
+        else:
+            result = service.extract(payload.session_id)
+        validation = {"status": "not_run", "reason": "Validation runs in /sessions/process"}
         return ExtractResponse(session_id=result.session_id, directory=str(result.directory), validation=validation)
 
-    @app.post("/sessions/segment", response_model=SegmentResponse, status_code=201)
-    def segment(
-        payload: SegmentRequest,
-        service: Annotated[SegmentationService, Depends(get_segmentation_service)],
+    @app.post("/sessions/process", response_model=PipelineResponse)
+    def process(
+        payload: SessionRequest,
+        service: Annotated[PipelineService, Depends(get_pipeline_service)],
         settings: Annotated[Settings, Depends(get_settings)],
     ):
-        root = settings.data_dir.resolve()
+        root = settings.data_dir.resolve() / "processed"
         directory = (root / payload.session_id).resolve()
         if directory.parent != root:
-            raise HTTPException(status_code=422, detail="Session directory must stay inside GEOMETRY_DATA_DIR")
+            raise HTTPException(status_code=422, detail="Invalid session directory")
         try:
-            options = {"max_frames": payload.max_frames}
-            if payload.resume:
-                options["resume"] = True
-            report = service.segment(directory, **options)
+            report = service.run(directory)
         except FileExistsError:
-            raise HTTPException(status_code=409, detail="Segmentation already exists; use the CLI with a new --output directory") from None
+            raise HTTPException(status_code=409, detail="Pipeline or stage results already exist; see pipeline.json and use stage CLI to continue") from None
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from None
-        except OSError:
-            raise HTTPException(status_code=500, detail="Could not read or write segmentation files") from None
-        return SegmentResponse(session_id=payload.session_id, directory=str(directory / "segmentation"), segmentation=report)
-
-    @app.post("/sessions/segment-mesh", response_model=SegmentMeshResponse, status_code=201)
-    def segment_mesh(
-        payload: SegmentMeshRequest,
-        service: Annotated[MeshSegmentationService, Depends(get_mesh_segmentation_service)],
-        settings: Annotated[Settings, Depends(get_settings)],
-    ):
-        root = settings.data_dir.resolve()
-        directory = (root / payload.session_id).resolve()
-        if directory.parent != root:
-            raise HTTPException(status_code=422, detail="Session directory must stay inside GEOMETRY_DATA_DIR")
-        try:
-            report = service.segment(directory, max_frames=payload.max_frames)
-        except FileExistsError:
-            raise HTTPException(status_code=409, detail="Mesh segmentation already exists; use the CLI with a new --output directory") from None
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail=str(error)) from None
-        except OSError:
-            raise HTTPException(status_code=500, detail="Could not read or write mesh segmentation files") from None
-        return SegmentMeshResponse(session_id=payload.session_id, directory=str(directory / "mesh_segmentation"), mesh_segmentation=report)
+        except (OSError, RuntimeError):
+            raise HTTPException(status_code=500, detail="Pipeline failed; see processed session pipeline.json for the failed stage") from None
+        return PipelineResponse(session_id=payload.session_id, directory=str(directory), pipeline=report)
 
     return app
 

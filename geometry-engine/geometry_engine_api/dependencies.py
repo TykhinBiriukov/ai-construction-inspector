@@ -59,3 +59,10 @@ def get_archive_service(
     client: Annotated[Client, Depends(get_supabase_client)],
 ) -> ArchiveService:
     return ArchiveService(settings, client)
+
+
+def get_pipeline_service(
+    segmentation: Annotated[SegmentationService, Depends(get_segmentation_service)],
+):
+    from geometry_engine.pipeline import PipelineService
+    return PipelineService(segmentation)

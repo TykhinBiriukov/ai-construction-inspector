@@ -137,13 +137,16 @@ class ArchiveService:
         self.client = client
         self.download = download_fn
 
-    def extract(self, session_id: str) -> ExtractionResult:
+    def extract(self, session_id: str, *, project_id: str | None = None) -> ExtractionResult:
+        if project_id is not None:
+            from .session_download import SessionDownloadService
+            return SessionDownloadService(self.settings, self.client, download_fn=self.download).extract(project_id, session_id)
         import re
         from tempfile import TemporaryDirectory
 
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", session_id):
             raise ArchiveServiceError("invalid_request", "Invalid session_id")
-        root = self.settings.data_dir.resolve()
+        root = self.settings.data_dir.resolve() / "raw"
         destination = root / session_id
         if destination.exists():
             raise ArchiveServiceError("session_exists", "Session folder already exists")
@@ -163,6 +166,8 @@ class ArchiveService:
             staged_session.mkdir()
             try:
                 extract_archive(work / "archive.zip", staged_session / "original", self.settings)
+                (staged_session / "archives").mkdir()
+                (work / "archive.zip").rename(staged_session / "archives" / f"{session_id}.zip")
             except (ArchiveError, zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
                 raise ArchiveServiceError("invalid_archive", str(error)) from None
             try:

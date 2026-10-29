@@ -2,6 +2,7 @@
 numpy==2.4.3
 scipy==1.17.1
 Pillow==12.1.1
+open3d==0.20.0
 
 # ARKitScenes image checks and visualization
 matplotlib==3.10.8
