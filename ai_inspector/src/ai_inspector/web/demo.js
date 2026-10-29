@@ -9,6 +9,15 @@
   const uid = () => crypto.randomUUID();
   const timestamp = value => value ? new Date(value).toLocaleString() : 'Not reported';
   const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className=className; if (text != null) el.textContent=String(text); return el; };
+  function messageText(text) {
+    const el=node('div','message-text');
+    for(const part of String(text).replace(/\n{3,}/g,'\n\n').split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g)) {
+      if(part.startsWith('`') && part.endsWith('`')) el.append(node('code','',part.slice(1,-1)));
+      else if(part.startsWith('**') && part.endsWith('**')) el.append(node('strong','',part.slice(2,-2)));
+      else el.append(document.createTextNode(part));
+    }
+    return el;
+  }
   function notify(text='') { $('notice').textContent=text; $('notice').hidden=!text; }
   function remember() {
     write(localStorage,pointerKey,chat?.chat_id ? JSON.stringify({chat_id:chat.chat_id, project_id:overview?.project_id}) : null);
@@ -101,18 +110,20 @@
   function renderConversation() {
     const runs=chat?.runs||[], signature=JSON.stringify(runs);
     if(historySignature!==signature) {
+      const follow = $('messages').scrollHeight - $('messages').scrollTop - $('messages').clientHeight < 100;
       historySignature=signature;
       if(runs.length) {
         $('messages').replaceChildren();
         for(const run of runs) {
-          const user=node('article','message user'); user.append(node('div','message-author','YOU'),node('div','message-text',run.text)); $('messages').append(user);
+          const user=node('article','message user'); user.append(node('div','message-author','YOU'),messageText(run.text)); $('messages').append(user);
           const assistant=node('article','message assistant'); assistant.append(node('div','message-author','✳ INSPECTOR'));
-          assistant.append(node('div','message-text',run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
+          assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
           const grid=node('div','artifact-grid'); for(const item of run.artifacts||[]) { const artifact=renderArtifact(item); if(artifact) grid.append(artifact); } if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
         }
       } else {
         const welcome=node('div','welcome'); welcome.append(node('div','hero-icon','✳'),node('h1','','From a question\nto a clearer picture.'),node('p','','Ask about your device, plan a capture, or turn available evidence into a dashboard.')); $('messages').replaceChildren(welcome);
       }
+      if(follow) $('messages').scrollTop=$('messages').scrollHeight;
     }
     $('activity').replaceChildren();
     const last=runs.at(-1);
