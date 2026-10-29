@@ -1,11 +1,5 @@
 # AI Inspector — first capture-to-geometry case
 
-Product and architecture documentation (Russian):
-
-- [First test-run overview](docs/project-overview-v1.ru.md): scope, components, session lifecycle, and current implementation boundary
-- [Agent and service contracts](docs/agent-tools-contracts-v1.ru.md): proposed tools, chat/events, iPhone recovery, BIM, and Geometry handoff
-- [Research and implementation roadmap](docs/research-and-implementation-v1.ru.md): source-backed findings, remaining experiments, dependencies, and acceptance scenarios
-
 Current developer handoff:
 
 - [Web agent → iPhone assignment](docs/agent-chat.md) — Meta Model API / Muse Spark 1.3, durable chat and predefined tools
