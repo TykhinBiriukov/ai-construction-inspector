@@ -170,3 +170,9 @@ class RoomSolver:
         result['evidence_observation_ids']=[o['observation_id'] for o in observations]
         result['analysis_origin']='live'
         return result
+
+    def refine(self, context, alignment, observations):
+        if context['model_version'] != self.room['model_version']:
+            raise ValueError('BIM revision mismatch')
+        from localization_service.refinement import refine
+        return refine(self.room, alignment, observations)

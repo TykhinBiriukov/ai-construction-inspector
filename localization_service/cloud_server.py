@@ -108,7 +108,7 @@ class CloudHandler(Handler):
     def handle_request(self):
         self.connection.settimeout(30)
         if self.path=='/healthz' and self.command=='GET':
-            self.reply(200,{'status':'ready','model_mode':'per_session_ifc','room_features':'rectangular_openings_v2'});return
+            self.reply(200,{'status':'ready','model_mode':'per_session_ifc','room_features':'rectangular_openings_v2','alignment_refinement':'held-out-rigid-v1'});return
         parts=self.path.strip('/').split('/')
         internal=parts==['internal','localization','sessions'] and self.command=='POST'
         registry=self.server.registry

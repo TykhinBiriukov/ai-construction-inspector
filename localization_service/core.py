@@ -116,10 +116,22 @@ class Localization:
             if oid in self.evidence and self.evidence[oid] != observation:
                 raise ValueError('observation ID conflict')
         self.evidence.update({uid(o['observation_id']): deepcopy(o) for o in observations})
-        # Initialization is not a continuous validator. Once registered, ARKit
-        # supplies movement within this segment; inspection views only add coverage.
-        # Explicit tracking loss/start() invalidates alignment independently.
+        # Initialization stays fixed unless a bounded, independently validated
+        # rigid refinement succeeds. Never rerun doorway initialization here.
         if self.alignment is not None:
+            refiner = getattr(self.solver, 'refine', None)
+            if refiner is not None:
+                refined = refiner(deepcopy(self.context), deepcopy(self.alignment),
+                                  list(deepcopy(self.evidence).values()))
+                if refined is not None:
+                    refined['T_bim_arkit'] = rigid(refined['T_bim_arkit'])
+                    ids = [uid(v) for v in refined['evidence_observation_ids']]
+                    if not ids or any(v not in self.evidence for v in ids):
+                        raise ValueError('refinement lacks evidence')
+                    self.alignment = dict(refined, alignment_id=str(uuid4()), revision=self.revision+1)
+                    self.last_result = deepcopy(self.alignment)
+                    # Do not expose a pose in the old frame until next telemetry.
+                    self.pose = None
             self.batches[batch_id] = payload
             self.revision += 1
             return self.snapshot()

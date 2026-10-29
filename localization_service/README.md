@@ -122,3 +122,18 @@ excluded. Coverage records retain observation IDs, are rebuilt after alignment
 changes, and disappear without alignment. This is measured support, not image
 quality, defect assessment, or hidden-surface coverage. Geometry is out of the
 current test scope; production Inspector integration remains separate.
+
+### Conservative rigid refinement
+
+After initialization, new observations may trigger one bounded rigid correction per
+ARKit segment (12–48 observations, every fourth observation). High-confidence depth
+proposes a yaw correction of 0.3–3 degrees and a normal translation of at most 8 cm.
+Alternating held-out frames must agree on orientation and improve two perpendicular
+walls, each supported by multiple views, without worsening another supported wall.
+Conflicting candidates retain the original alignment. Floor height and room dimensions
+are unchanged; original alignment and validation metrics remain in the snapshot.
+Coverage still uses its original 6 cm depth-to-BIM gate, opening masks and density
+checks. A new alignment ID invalidates coverage cache; latest pose is hidden until
+fresh telemetry. This is an experimental estimator, not proof of BIM conformity.
+Completed sessions are not retroactively rewritten by deployment. No UI distinction
+between photographic visibility and BIM conformity is introduced by this change.

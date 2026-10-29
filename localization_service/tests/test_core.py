@@ -100,7 +100,26 @@ class CoreTests(unittest.TestCase):
         self.evidence[0]['source_verified']=False
         with self.assertRaises(ValueError):s.observe(str(uuid4()),self.seg,self.evidence)
 
-if __name__ == '__main__': unittest.main()
+    def test_refinement_updates_identity_clears_stale_pose_and_is_idempotent(self):
+        s = self.localized()
+        old_id = s.alignment['alignment_id']
+        s.pose = {'T_bim_camera': IDENTITY}
+        class Refiner:
+            calls = 0
+            def refine(self, context, alignment, observations):
+                self.calls += 1
+                return dict(alignment, T_bim_arkit=IDENTITY,
+                            evidence_observation_ids=[o['observation_id'] for o in observations])
+        refiner = Refiner(); s.solver = refiner
+        observation = {'observation_id':str(uuid4()), 'source_verified':True,
+                       'files':[{'sha256':'refine-fixture'}]}
+        batch = str(uuid4())
+        s.observe(batch, self.seg, [observation])
+        self.assertNotEqual(s.alignment['alignment_id'], old_id)
+        self.assertIsNone(s.pose)
+        self.assertEqual(s.alignment['T_bim_arkit'], IDENTITY)
+        s.observe(batch, self.seg, [observation])
+        self.assertEqual(refiner.calls, 1)
 
 class HTTPTests(unittest.TestCase):
     def test_auth_persistence_and_old_segment(self):
@@ -126,3 +145,5 @@ class HTTPTests(unittest.TestCase):
             self.assertEqual(call(restored,route)[1]['guidance']['phase'],'inspecting')
             call(restored,route+'/finish',{})
             self.assertTrue(call(restored,route+'/start',{'segment_id':str(uuid4())})[0].startswith('422'))
+
+if __name__ == '__main__': unittest.main()
