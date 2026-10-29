@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
+from .workspace import WorkItem, Observation, ImportPlan
 from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
 from .agent import CreateChatRequest, ChatMessageRequest
@@ -41,7 +42,7 @@ class IntakeSizeLimit:
         self.max_bytes = max_bytes
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] != "http" or scope["method"] != "POST" or scope["path"] != "/v1/inspections":
+        if scope["type"] != "http" or scope["method"] != "POST" or not (scope["path"] == "/v1/inspections" or (scope["path"].startswith("/v1/chats/") and scope["path"].endswith("/files"))):
             await self.app(scope, receive, send)
             return
         error = APIError(413, "request_too_large", "Upload request exceeds the configured size limit")
@@ -260,6 +261,53 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         result, response.status_code = service.agent.submit(principal, str(chat_id), request)
         return result
 
+    @app.get("/v1/chats", tags=["workspace"])
+    def list_chats(principal: Annotated[Principal, Depends(operator)]):
+        with service.database.connection() as connection:
+            rows = connection.execute("SELECT data FROM chats WHERE project_id=?", (principal.project_id,)).fetchall()
+        chats = sorted((json.loads(row['data']) for row in rows), key=lambda chat: chat['created_at'], reverse=True)[:100]
+        return {"chats": [{key: chat[key] for key in ('chat_id','room_id','created_at')} for chat in chats]}
+
+    @app.get("/v1/chats/{chat_id}/workspace", tags=["workspace"])
+    def workspace_state(chat_id: UUID, principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.state(principal, str(chat_id))
+
+    @app.post("/v1/chats/{chat_id}/files", tags=["workspace"])
+    def upload_chat_file(chat_id: UUID, file_id: Annotated[UUID, Form()], file: Annotated[UploadFile, File()],
+                         principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.upload(principal, str(chat_id), file_id, file.filename, file.file)
+
+    @app.get("/v1/chats/{chat_id}/files/{file_id}/download", tags=["workspace"])
+    def download_chat_file(chat_id: UUID, file_id: str, principal: Annotated[Principal, Depends(operator)]):
+        file = service.workspace.download(principal, str(chat_id), file_id)
+        if file.get('sha256'):
+            return FileResponse(service.bim_store.path_for(file['sha256']), filename=file['name'], media_type='application/octet-stream')
+        return Response(file['content'], media_type='application/octet-stream', headers={'Content-Disposition':'attachment; filename="inspector-result.json"'})
+
+    @app.post("/v1/chats/{chat_id}/files/{file_id}/delete", tags=["workspace"])
+    def delete_chat_file(chat_id: UUID, file_id: str, principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.trash(principal, str(chat_id), file_id, True)
+
+    @app.post("/v1/chats/{chat_id}/files/{file_id}/restore", tags=["workspace"])
+    def restore_chat_file(chat_id: UUID, file_id: str, principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.trash(principal, str(chat_id), file_id, False)
+
+    @app.post("/v1/chats/{chat_id}/plan/{item_id}", tags=["workspace"])
+    def save_plan_item(chat_id: UUID, item_id: UUID, body: WorkItem, principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.save_item(principal, str(chat_id), item_id, body)
+
+    @app.post("/v1/chats/{chat_id}/plan-import", tags=["workspace"])
+    def import_plan(chat_id: UUID, body: ImportPlan, principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.import_plan(principal, str(chat_id), body)
+
+    @app.post("/v1/chats/{chat_id}/observations/{observation_id}", tags=["workspace"])
+    def save_observation(chat_id: UUID, observation_id: UUID, body: Observation, principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.observe(principal, str(chat_id), observation_id, body)
+
+    @app.post("/v1/chats/{chat_id}/observations/{observation_id}/withdraw", tags=["workspace"])
+    def withdraw_observation(chat_id: UUID, observation_id: UUID, principal: Annotated[Principal, Depends(operator)]):
+        return service.workspace.withdraw(principal, str(chat_id), observation_id)
+
     @app.post("/v1/inspections", response_model=Inspection, status_code=201, tags=["inspection intake"])
     async def create_inspection(
         response: Response,
@@ -336,6 +384,12 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     @app.post("/v1/sessions/{session_id}/abort", response_model=Session, tags=["capture sessions"])
     def abort_session(session_id: UUID, principal: Annotated[Principal, Depends(operator)]):
         return service.abort_session(principal, str(session_id))
+
+    @app.post("/v1/standalone-captures/{session_id}/upload-plans", tags=["capture completion"])
+    def standalone_upload_plan(session_id: UUID, body: UploadPlanRequest,
+                               principal: Annotated[Principal, Depends(authenticate)]):
+        from .standalone_capture import upload_plan
+        return upload_plan(settings, principal, session_id, body)
 
     @app.post("/v1/sessions/{session_id}/upload-plans", status_code=201, tags=["capture completion"])
     def upload_plan(session_id: UUID, body: UploadPlanRequest, response: Response, principal: Annotated[Principal, Depends(authenticate)]):

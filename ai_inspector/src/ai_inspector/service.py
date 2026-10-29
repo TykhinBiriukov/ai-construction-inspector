@@ -56,6 +56,8 @@ class InspectorService:
         self._geometry_results = None
         from .agent import ChatAgent
         self.agent = ChatAgent(self, model_client=model_client)
+        from .workspace import Workspace
+        self.workspace = Workspace(self)
 
     @property
     def geometry_results(self):

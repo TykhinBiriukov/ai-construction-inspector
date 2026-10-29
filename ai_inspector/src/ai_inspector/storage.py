@@ -29,6 +29,9 @@ SCHEMA_SQL = """
                     project_id TEXT NOT NULL,
                     data TEXT NOT NULL
                 );
+CREATE TABLE IF NOT EXISTS workspace_files (file_id TEXT NOT NULL, chat_id TEXT NOT NULL REFERENCES chats(chat_id), data TEXT NOT NULL, PRIMARY KEY(chat_id, file_id));
+CREATE TABLE IF NOT EXISTS workspace_items (item_id TEXT NOT NULL, chat_id TEXT NOT NULL REFERENCES chats(chat_id), data TEXT NOT NULL, PRIMARY KEY(chat_id, item_id));
+CREATE TABLE IF NOT EXISTS workspace_observations (observation_id TEXT NOT NULL, chat_id TEXT NOT NULL REFERENCES chats(chat_id), data TEXT NOT NULL, PRIMARY KEY(chat_id, observation_id));
                 CREATE TABLE IF NOT EXISTS agent_runs (
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                     run_id TEXT NOT NULL UNIQUE,

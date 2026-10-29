@@ -54,7 +54,7 @@ scope. Phones cannot read chats or invoke the model. IDs below are UUIDs.
    different capture context.
 2. `POST /v1/chats/{chat_id}/messages` with
    `{schema_version: "0.1", request_id, text}`. Text is nonblank, at most 8000
-   characters. This increment accepts text, not BIM attachments.
+   characters. Optional `file_ids` selects up to 8 files from this chat workspace; see below. Uploading/selecting IFC does not attach it as the session reference BIM or parse its geometry.
 3. `GET /v1/chats/{chat_id}?limit=30&before=...` returns the session link,
    saved user/assistant runs and nullable `next_before`. Runs within a page are
    chronological; `before` retrieves older runs. Polling does not call Meta.
@@ -117,9 +117,9 @@ current session plus the loaded run history), device status, service
 configuration and persisted tool results. It does not expose hidden model reasoning
 or claim a configured service is running. The conversation snapshot is calculated from these linked sessions, not invented
 by the model. Older chat runs outside the loaded history page are not included.
-Demo navigation hides the operational Control room and Backlog menu. There is no
-misleading upload button: chat attachments are not supported yet. Operational file
-uploads remain in Control room. Capture references are not a full Storage browser. New chat is required to change room context.
+Demo navigation hides the operational Control room and Backlog menu. Attach files
+beside the message input; select context or manage Trash in Files. Capture references
+are not a full Storage browser. The conversation selector restores prior workspaces. New chat is required to change room context.
 
 Runs now include additive `display_reply` and `artifacts` fields. `reply` remains
 unchanged for older clients. The assistant may emit a fenced `inspector-ui` JSON
@@ -141,3 +141,51 @@ The demo stores its chat pointer separately from Control room. An unfinished
 request's ID and body are retained in sessionStorage for retry in the same tab;
 refresh loads server history. Polling shows completed tool results while a run is
 active; planned/in-flight tool names are not currently exposed by the API.
+
+## Files, work plans and observations
+
+Apply `scripts/sql/003_workspace.sql` with the DB owner before deploying. Runtime
+access is SELECT/INSERT/UPDATE to three private workspace tables, scoped through
+the authenticated chat; device credentials cannot access these APIs. Native SQLite
+creates the same tables. No model tool can change plan or observation records.
+
+- `GET /v1/chats` lists the latest 100 project conversations.
+- `GET /v1/chats/{id}/workspace`: files, plan items, observations and deterministic
+  progress counts. Files include uploads, saved Inspector replies/tool results as
+  JSON, linked capture/Geometry summaries, and reference BIM. Outputs are not
+  independently measured evidence. Up to 200 recent runs supply output listings.
+- `POST .../files`: multipart `file_id` UUID + `file`; deployment limit 8 MiB.
+  The same ID/content is retryable. Private immutable blobs reuse the project's
+  content-addressed Storage store; filenames never become filesystem paths.
+- `GET .../files/{file_id}/download`; `POST .../files/{file_id}/delete` or `/restore`.
+  Delete moves the chat reference to Trash, not permanent blob deletion; history,
+  recorded evidence and already-snapshotted model requests remain. Restoring a
+  derived file does not mutate its underlying capture, BIM or agent run.
+- Message `file_ids` are validated in this chat and frozen with the request.
+  UTF-8 TXT/MD/CSV/JSON/IFC/XML/LOG text gets a bounded excerpt (16k stored, 10k sent
+  per file); truncated excerpts are marked. PDFs/images/other opaque formats are
+  metadata-only, not claimed as visually analysed. Files and notes are untrusted
+  reference data. No markup is executed. An uploaded IFC is not a validated model.
+- `POST .../plan/{item_id}`: title, location, reference, deleted, revision (0 for
+  creation). Revision protects concurrent edits; archival excludes an item from
+  the denominator. Each chat supports at most 200 planned items.
+- `POST .../plan-import`: request_id UUID + selected file_id; CSV header `title`
+  with optional `location,reference`, or a JSON array of equivalent objects.
+  Bounded at 256 KB and 200 items; all rows validate before atomic import.
+  Exact request-ID replay does not duplicate items. Imports create no observations.
+- `POST .../observations/{observation_id}`: item_id, status (`confirmed`,
+  `needs_review`, `not_done`), note, author, timezone-aware observed_at, file_ids.
+  Stores evidence name/origin snapshots and operator provenance. IDs are retryable;
+  future timestamps are rejected. Direct human observation can be recorded without
+  a file; an AI output alone cannot confirm work. Names are self-reported under the
+  shared operator credential, not per-person authenticated attestations.
+- `POST .../observations/{id}/withdraw`: retains the record while withdrawing its
+  effect. Latest observed_at (then record time/ID) wins among active observations.
+
+Progress counts active planned items by their latest nonwithdrawn observation.
+No observation means `no_data`, never `not_done`. Percentage is confirmed item
+count / active item count with equal weights, not physical/financial progress or
+certification. Plan and observation summaries are included as a bounded snapshot
+in each new model request; the model may explain them or render widgets but cannot
+mark items complete. Files in Trash cannot be newly selected, while old evidence
+snapshots remain attributable. Concurrent edits return 409 without overwriting.

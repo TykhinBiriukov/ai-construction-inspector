@@ -1,0 +1,14 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+SELECT pg_advisory_xact_lock(7341202601);
+CREATE TABLE IF NOT EXISTS inspector.workspace_files (file_id TEXT NOT NULL, chat_id TEXT NOT NULL REFERENCES inspector.chats(chat_id), data TEXT NOT NULL, PRIMARY KEY(chat_id, file_id));
+CREATE TABLE IF NOT EXISTS inspector.workspace_items (item_id TEXT NOT NULL, chat_id TEXT NOT NULL REFERENCES inspector.chats(chat_id), data TEXT NOT NULL, PRIMARY KEY(chat_id, item_id));
+CREATE TABLE IF NOT EXISTS inspector.workspace_observations (observation_id TEXT NOT NULL, chat_id TEXT NOT NULL REFERENCES inspector.chats(chat_id), data TEXT NOT NULL, PRIMARY KEY(chat_id, observation_id));
+REVOKE ALL ON inspector.workspace_files FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON inspector.workspace_files TO inspector_app;
+REVOKE ALL ON inspector.workspace_items FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON inspector.workspace_items TO inspector_app;
+REVOKE ALL ON inspector.workspace_observations FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON inspector.workspace_observations TO inspector_app;
+COMMIT;

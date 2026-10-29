@@ -7,7 +7,7 @@ from ai_inspector.storage import Database
 from ai_inspector.errors import APIError
 
 WRITE_LOCK = 7341202601
-TABLE_REF = re.compile(r'\b(FROM|INTO|UPDATE|JOIN)\s+(backlog_items|chats|agent_runs|inspections|sessions|receipts|capture_completions|geometry_jobs|work_items|device_events|device_connections|upload_requests|upload_objects|geometry_events)\b', re.IGNORECASE)
+TABLE_REF = re.compile(r'\b(FROM|INTO|UPDATE|JOIN)\s+(workspace_files|workspace_items|workspace_observations|backlog_items|chats|agent_runs|inspections|sessions|receipts|capture_completions|geometry_jobs|work_items|device_events|device_connections|upload_requests|upload_objects|geometry_events)\b', re.IGNORECASE)
 
 class Row(dict):
     def __getitem__(self, key):
