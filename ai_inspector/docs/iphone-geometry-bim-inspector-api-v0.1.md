@@ -1,3 +1,17 @@
+> **Редакция 8 — 28.10.2026: Geometry ZIP parts, приоритет над прежним транспортом ниже.** Олег согласовал формат файлов из MOBILE_CAPTURE_PROMPT и деление большого набора на самостоятельные ZIP. Телефон не вызывает `/sessions/extract`; после Storage он уведомляет только Inspector. Старые завершения/сессии сохраняют прежний транспорт.
+>
+> Каждый ZIP: `capture.json`, `mesh.ply` (для LiDAR), `frames/{original_frame_id}/{rgb.jpg,metadata.json,depth.bin?,confidence.bin?}`. В metadata schema_version=1.0, intrinsics.K/width/height, pose.T_world_from_camera; depth копируется без изменения float32 значений. В capture.json project_id, session_id, frame_count именно этой части. RGB-only: depth/confidence=null; mesh=null, если mesh отсутствует. Новые ID кадров не создаются.
+>
+> Части содержат только один segment_id; mesh этого сегмента повторяется в каждой его части. Это самостоятельные ZIP, не бинарные куски одного ZIP. Максимум части: min(server max_archive_bytes − 64 KiB, 15 MiB). Если mesh + один кадр превышают лимит, экспорт явно блокируется с сохранением оригиналов; автоматическое дробление одной сетки/кадра пока не поддержано.
+>
+> Upload plan: `kind=geometry_archive`, общий completion_id, объект `capture-0001.zip` (далее 0002...), media_type=application/zip, фактические byte_length/sha256. Ключ выдаёт сервер: `{session.storage.key_prefix}geometry/{completion_id}/{name}`. Корень bucket не используется.
+>
+> После всех частей `kind=capture_manifest` загружает capture-manifest.json: schema_version=1.0, format=geometry_capture_parts_v1, session_id, project_id, completion_id, frame_count всего набора и parts[]. Для каждой части: name, segment_id, frame_ids, depth_frame_ids (кадры с depth И confidence), byte_length, sha256, object_key. RGB-only/кадры без confidence помещаются в отдельные части с пустым depth_frame_ids; коллега может не скачивать эти ZIP.
+>
+> `/complete`: schema_version=0.1, completion_id, capture_ref={format:supabase_geometry_parts_v1, storage_id:capture-supabase, manifest_key, manifest_byte_length, manifest_sha256}. Inspector проверяет части последовательно и сохраняет принятые копии; возвращает обычную квитанцию. Возможность определяется через capture_formats `/v1/capabilities`; без поддержки новый клиент не начинает этот транспорт. Новый формат не означает автоматически настроенный Geometry — запуск вне текущего мобильного теста.
+
+> **Редакция 7 — 28.10.2026, приоритет над упоминаниями обязательного финального ZIP ниже:** по согласованию с Олегом новые iPhone-сессии завершаются загрузкой отдельных `observations/<id>/{rgb.jpg,frame.json,depth.f32?,confidence.u8?}` через `kind=observation_files`, затем общего манифеста через `kind=capture_manifest`. Completion использует существующий `supabase_capture_v1` и выданный сервером ключ манифеста, фактические размер/SHA256. ID сессии, наблюдений, сегментов и исходные байты сохраняются. Набор 150 МБ не становится одним объектом Storage; облачный лимит отдельного файла остаётся 16 МиБ, манифеста — 4 МиБ. Inspector уже поддерживает этот формат; Geometry получает согласованный source reference от Inspector, не прямой вызов с телефона. Подготовленные, но ещё не отправленные ZIP без completion request мигрируют на файлы; запросы completion в полёте неизменны. Ранние наблюдения и финальный манифест ссылаются на одинаковые ID/байты. ZIP поддерживается для старых клиентов, но не обязателен для новых. Автоматическое подключение Geometry — отдельная настройка сервера.
+
 > **Редакция 6 — 28.10.2026:** в этот общий контракт включён согласованный с Олегом сценарий отдельного Localization Service: Inspector назначает задание → Localization напрямую руководит начальной привязкой через приложение → Inspector продолжает инспекцию, Localization параллельно отслеживает положение и покрытие. При потере привязки задание Inspector приостанавливается до восстановления. Без BIM локализация пропускается. API расширения в §13 — предложение для согласования владельцами, не реализованные endpoints. Финальный Inspector ZIP и существующий интерфейс Geometry не меняются. Ранние наблюдения передаются дополнительно через существующие signed upload plans. Старые S3/PNG-примеры ниже сохраняют исторический контекст; текущий транспорт описан в связанных руководствах, а онлайн-локализация — в §13.
 
 > **Update 2026-10-27 — first-case implementation:** the current iPhone/Inspector transport is specified in [the server-owner integration guide](../../docs/inspector-server-integration.md) and [mobile integration status](../../docs/mobile-integration-status.md). Oleg approved Supabase **signed upload plans**, using a separate scoped Inspector device token. The S3 versioning, S3 completion examples and earlier direct Supabase-user proposal below are superseded for this first case. Geometry ZIP is a separate pending API extension; dispatch stays with Inspector. The remainder preserves the broader earlier proposal for reference.
@@ -1042,6 +1056,18 @@ BIM axes, units and large survey offsets once on the backend; retain the reversi
 source-to-working-frame transform. Viewer geometry uses this same working frame.
 A revision/context change requires a new session, not silent rebinding.
 
+#### Регистрация нового ARKit-сегмента (уточнение клиентской подготовки)
+
+До первой телеметрии нового сегмента клиент вызывает POST
+`/v1/sessions/{session_id}/spatial-segments` с `protocol=live_bim_v1`,
+`operation_id` и `segment_id` (UUID). 201/200 возвращает session_id и segment_id.
+Повтор того же тела идемпотентен; конфликт ID → 409. API разрешает только назначенный
+телефон и capturing-сессию, сохраняет сегмент и сообщает L о начале/сбросе камеры.
+После этого разрешена camera.pose. Новый сегмент инвалидирует прежнюю привязку;
+старые сегменты не могут снова стать текущими от поздней телеметрии. Клиент сохраняет
+фото и при недоступности L, не показывая локализацию как успешную. Возможность
+live_localization включается только при поддержке этого маршрута вместе с остальными.
+
 ### 13.4. Early evidence (new endpoint; existing upload plans)
 
 Upload originals as described in the current iOS guide. Preserve frame schema 0.2,
@@ -1246,3 +1272,28 @@ Acceptance checks before calling this live:
 
 This document does not implement or validate these features. Localization Service algorithm,
 thresholds and real-room accuracy remain to be agreed and tested.
+
+
+### Cloud Localization handoff — 29 October
+
+For the rectangular-room prototype, iPhone calls authenticated
+`POST /v1/sessions/{session_id}/localization` on Inspector with `{}` before opening
+localization. Inspector checks assigned device/project and active capture state,
+then transfers the session's pinned IFC to Localization using server credentials.
+Response: `{session_id, model_version, endpoint, session_token}`. The phone must
+verify IDs/version and require HTTPS; it must never receive the service credential.
+
+Localization internal `POST /internal/localization/sessions` accepts binding
+`{session_id, project_id, room_id, model_version, ifc_base64}` with service Bearer.
+SHA256 must match model_version (`upload-sha256:<hash>`); repeats are idempotent,
+changing a session's binding is rejected. Files are not fetched from arbitrary URLs.
+
+Phone uses `X-Localization-Code: <session_token>` with session-specific routes:
+`GET /v1/localization/sessions/{id}/config` returns room/meshes; start, observations,
+pose, finish and GET session retain the existing lab JSON shapes. An observation
+is one RGB/depth/frame bundle. Geometry and final capture uploads are unchanged.
+Unsupported IFC returns422; unavailable service returns503, with local captures
+preserved. Current importer supports one axis-aligned rectangular room, four walls,
+one floor/space and one doorway on min-X, metre units. No fixed model is bundled.
+Tokens are session scoped but do not yet expire on Inspector abort. Inspector LLM
+instruction-owner handoff remains separate from this capture/localization adapter.

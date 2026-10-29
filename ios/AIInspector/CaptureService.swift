@@ -14,6 +14,7 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
     private var meshError: String?
     @Published var status = "Камера остановлена"
     @Published var running = false
+    var onPose: ((ARFrame) -> Void)?
     var onInterruption: (() -> Void)?
     private var segmentStartedAt: TimeInterval?
 
@@ -61,6 +62,13 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
         }
         guard !supportsDepth || frame.sceneDepth != nil else { throw CaptureError.invalid("Карта глубины ещё не готова") }
         return frame
+    }
+
+    nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        MainActor.assumeIsolated {
+            guard running, let started = segmentStartedAt, frame.timestamp >= started else { return }
+            onPose?(frame)
+        }
     }
 
     nonisolated func sessionWasInterrupted(_ session: ARSession) {

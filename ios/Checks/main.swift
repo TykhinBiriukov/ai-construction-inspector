@@ -152,11 +152,11 @@ let exportSegment = UUID().uuidString; exportSession.segment_ids.append(exportSe
 var fourDepths = Data(); for value: Float in [2, .nan, -1, .infinity] { fourDepths.appendLE(value.bitPattern) }
 let exportPayload = CapturePayload(rgb: jpegData as Data, depth: fourDepths, confidence: Data([2,1,0,2]), rgbSize: [2,2], depthSize: [2,2], intrinsics: [[2,0,1],[0,2,1],[0,0,1]], pose: rows, timestamp: 123.5, origin: "device", tracking: "normal")
 _ = try store.record(exportPayload, session: exportSession, segment: exportSegment, instruction: nil)
-let zip = try GeometryExport.export(sessionID: exportSession.session_id, store: store, mesh: ply, meshSegment: exportSegment)
+let zip = try GeometryExport.export(sessionID: exportSession.session_id, store: store, mesh: ply, meshSegment: exportSegment, projectID: "project-1")
 try Data(contentsOf: zip).write(to: URL(fileURLWithPath: "/tmp/inspector-geometry-fixture.zip"), options: .atomic)
 exportSession.segment_ids.append(UUID().uuidString); try store.save(exportSession)
 _ = try store.record(exportPayload, session: exportSession, segment: exportSession.segment_ids.last!, instruction: nil)
-do { _ = try GeometryExport.export(sessionID: exportSession.session_id, store: store, mesh: ply, meshSegment: exportSegment); fatalError("Mixed coordinate segments exported") } catch is CaptureError {}
+do { _ = try GeometryExport.export(sessionID: exportSession.session_id, store: store, mesh: ply, meshSegment: exportSegment, projectID: "project-1"); fatalError("Mixed coordinate segments exported") } catch is CaptureError {}
 print("PASS: full Geometry ZIP fixture, real JPEG codec dimensions, mixed-coordinate rejection")
 
 let archivePrefix = "projects/project-1/sessions/" + assignedID + "/"
@@ -184,3 +184,84 @@ try require(sameUUID(sentID, receiptID), "Server UUID normalization rejected")
 try require(!sameUUID(sentID, UUID().uuidString), "Different UUID accepted")
 try require(!sameUUID(nil, nil) && !sameUUID("invalid", "invalid"), "Missing/malformed receipt accepted")
 print("PASS: real receipt UUID casing regression, mismatched and missing IDs rejected")
+
+// Spatial protocol: gate old servers, reject competing owners, scope instructions to segments.
+let spatialSession = "11111111-1111-4111-8111-111111111111"
+let spatialSegment = "22222222-2222-4222-8222-222222222222"
+let spatialInstructionID = "33333333-3333-4333-8333-333333333333"
+func spatialFixture(owner: String = "localization", phase: String = "localizing", revision: Int = 3, duplicate: Bool = false) throws -> SpatialSnapshot {
+    let instruction: [String: Any] = ["instruction_id":spatialInstructionID, "source":owner, "control_revision":revision,
+        "session_id":spatialSession, "segment_id":spatialSegment, "text":"Покажите угол", "status":"active"]
+    return try JSONDecoder().decode(SpatialSnapshot.self, from: JSONSerialization.data(withJSONObject: [
+        "protocol":"live_bim_v1", "session_id":spatialSession, "revision":revision,
+        "context":["model_version":"v1", "room_id":"room"],
+        "alignments":[["segment_id":spatialSegment, "status":"localized"]],
+        "guidance":["phase":phase,"owner":owner,"control_revision":revision,"active_instruction_id":spatialInstructionID],
+        "instructions":duplicate ? [instruction,instruction] : [instruction]]))
+}
+let spatialValid = try spatialFixture()
+try spatialValid.validate(session: spatialSession, model: "v1", room: "room", previous: nil)
+try require(spatialValid.instruction(segment: spatialSegment)?.text == "Покажите угол", "Localization guidance lost")
+try require(spatialValid.instruction(segment: UUID().uuidString) == nil, "Old segment instruction leaked")
+for bad in [try spatialFixture(owner: "inspector"), try spatialFixture(revision: 2), try spatialFixture(duplicate: true)] {
+    var rejected = false
+    do { try bad.validate(session: spatialSession, model: "v1", room: "room", previous: spatialValid) } catch { rejected = true }
+    try require(rejected, "Invalid/stale/competing spatial instruction accepted")
+}
+let inspect = try spatialFixture(owner: "inspector", phase: "inspecting")
+try inspect.validate(session: spatialSession, model: "v1", room: "room", previous: nil)
+try require(inspect.instruction(segment: spatialSegment) != nil && inspect.instruction(segment: nil) == nil, "Inspector resumed without current-segment alignment")
+let oldJournal = Data("{\"startBodies\":{},\"ackIDs\":{},\"acknowledged\":[],\"startedSessionIDs\":[],\"completionRejected\":false,\"closedSessionIDs\":[]}".utf8)
+let migratedJournal = try JSONDecoder().decode(CaptureJournal.self, from: oldJournal)
+try require(migratedJournal.earlyEvidence == nil, "Old journal migration failed")
+let early = EarlyEvidence(batchID: UUID().uuidString.lowercased(), sessionID: spatialSession, segmentID: spatialSegment,
+    observationID: spatialInstructionID, instructionID: nil, purpose: "localization", files: [], uploadRequestIDs: ["rgb.jpg":"stable-request"], batchBody: Data("exact body".utf8))
+let restoredEarly = try JSONDecoder().decode(EarlyEvidence.self, from: JSONEncoder().encode(early))
+try require(restoredEarly.batchBody == early.batchBody && restoredEarly.uploadRequestIDs == early.uploadRequestIDs && restoredEarly.batchID == early.batchID, "Early retry identity changed")
+print("PASS: spatial ownership, segment/reset gate, stale revisions, old journal migration, durable early retry bytes")
+
+// A proper IFC-to-BIM rotation must preserve handedness in the 3D view.
+let displayPose = bimPoseMatrix([[1,0,0,2],[0,0,1,3],[0,-1,0,-4],[0,0,0,1]])!
+try require(displayPose.columns.3.x == 2 && displayPose.columns.3.y == 3 && displayPose.columns.3.z == -4, "3D pose translation transposed")
+try require(displayPose.columns.2.y == 1, "3D camera forward axis flipped")
+try require(bimPoseMatrix([[-1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]) == nil, "3D view accepted a reflection")
+print("PASS: 3D BIM pose translation, direction and reflection rejection")
+
+try require(completionPending.transportFormat == "geometry_parts", "New captures must upload Geometry parts")
+var oldZip = completionPending
+oldZip.transportFormat = "zip"
+oldZip.manifestBytes = Data([1,2,3])
+oldZip.manifest.observations[0].files[0].object_key = "old-zip-only-key"
+oldZip.useIndividualFilesIfUnsubmitted()
+try require(oldZip.transportFormat == "files" && oldZip.manifestBytes == nil && oldZip.completion_id == completionPending.completion_id, "Unsubmitted ZIP migration lost identity or retained ZIP manifest")
+try require(oldZip.manifest.observations[0].files[0].object_key.isEmpty, "ZIP migration skipped unuploaded files")
+var sentZip = completionPending
+sentZip.transportFormat = "zip"
+sentZip.request = completion
+sentZip.useIndividualFilesIfUnsubmitted()
+try require(sentZip.transportFormat == "zip" && sentZip.request == completion, "Changed an in-flight completion")
+let migrated = try ObservationStore.decoder.decode(PendingCompletion.self, from: ObservationStore.encoder.encode(oldZip))
+try require(migrated.transportFormat == "files" && migrated.completion_id == oldZip.completion_id, "Migration did not survive restart")
+print("PASS: individual file default, old ZIP migration, durable identity, in-flight completion preserved")
+
+// Independent ZIP parts keep complete observations and never mix ARKit coordinate segments.
+var geometryAssignmentJSON = try JSONSerialization.jsonObject(with: ObservationStore.encoder.encode(assignment)) as! [String: Any]
+geometryAssignmentJSON["session_id"] = exportSession.session_id
+geometryAssignmentJSON["room_id"] = "fixture-room"
+geometryAssignmentJSON["model_version"] = "fixture-model"
+geometryAssignmentJSON["model_is_synthetic"] = true
+geometryAssignmentJSON["capture_origin"] = "device"
+let geometryAssignment = try JSONDecoder().decode(InspectorAssignment.self, from: JSONSerialization.data(withJSONObject: geometryAssignmentJSON))
+_ = try store.record(exportPayload, session: exportSession, segment: exportSegment, instruction: nil)
+let meshFolder = store.folder(exportSession.session_id).appendingPathComponent("mesh")
+try FileManager.default.createDirectory(at: meshFolder, withIntermediateDirectories: true)
+for segment in exportSession.segment_ids { try ply.write(to: meshFolder.appendingPathComponent(segment + ".ply")) }
+let geometryPending = try freezeCapture(assignment: geometryAssignment, store: store)
+let singleSize = try Data(contentsOf: URL(fileURLWithPath: "/tmp/inspector-geometry-fixture.zip")).count
+let geometryParts = try GeometryPartsExport.build(assignment: geometryAssignment, pending: geometryPending, store: store, maxBytes: singleSize + 64)
+try require(geometryParts.parts.count == 3 && geometryParts.parts.allSatisfy { $0.byte_length <= singleSize + 64 && $0.frame_ids.count == 1 }, "ZIP parts exceed size or merge frames")
+try require(Set(geometryParts.parts.flatMap(\.frame_ids)).count == 3, "Split lost or duplicated frames")
+let again = try GeometryPartsExport.build(assignment: geometryAssignment, pending: geometryPending, store: store, maxBytes: singleSize + 64)
+try require(again.parts.map(\.sha256) == geometryParts.parts.map(\.sha256), "Retry changed archive bytes")
+do { _ = try GeometryPartsExport.build(assignment: geometryAssignment, pending: geometryPending, store: store, maxBytes: 10); fatalError("Oversize single frame accepted") } catch is CaptureError {}
+print("PASS: bounded independent ZIPs, stable original frame IDs, per-segment mesh, deterministic retry, oversized singleton rejection")

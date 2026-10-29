@@ -87,13 +87,17 @@ enum GeometryExport {
         }
         return result
     }
-    static func export(sessionID: String, store: ObservationStore, mesh: Data, meshSegment: String) throws -> URL {
+    static func export(sessionID: String, store: ObservationStore, mesh: Data?, meshSegment: String, projectID: String? = nil, selectedFrameIDs: Set<String>? = nil, outputName: String? = nil) throws -> URL {
         guard sessionID.range(of: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", options: .regularExpression) != nil else { throw CaptureError.invalid("Неверный ID Geometry capture") }
-        let frames = try store.observations(sessionID).sorted { $0.timestamp_s < $1.timestamp_s }
+        let frames = try store.observations(sessionID).filter { selectedFrameIDs == nil || selectedFrameIDs!.contains($0.id) }.sorted { $0.timestamp_s < $1.timestamp_s }
         guard !frames.isEmpty, Set(frames.map(\.segment_id)) == [meshSegment], frames.allSatisfy({ $0.capture_origin == "device" }) else {
             throw CaptureError.invalid("Geometry ZIP требует реальные кадры и mesh из одной непрерывной AR-сессии")
         }
-        guard mesh.starts(with: Data("ply\nformat binary_little_endian 1.0\n".utf8)) else { throw CaptureError.invalid("Нет mesh ARKit") }
+        if let mesh {
+            guard mesh.starts(with: Data("ply\nformat binary_little_endian 1.0\n".utf8)) else { throw CaptureError.invalid("Нет mesh ARKit") }
+        } else if frames.contains(where: { $0.depth != nil }) {
+            throw CaptureError.invalid("Для LiDAR-кадров отсутствует mesh.ply сегмента " + meshSegment)
+        }
         let staging = store.folder(sessionID).appendingPathComponent(".geometry-\(UUID().uuidString.lowercased())")
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: staging) }
@@ -104,10 +108,10 @@ enum GeometryExport {
             try data.write(to: url, options: .atomic); files.append((name, url))
         }
         func json(_ value: Any) throws -> Data { try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .prettyPrinted]) }
-        try add("mesh.ply", mesh)
-        for (index, frame) in frames.enumerated() {
+        if let mesh { try add("mesh.ply", mesh) }
+        for frame in frames {
             guard frame.tracking_state == "normal", frame.K_rgb.flatMap({ $0 }).allSatisfy(\.isFinite), frame.T_world_camera.flatMap({ $0 }).allSatisfy(\.isFinite), frame.timestamp_s.isFinite else { throw CaptureError.invalid("Неверные метаданные Geometry кадра") }
-            let id = String(format: "%06d", index + 1), prefix = "frames/" + String(format: "%06d", index + 1) + "/"
+            let id = frame.frame_id, prefix = "frames/" + frame.frame_id + "/"
             let source = store.folder(sessionID).appendingPathComponent("observations/" + frame.id)
             let rgb = try Data(contentsOf: source.appendingPathComponent(frame.rgb.name))
             guard let image = CGImageSourceCreateWithData(rgb as CFData, nil), let properties = CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any],
@@ -117,7 +121,7 @@ enum GeometryExport {
             var depth: Any = NSNull(), confidence: Any = NSNull()
             if let file = frame.depth, let size = frame.depth_size {
                 guard frame.depth_source == "sceneDepth", file.byte_length == size[0] * size[1] * 4 else { throw CaptureError.invalid("Неверный depth для Geometry") }
-                try add(prefix + "depth.bin", sanitizedDepth(Data(contentsOf: source.appendingPathComponent(file.name))))
+                try add(prefix + "depth.bin", Data(contentsOf: source.appendingPathComponent(file.name)))
                 depth = ["path": "depth.bin", "width": size[0], "height": size[1], "dtype": "float32", "byte_order": "little", "unit": "meter", "source": "sceneDepth"] as [String: Any]
                 if let file = frame.confidence {
                     let bytes = try Data(contentsOf: source.appendingPathComponent(file.name))
@@ -126,12 +130,12 @@ enum GeometryExport {
                     confidence = ["path": "confidence.bin", "width": size[0], "height": size[1], "dtype": "uint8"] as [String: Any]
                 }
             }
-            try add(prefix + "metadata.json", json(["frame_id": id, "timestamp_s": frame.timestamp_s, "tracking_state": frame.tracking_state,
-                "rgb": ["path": "rgb.jpg", "width": frame.rgb_size[0], "height": frame.rgb_size[1]], "intrinsics": ["K": frame.K_rgb],
+            try add(prefix + "metadata.json", json(["schema_version": "1.0", "frame_id": id, "timestamp_s": frame.timestamp_s, "tracking_state": frame.tracking_state,
+                "rgb": ["path": "rgb.jpg", "width": frame.rgb_size[0], "height": frame.rgb_size[1]], "intrinsics": ["K": frame.K_rgb, "width": frame.rgb_size[0], "height": frame.rgb_size[1]],
                 "pose": ["T_world_from_camera": frame.T_world_camera], "depth": depth, "confidence": confidence]))
         }
-        try add("capture.json", json(["schema_version": "1.0", "session_id": sessionID, "length_unit": "meter", "coordinate_system": "arkit", "world_alignment": "gravity", "matrix_storage": "rows", "mesh": "mesh.ply", "frames_directory": "frames", "frame_count": frames.count]))
-        let output = store.folder(sessionID).appendingPathComponent(sessionID + ".zip")
+        try add("capture.json", json(["schema_version": "1.0", "session_id": sessionID, "project_id": projectID as Any? ?? NSNull(), "length_unit": "meter", "coordinate_system": "arkit", "world_alignment": "gravity", "matrix_storage": "rows", "mesh": mesh == nil ? NSNull() : "mesh.ply" as Any, "frames_directory": "frames", "frame_count": frames.count]))
+        let output = store.folder(sessionID).appendingPathComponent(outputName ?? (sessionID + ".zip"))
         try CaptureZIP.write(files: files, to: output)
         return output
     }
@@ -179,5 +183,67 @@ enum InspectorArchive {
         try CaptureZIP.write(files: [("capture-manifest.json", tempManifest)] + entries, to: output)
         let archive = try Data(contentsOf: output, options: .mappedIfSafe)
         return Result(manifest: manifest, manifestBytes: bytes, info: StoredFile(name: "capture.zip", data: archive))
+    }
+}
+
+/// Independent ZIPs: whole frames, one ARKit segment, matching mesh repeated in every part.
+/// Publication is described by a separate index; no part is a binary slice of a ZIP.
+enum GeometryPartsExport {
+    struct Part: Codable, Sendable {
+        let name: String
+        let segment_id: String
+        let frame_ids: [String]
+        let depth_frame_ids: [String]
+        let byte_length: Int
+        let sha256: String
+        var object_key: String = ""
+    }
+    struct Index: Codable, Sendable {
+        var schema_version = "1.0"
+        var format = "geometry_capture_parts_v1"
+        let session_id: String
+        let project_id: String
+        let completion_id: String
+        let frame_count: Int
+        var parts: [Part]
+    }
+    static func build(assignment: InspectorAssignment, pending: PendingCompletion, store: ObservationStore, maxBytes: Int) throws -> Index {
+        guard maxBytes > 0, pending.manifest.session_id == assignment.id else { throw CaptureError.invalid("Неверный лимит или сессия архивов") }
+        let allowed = Set(pending.manifest.observations.map(\.observation_id))
+        let frames = try store.observations(assignment.id).filter { allowed.contains($0.id) }
+        guard frames.count == allowed.count, !frames.isEmpty else { throw CaptureError.invalid("Неполный набор кадров для ZIP") }
+        let folder = store.folder(assignment.id).appendingPathComponent("geometry-parts/" + pending.completion_id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var parts: [Part] = []
+        for segment in Set(frames.map(\.segment_id)).sorted() {
+            let group = frames.filter { $0.segment_id == segment }.sorted { $0.timestamp_s < $1.timestamp_s }
+            let meshURL = store.folder(assignment.id).appendingPathComponent("mesh/" + segment + ".ply")
+            let mesh = FileManager.default.fileExists(atPath: meshURL.path) ? try Data(contentsOf: meshURL) : nil
+            if group.contains(where: { $0.depth != nil }) && mesh == nil { throw CaptureError.invalid("Не найден mesh.ply для сегмента " + segment) }
+            func pack(_ selected: [FrameMetadata]) throws {
+                let temporary = try GeometryExport.export(sessionID: assignment.id, store: store, mesh: mesh, meshSegment: segment,
+                    projectID: assignment.project_id, selectedFrameIDs: Set(selected.map(\.id)), outputName: ".geometry-candidate.zip")
+                defer { try? FileManager.default.removeItem(at: temporary) }
+                let size = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                if size > maxBytes {
+                    guard selected.count > 1 else { throw CaptureError.invalid("Mesh и один кадр превышают лимит ZIP. Данные сохранены; требуется отдельная передача mesh или другой лимит.") }
+                    let midpoint = selected.count / 2
+                    try pack(Array(selected[..<midpoint])); try pack(Array(selected[midpoint...])); return
+                }
+                let name = String(format: "capture-%04d.zip", parts.count + 1)
+                let destination = folder.appendingPathComponent(name)
+                let bytes = try Data(contentsOf: temporary, options: .mappedIfSafe)
+                try bytes.write(to: destination, options: .atomic)
+                let info = StoredFile(name: name, data: bytes)
+                parts.append(Part(name: name, segment_id: segment, frame_ids: selected.map(\.frame_id),
+                    depth_frame_ids: selected.filter { $0.depth != nil && $0.confidence != nil }.map(\.frame_id), byte_length: info.byte_length, sha256: info.sha256))
+            }
+            // Keep test-only RGB/missing-confidence frames in separate archives so Geometry can skip downloads.
+            for usableDepth in [true, false] {
+                let selected = group.filter { ($0.depth != nil && $0.confidence != nil) == usableDepth }
+                if !selected.isEmpty { try pack(selected) }
+            }
+        }
+        return Index(session_id: assignment.id, project_id: assignment.project_id, completion_id: pending.completion_id, frame_count: frames.count, parts: parts)
     }
 }

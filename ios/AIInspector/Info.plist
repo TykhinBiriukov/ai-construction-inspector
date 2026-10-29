@@ -39,5 +39,24 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Подключение к вашему Mac для локального теста BIM-привязки и передачи LiDAR-снимков.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>172.20.10.7</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>LocalizationLabAllowedIPv4</key>
+	<string>172.20.10.7</string>
+	<key>LocalizationLabDefaultEndpoint</key>
+	<string>http://172.20.10.7:8788</string>
 </dict>
 </plist>

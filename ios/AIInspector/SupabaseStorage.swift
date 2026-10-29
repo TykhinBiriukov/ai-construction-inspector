@@ -47,6 +47,11 @@ struct StorageConnectionView: View {
                     if let error { Text(error).foregroundStyle(.red) }
                 }
                 Text("Фото загружаются прямо в Supabase по временным ссылкам Inspector. Вход Supabase не нужен. Device token хранится в Keychain.").font(.footnote)
+                Section("Локализация по BIM") {
+                    NavigationLink("Настройки Localization Service") { LocalizationSettingsView() }
+                        .disabled(connection.active != nil)
+                    if connection.active != nil { Text("Настройки доступны после завершения текущей сессии.").font(.caption) }
+                }
                 Button("Разрешить уведомления") { Task { await PushService.shared.enable() } }
             }.navigationTitle("Подключение").toolbar { Button("Готово") { dismiss() } }
         }

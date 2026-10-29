@@ -53,19 +53,27 @@ struct InspectorView: View {
                     if !connection.frozen {
                         CapturePanel(model: model, capture: model.capture, showModel: $showModel)
                     }
-                    Text("Снимите помещение согласно заданию инспекции.")
+                    SessionLocalizationPanel(localization: model.localization, capture: model.capture)
+                    if model.assignment.model_version == "unbound" {
+                        Text("Съёмка без BIM: локализация и покрытие недоступны.")
+                    }
                     Text("Наблюдений на телефоне: \(model.observations.count)")
                     Button("Посмотреть наблюдения") { showEvidence = true }
+                    if let progress = connection.uploadProgress {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Передача файлов")
+                                Spacer()
+                                Text("\(Int(progress * 100))% отправлено").monospacedDigit()
+                            }.font(.subheadline)
+                            ProgressView(value: progress)
+                                .accessibilityLabel("Передача файлов")
+                                .accessibilityValue("\(Int(progress * 100)) процентов")
+                        }
+                    } else if connection.frozen && connection.busy {
+                        ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     Text(connection.status).font(.footnote)
-                    if connection.geometryMode == "mock" {
-                        Text("Geometry: MOCK — тест обмена данными, не реконструкция комнаты.").font(.footnote).foregroundStyle(.orange)
-                    }
-                    if model.capture.supportsMesh && !model.synthetic {
-                        Button("Подготовить ZIP для Geometry") { Task { await model.exportGeometry() } }
-                            .disabled(model.busy || connection.busy || connection.frozen)
-                        if let zip = model.geometryZIP { ShareLink("Экспортировать ZIP", item: zip) }
-                        Text("ZIP сохраняется локально. Загрузка архива требует поддержки в Inspector.").font(.caption).foregroundStyle(.secondary)
-                    }
                     if connection.frozen {
                         Text("Набор зафиксирован. Ожидаем подтверждение Inspector.").font(.headline)
                     }

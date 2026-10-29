@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS localization.sessions (
   id TEXT PRIMARY KEY, operation TEXT UNIQUE, state TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS localization.models (
-  sha256 TEXT PRIMARY KEY, content BYTEA NOT NULL
+  sha256 TEXT PRIMARY KEY, content BYTEA NOT NULL, room TEXT NOT NULL, meshes TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS localization.files (
   session_id TEXT NOT NULL, observation_id TEXT NOT NULL,
@@ -18,4 +18,4 @@ REVOKE ALL ON ALL TABLES IN SCHEMA localization FROM PUBLIC;
 GRANT USAGE ON SCHEMA localization TO localization_app;
 GRANT SELECT,INSERT,UPDATE ON localization.sessions TO localization_app;
 GRANT SELECT,INSERT ON localization.files TO localization_app;
-GRANT SELECT ON localization.models TO localization_app;
+GRANT SELECT,INSERT ON localization.models TO localization_app;

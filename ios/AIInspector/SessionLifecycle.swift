@@ -114,9 +114,36 @@ struct PendingCompletion: Codable, Sendable {
     var manifestBytes: Data?
     var request: CaptureCompletion?
     var transportFormat: String?
+    var geometryParts: GeometryPartsExport.Index?
     var archiveInfo: StoredFile?
+    var fileUploadFraction: Double {
+        if let parts = geometryParts?.parts {
+            let total = parts.reduce(0.0) { $0 + Double($1.byte_length) }
+            let sent = parts.filter { !$0.object_key.isEmpty }.reduce(0.0) { $0 + Double($1.byte_length) }
+            return total > 0 ? min(1, max(0, sent / total)) : 0
+        }
+        let files = manifest.observations.flatMap(\.files)
+        let total = files.reduce(0.0) { $0 + Double($1.byte_length) }
+        let sent = files.filter { !$0.object_key.isEmpty }.reduce(0.0) { $0 + Double($1.byte_length) }
+        return total > 0 ? min(1, max(0, sent / total)) : 0
+    }
+
+    /// Only unsent completions may change transport. Keep frozen inventory/IDs and originals.
+    mutating func useIndividualFilesIfUnsubmitted() {
+        guard transportFormat == "zip", request == nil else { return }
+        transportFormat = "files"
+        archiveInfo = nil
+        manifestBytes = nil
+        requestIDs.removeValue(forKey: "archive")
+        for oi in manifest.observations.indices {
+            for fi in manifest.observations[oi].files.indices {
+                manifest.observations[oi].files[fi].object_key = ""
+            }
+        }
+    }
 }
 struct CaptureJournal: Codable {
+    var earlyEvidence: [EarlyEvidence]? // Optional for journals written by older clients.
     var active: InspectorAssignment?
     var startBodies: [String: Data] = [:]
     var ackIDs: [String: String] = [:]
@@ -149,7 +176,7 @@ func freezeCapture(assignment: InspectorAssignment, store: ObservationStore) thr
     return PendingCompletion(completion_id: UUID().uuidString.lowercased(), manifest: FinalCaptureManifest(session_id: assignment.id,
         inspection_id: assignment.inspection_id, project_id: assignment.project_id, room_id: assignment.room_id,
         model_version: assignment.model_version, capture_origin: assignment.capture_origin, input_mode: assignment.input_mode,
-        capture_closed_at: Date(), observation_count: observations.count, segments: segments, observations: observations), transportFormat: "zip")
+        capture_closed_at: Date(), observation_count: observations.count, segments: segments, observations: observations), transportFormat: "geometry_parts")
 }
 
 /// UUID text is case-insensitive; reject malformed IDs even when strings match.

@@ -5,6 +5,9 @@ owned by the phone/Inspector. Frame/depth/confidence allow localization recovery
 """
 from contextlib import contextmanager
 import hashlib
+import json
+import re
+import threading
 from pathlib import Path
 from uuid import UUID
 
@@ -13,16 +16,21 @@ class Queries:
     def __init__(self, connection):self.connection=connection
     def execute(self, sql, args=()):
         # Only internal Lab queries pass through this adapter; no user SQL.
-        return self.connection.execute(sql.replace('sessions','localization.sessions').replace('?','%s'),args)
+        return self.connection.execute(re.sub(r'(?<![.\w])sessions\b','localization.sessions',sql).replace('?','%s'),args)
 
 
 class PostgresStore:
     def __init__(self, dsn):
         import psycopg
-        self.psycopg=psycopg;self.dsn=dsn;self.connection=None
+        self.psycopg=psycopg;self.dsn=dsn;self.connection=None;self.lock=threading.RLock()
 
     @contextmanager
     def connect(self):
+        with self.lock:
+            with self._transaction() as db:yield db
+
+    @contextmanager
+    def _transaction(self):
         if self.connection is None or self.connection.closed:
             self.connection=self.psycopg.connect(self.dsn,connect_timeout=10,autocommit=True)
         with self.connection.transaction():

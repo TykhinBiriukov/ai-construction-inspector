@@ -22,6 +22,7 @@ class StoreDouble(PostgresStore):
     def __init__(self,path):
         self.path=path;self.fail_commit=False
         with sqlite3.connect(path) as db:
+            db.execute('CREATE TABLE models (sha256 TEXT PRIMARY KEY,content BLOB,room TEXT,meshes TEXT)')
             db.execute('CREATE TABLE sessions (id TEXT PRIMARY KEY,operation TEXT UNIQUE,state TEXT NOT NULL)')
             db.execute('CREATE TABLE files (session_id TEXT,observation_id TEXT,name TEXT,sha256 TEXT,byte_length INTEGER,content BLOB,PRIMARY KEY(session_id,observation_id,name))')
     @contextmanager
@@ -36,7 +37,7 @@ class CloudStoreTests(unittest.TestCase):
         for env in [{},{'LOCALIZATION_SERVICE_TOKEN':'1234'}, {'LOCALIZATION_SERVICE_TOKEN':'a'*32}]:
             with self.assertRaises(ValueError):configuration(env)
         cfg={'LOCALIZATION_SERVICE_TOKEN':'a'*32,'LOCALIZATION_DATABASE_URL':'postgresql://test','LOCALIZATION_MODEL_SHA256':'a'*64}
-        self.assertEqual(configuration(cfg)[2],'a'*64)
+        self.assertEqual(str(configuration(cfg)[2]),'/data')
         cfg['LOCALIZATION_SERVICE_TOKEN']='a'*32+'\n'
         with self.assertRaises(ValueError):configuration(cfg)
 
@@ -70,3 +71,24 @@ class CloudStoreTests(unittest.TestCase):
             store.fail_commit=False
             self.assertEqual(restarted.request('GET',route,{})['observation_count'],4)
             self.assertEqual(restarted.request('POST',route+['observations'],next_body)['observation_count'],5)
+
+    def test_sessions_pin_distinct_models_and_tokens(self):
+        from localization_service.cloud_server import CloudRegistry
+        import base64
+        with tempfile.TemporaryDirectory() as tmp:
+            store=StoreDouble(Path(tmp)/'db');registry=CloudRegistry(store,Path(tmp)/'cache','test-service-secret'*3)
+            assignments=[]
+            for length in (5.0,8.0):
+                content=('synthetic-model-'+str(length)).encode();digest=hashlib.sha256(content).hexdigest()
+                room=dict(ROOM,length=length,model_version=digest,room_id='fixture',entry_element_id='door',bim_frame_id='fixture')
+                with store.connect() as db:db.execute('INSERT INTO localization.models VALUES (?,?,?,?)',(digest,content,json.dumps(room),'[]'))
+                body=dict(session_id=str(uuid4()),project_id='test',room_id='fixture',model_version='upload-sha256:'+digest,ifc_base64=base64.b64encode(content).decode())
+                access=registry.provision(body);assignments.append((body,access))
+                config=registry.request('GET',['v1','localization','sessions',body['session_id'],'config'],{})
+                self.assertEqual(config['room']['length'],length)
+            self.assertNotEqual(assignments[0][1]['session_token'],assignments[1][1]['session_token'])
+            wrong=dict(assignments[1][0],session_id=assignments[0][0]['session_id'])
+            with self.assertRaises(ValueError):registry.provision(wrong)
+            fresh=CloudRegistry(store,Path(tmp)/'new-cache',registry.token)
+            result=fresh.request('GET',['v1','localization','sessions',assignments[0][0]['session_id'],'config'],{})
+            self.assertEqual(result['room']['length'],5.0)

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        0000000000000000000000D6 = {isa = PBXBuildFile; fileRef = 000000000000000000000072; };
+        0000000000000000000000D5 = {isa = PBXBuildFile; fileRef = 000000000000000000000071; };
+		0000000000000000000000D4 = {isa = PBXBuildFile; fileRef = 000000000000000000000070; };
 		0000000000000000000000D3 /* GeometryExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006F; };
 		0000000000000000000000D2 /* StorageUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006E; };
 		0000000000000000000000D1 /* InspectorConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006D; };
@@ -22,6 +25,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        000000000000000000000072 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabRoom3D.swift; sourceTree = "<group>"; };
+        000000000000000000000071 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationLab.swift; sourceTree = "<group>"; };
+		000000000000000000000070 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialCapture.swift; sourceTree = "<group>"; };
 		00000000000000000000006F /* GeometryExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeometryExport.swift; sourceTree = "<group>"; };
 		00000000000000000000006E /* StorageUpload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageUpload.swift; sourceTree = "<group>"; };
 		00000000000000000000006D /* InspectorConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorConnection.swift; sourceTree = "<group>"; };
@@ -66,6 +72,9 @@
 				000000000000000000000068 /* RoomPreview.swift */,
 				00000000000000000000006B /* SupabaseStorage.swift */,
 				00000000000000000000006F /* GeometryExport.swift */,
+                000000000000000000000070 /* SpatialCapture.swift */,
+                000000000000000000000071 /* LocalizationLab.swift */,
+                000000000000000000000072 /* LabRoom3D.swift */,
 				00000000000000000000006E /* StorageUpload.swift */,
 				00000000000000000000006D /* InspectorConnection.swift */,
 				00000000000000000000006C /* SessionLifecycle.swift */,
@@ -151,6 +160,9 @@
 				0000000000000000000000CC /* RoomPreview.swift in Sources */,
 				0000000000000000000000CF /* SupabaseStorage.swift in Sources */,
 				0000000000000000000000D3 /* GeometryExport.swift in Sources */,
+                0000000000000000000000D4 /* SpatialCapture.swift in Sources */,
+                0000000000000000000000D5 /* LocalizationLab.swift in Sources */,
+                0000000000000000000000D6 /* LabRoom3D.swift in Sources */,
 				0000000000000000000000D2 /* StorageUpload.swift in Sources */,
 				0000000000000000000000D1 /* InspectorConnection.swift in Sources */,
 				0000000000000000000000D0 /* SessionLifecycle.swift in Sources */,

@@ -5,13 +5,30 @@ import UIKit
 @MainActor
 final class InspectorConnection: ObservableObject {
     static let shared = InspectorConnection()
-    static let defaultEndpoint = "https://dryer-finished-kidney-idea.trycloudflare.com"
+    static let defaultEndpoint = "https://inspector.campuscompile.eu"
     static let defaultDevice = "iphone-1"
     @Published private(set) var active: InspectorAssignment?
     @Published private(set) var status = "Inspector не настроен"
+    @Published private(set) var uploadProgress: Double?
     @Published private(set) var busy = false
     @Published private(set) var frozen = false
     @Published private(set) var geometryMode = "unknown"
+    @Published private(set) var spatial: SpatialSnapshot?
+    @Published private(set) var spatialStatus = "Онлайн-локализация не подключена"
+    @Published private(set) var localizationEnabled = false
+    @Published private(set) var spatialFresh = false
+    private var liveCapability: LiveLocalizationCapability?
+    private var capabilitiesChecked = Date.distantPast
+    private var spatialReceived = Date.distantPast
+    private var spatialRefreshing = false
+    private var poseSending = false
+    private var lastPoseTime = -Double.infinity
+    private var lastPoseTracking = ""
+    private var desiredSpatialSegment: String?
+    private var registeredSpatialSegment: String?
+    private var poseSegment: String?
+    private var poseSequence = 0
+    private var spatialLoop: Task<Void, Never>?
     private var journal = CaptureJournal()
     private var journalURL: URL?
     private var base: URL?
@@ -24,6 +41,7 @@ final class InspectorConnection: ObservableObject {
     private let delegate = StorageHTTP()
     private let storage = SignedStorageTransport()
     private lazy var http = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+    var localLabActive = false
     private var foreground = false
     private var reconciling = false
     private var failures = 0
@@ -40,12 +58,20 @@ final class InspectorConnection: ObservableObject {
         setForeground(true)
     }
     private func disconnect() {
+        spatialFresh = false
         reader?.cancel(); heartbeat?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil
     }
     func setForeground(_ value: Bool) {
-        foreground = value; loop?.cancel(); disconnect()
+        let value = value && !localLabActive
+        foreground = value; loop?.cancel(); spatialLoop?.cancel(); disconnect()
         guard value else { return }
         failures = 0
+        spatialLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshSpatial()
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
+        }
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -68,6 +94,7 @@ final class InspectorConnection: ObservableObject {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = folder.appendingPathComponent(StoredFile(name: "", data: Data(newScope.utf8)).sha256 + ".json")
         journal = FileManager.default.fileExists(atPath: file.path) ? try ObservationStore.decoder.decode(CaptureJournal.self, from: Data(contentsOf: file)) : CaptureJournal()
+        liveCapability = nil; localizationEnabled = false; spatial = nil; geometryMode = "unknown"
         base = url; device = id; scope = newScope; journalURL = file
         active = journal.active; frozen = journal.pending != nil || (active.map { !$0.canCapture } ?? false)
     }
@@ -92,15 +119,35 @@ final class InspectorConnection: ObservableObject {
         }
         return data
     }
+    struct LocalizationAccess: Decodable {
+        let session_id: String
+        let model_version: String
+        let endpoint: String
+        let session_token: String
+    }
+    func prepareLocalization(_ assignment: InspectorAssignment) async throws -> LocalizationAccess {
+        try prepare()
+        let bytes = try await request("v1/sessions/\(assignment.id)/localization", method: "POST", body: Data("{}".utf8))
+        let access = try JSONDecoder().decode(LocalizationAccess.self, from: bytes)
+        guard sameUUID(access.session_id, assignment.id), access.model_version == assignment.model_version else {
+            throw CaptureError.invalid("Inspector выдал локализацию для другого задания")
+        }
+        return access
+    }
     @discardableResult func reconcile() async -> Bool {
         guard foreground, !busy, !reconciling else { return false }
         reconciling = true; defer { reconciling = false }
         do {
             try prepare()
-            if geometryMode == "unknown" {
+            if geometryMode == "unknown" || Date().timeIntervalSince(capabilitiesChecked) > 30 {
                 let data = try await request("v1/capabilities")
                 let caps = try JSONSerialization.jsonObject(with: data) as? [String: Any]
                 geometryMode = caps?["geometry_mode"] as? String ?? "unknown"
+                if let value = caps?["live_localization"], let bytes = try? JSONSerialization.data(withJSONObject: value) {
+                    liveCapability = try? JSONDecoder().decode(LiveLocalizationCapability.self, from: bytes)
+                }
+                localizationEnabled = liveCapability?.supported == true
+                capabilitiesChecked = Date()
             }
             if let current = active {
                 let latest = try JSONDecoder().decode(InspectorAssignment.self, from: await request("v1/sessions/\(current.id)"))
@@ -127,6 +174,8 @@ final class InspectorConnection: ObservableObject {
             }
             if let active { try await acknowledge(active) }
             connectSocket()
+            await refreshSpatial()
+            Task { await self.sendEarlyEvidence() }
             if journal.pending == nil { status = active == nil ? "Ожидаем задание от Inspector" : "Сессия подключена" }
             failures = 0; return true
         } catch { failures += 1; status = error.localizedDescription; return false }
@@ -192,7 +241,7 @@ final class InspectorConnection: ObservableObject {
     }
     static var store: ObservationStore { ObservationStore(root: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("sessions")) }
 
-    private func upload(bytes: Data, object: UploadObject, logicalID: String, manifest: Bool, archive: Bool = false) async throws -> String {
+    private func upload(bytes: Data, object: UploadObject, logicalID: String, manifest: Bool, archive: Bool = false, geometryPart: Bool = false) async throws -> String {
         guard let current = active, var pending = journal.pending, let assignmentStorage = current.storage,
               assignmentStorage.provider == "supabase", assignmentStorage.bucket == "inspection-captures" else { throw CaptureError.invalid("Inspector не настроил Supabase storage") }
         let requestID = pending.requestIDs[logicalID] ?? UUID().uuidString.lowercased()
@@ -200,7 +249,7 @@ final class InspectorConnection: ObservableObject {
         var payload = try JSONSerialization.jsonObject(with: JSONEncoder().encode(object)) as! [String: Any]
         payload["observation_id"] = object.observation_id ?? NSNull() as Any
         let body = try JSONSerialization.data(withJSONObject: ["schema_version": "0.1", "request_id": requestID,
-            "kind": archive ? "capture_archive" : (manifest ? "capture_manifest" : "observation_files"), "completion_id": (manifest || archive) ? pending.completion_id as Any : NSNull(), "objects": [payload]], options: .sortedKeys)
+            "kind": geometryPart ? "geometry_archive" : archive ? "capture_archive" : (manifest ? "capture_manifest" : "observation_files"), "completion_id": (manifest || archive || geometryPart) ? pending.completion_id as Any : NSNull(), "objects": [payload]], options: .sortedKeys)
         let response = try JSONDecoder().decode(UploadPlanResponse.self, from: await request("v1/sessions/\(current.id)/upload-plans", method: "POST", body: body))
         guard response.format == "supabase_upload_plan_v1", sameUUID(response.request_id, requestID), sameUUID(response.session_id, current.id),
               response.items.count == 1, let item = response.items.first, item.name == object.name, ((item.observation_id == nil && object.observation_id == nil) || sameUUID(item.observation_id, object.observation_id)),
@@ -220,9 +269,46 @@ final class InspectorConnection: ObservableObject {
                 journal.completionRejected = false; journal.pending = nil
                 journal.pending = try freezeCapture(assignment: current, store: store)
             }
+            journal.pending?.useIndividualFilesIfUnsubmitted()
             try save(); try await startCapture()
             guard let frozenSet = journal.pending else { return }
-            if frozenSet.transportFormat == "zip" {
+            updateUploadProgress()
+            if frozenSet.transportFormat == "geometry_parts" {
+                if journal.pending?.geometryParts == nil {
+                    let data = try await request("v1/capabilities")
+                    let caps = try JSONSerialization.jsonObject(with: data) as? [String:Any]
+                    guard (caps?["capture_formats"] as? [String])?.contains("supabase_geometry_parts_v1") == true,
+                          let limit = caps?["max_archive_bytes"] as? Int, limit > 65536 else {
+                        throw CaptureError.invalid("Inspector ещё не поддерживает несколько Geometry ZIP. Наблюдения сохранены; обновите сервер.")
+                    }
+                    status = "Подготовка архивов…"
+                    let index = try await Task.detached {
+                        try GeometryPartsExport.build(assignment: current, pending: frozenSet, store: store, maxBytes: min(limit - 65536, 15 * 1024 * 1024))
+                    }.value
+                    journal.pending?.geometryParts = index; try save()
+                }
+                if journal.pending?.manifestBytes == nil {
+                    for (i, part) in journal.pending!.geometryParts!.parts.enumerated() {
+                        if !part.object_key.isEmpty { continue }
+                        status = "Загрузка архивов в хранилище…"
+                        let url = store.folder(current.id).appendingPathComponent("geometry-parts/\(frozenSet.completion_id)/\(part.name)")
+                        let bytes = try Data(contentsOf: url, options: .mappedIfSafe)
+                        guard bytes.count == part.byte_length, StoredFile(name: part.name, data: bytes).sha256 == part.sha256 else { throw CaptureError.invalid("ZIP изменён после подготовки") }
+                        let key = try await upload(bytes: bytes, object: UploadObject(observation_id: nil, name: part.name, media_type: "application/zip", byte_length: part.byte_length, sha256: part.sha256), logicalID: part.name, manifest: false, geometryPart: true)
+                        journal.pending?.geometryParts?.parts[i].object_key = key; try save(); updateUploadProgress()
+                    }
+                    let indexBytes = try ObservationStore.encoder.encode(journal.pending!.geometryParts!)
+                    journal.pending?.manifestBytes = indexBytes; try save()
+                }
+                uploadProgress = nil; status = "Сохранение списка архивов…"
+                if journal.pending?.request == nil {
+                    let bytes = journal.pending!.manifestBytes!, info = StoredFile(name: "capture-manifest.json", data: journal.pending!.manifestBytes!)
+                    let key = try await upload(bytes: bytes, object: UploadObject(observation_id: nil, name: info.name, media_type: "application/json", byte_length: info.byte_length, sha256: info.sha256), logicalID: "manifest", manifest: true)
+                    journal.pending?.request = CaptureCompletion(completion_id: frozenSet.completion_id,
+                        capture_ref: .init(format: "supabase_geometry_parts_v1", storage_id: current.storage!.storage_id, manifest_key: key, manifest_byte_length: info.byte_length, manifest_sha256: info.sha256))
+                    try save()
+                }
+            } else if frozenSet.transportFormat == "zip" {
                 if frozenSet.archiveInfo == nil {
                     status = "Подготовка ZIP с наблюдениями…"
                     guard let keyPrefix = current.storage?.key_prefix else { throw CaptureError.invalid("Нет префикса хранилища Inspector") }
@@ -253,18 +339,23 @@ final class InspectorConnection: ObservableObject {
             if frozenSet.manifestBytes == nil {
                 for (oi, observation) in frozenSet.manifest.observations.enumerated() {
                     for (fi, file) in observation.files.enumerated() {
+                        // A saved server key means PUT finished; preserve progress across retries.
+                        if !file.object_key.isEmpty { continue }
                         let bytes = try Data(contentsOf: store.folder(current.id).appendingPathComponent("observations/" + observation.observation_id + "/" + file.name))
                         guard bytes.count == file.byte_length, StoredFile(name: "", data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("Локальный файл повреждён") }
-                        status = "Загрузка \(oi + 1)/\(frozenSet.manifest.observation_count): \(file.name)"
+                        status = "Загрузка файлов в хранилище…"
                         let object = UploadObject(observation_id: observation.observation_id, name: file.name,
                             media_type: file.name == "rgb.jpg" ? "image/jpeg" : (file.name == "frame.json" ? "application/json" : "application/octet-stream"), byte_length: file.byte_length, sha256: file.sha256)
                         let key = try await upload(bytes: bytes, object: object, logicalID: observation.observation_id + "/" + file.name, manifest: false)
                         journal.pending?.manifest.observations[oi].files[fi].object_key = key; try save()
+                        updateUploadProgress()
                     }
                 }
                 let manifestBytes = try ObservationStore.encoder.encode(journal.pending!.manifest)
                 journal.pending?.manifestBytes = manifestBytes; try save()
             }
+            uploadProgress = nil
+            status = "Отправка манифеста набора…"
             let bytes = journal.pending!.manifestBytes!, info = StoredFile(name: "capture-manifest.json", data: journal.pending!.manifestBytes!)
             if journal.pending?.request == nil {
                 let key = try await upload(bytes: bytes, object: UploadObject(observation_id: nil, name: info.name, media_type: "application/json", byte_length: info.byte_length, sha256: info.sha256), logicalID: "manifest", manifest: true)
@@ -274,6 +365,8 @@ final class InspectorConnection: ObservableObject {
                 try save()
             }
             }
+            uploadProgress = nil
+            status = "Inspector проверяет набор…"
             let pending = journal.pending!
             let data = try await request("v1/sessions/\(current.id)/complete", method: "POST", body: ObservationStore.encoder.encode(pending.request!))
             let receipt = try JSONDecoder().decode(CompletionResponse.self, from: data)
@@ -287,8 +380,136 @@ final class InspectorConnection: ObservableObject {
             if journal.pending == nil { frozen = false }; status = error.localizedDescription
         }
     }
+    private func updateUploadProgress() {
+        guard let pending = journal.pending, pending.transportFormat != "zip", pending.manifestBytes == nil else { uploadProgress = nil; return }
+        uploadProgress = pending.fileUploadFraction
+    }
     private func close(_ id: String) throws {
+        uploadProgress = nil
         journal.closedSessionIDs.append(id); journal.active = nil; journal.pending = nil; journal.completionRejected = false
-        try save(); active = nil; frozen = false; completionFailures = 0; nextCompletionAttempt = .distantPast
+        try save(); endSpatialSegment(); spatial = nil; spatialFresh = false; active = nil; frozen = false; completionFailures = 0; nextCompletionAttempt = .distantPast
+    }
+}
+
+extension InspectorConnection {
+    func registerSpatialSegment(_ segment: String) async throws {
+        guard localizationEnabled, let current = active, current.model_version != "unbound" else { return }
+        desiredSpatialSegment = segment
+        spatialFresh = false
+        try await confirmSpatialSegment(segment, current: current)
+        await refreshSpatial()
+    }
+    private func confirmSpatialSegment(_ segment: String, current: InspectorAssignment) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["protocol":"live_bim_v1", "operation_id":segment, "segment_id":segment], options: .sortedKeys)
+        let data = try await request("v1/sessions/\(current.id)/spatial-segments", method: "POST", body: body)
+        let receipt = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard sameUUID(receipt?["session_id"] as? String, current.id), sameUUID(receipt?["segment_id"] as? String, segment) else {
+            throw CaptureError.invalid("Неверное подтверждение сегмента локализации")
+        }
+        guard desiredSpatialSegment == segment, active?.id == current.id else { return }
+        registeredSpatialSegment = segment
+    }
+    func endSpatialSegment() {
+        desiredSpatialSegment = nil; registeredSpatialSegment = nil; spatialFresh = false
+    }
+    func refreshSpatial() async {
+        guard foreground, localizationEnabled, let current = active, !frozen, !spatialRefreshing else { return }
+        spatialRefreshing = true; defer { spatialRefreshing = false }
+        do {
+            if let segment = desiredSpatialSegment, registeredSpatialSegment != segment {
+                try await confirmSpatialSegment(segment, current: current)
+            }
+            let snapshot = try JSONDecoder().decode(SpatialSnapshot.self, from: await request("v1/sessions/\(current.id)/spatial-state"))
+            guard active?.id == current.id, foreground else { return }
+            try snapshot.validate(session: current.id, model: current.model_version, room: current.room_id,
+                                  previous: spatial?.session_id == current.id ? spatial : nil)
+            spatial = snapshot; spatialReceived = Date(); spatialFresh = true
+            spatialStatus = ["awaiting_camera":"Откройте камеру", "localizing":"Определяем положение в BIM",
+                             "relocalizing":"Восстанавливаем привязку", "inspecting":"Съёмка под управлением Inspector",
+                             "blocked":"Локализация требует внимания", "finished":"Съёмка завершена"][snapshot.guidance.phase] ?? ""
+        } catch {
+            spatialFresh = false
+            spatialStatus = "Локализация недоступна. Фото сохраняются локально."
+        }
+    }
+    func liveInstruction(segment: String?) -> SpatialInstruction? {
+        guard spatialFresh, Date().timeIntervalSince(spatialReceived) < 3 else { return nil }
+        return spatial?.instruction(segment: segment)
+    }
+    func sendPose(timestamp: Double, tracking: String, reason: String?, pose: [[Float]], intrinsics: [[Float]], size: [Int], segment: String) {
+        guard foreground, localizationEnabled, !frozen, let current = active,
+              journal.startedSessionIDs.contains(current.id), registeredSpatialSegment == segment, let socket, !poseSending else { return }
+        if poseSegment != segment { poseSegment = segment; poseSequence = 0; lastPoseTime = -.infinity; lastPoseTracking = "" }
+        let hz = min(10, liveCapability?.pose_hz ?? 5)
+        guard timestamp > lastPoseTime, timestamp - lastPoseTime >= 1 / hz || tracking != lastPoseTracking else { return }
+        lastPoseTime = timestamp; lastPoseTracking = tracking; poseSequence += 1
+        let message = CameraPose(session_id: current.id, segment_id: segment, sequence: poseSequence,
+                                 frame_timestamp_s: timestamp, tracking_state: tracking, tracking_reason: reason,
+                                 T_arkit_camera: pose, intrinsics: intrinsics, image_size: size)
+        guard let data = try? JSONEncoder().encode(message), let text = String(data: data, encoding: .utf8) else { return }
+        poseSending = true
+        Task {
+            defer { poseSending = false }
+            do { try await socket.send(.string(text)) }
+            catch { spatialFresh = false }
+        }
+    }
+    /// Persist intent before sending anything; this is independent of the frozen final ZIP journal.
+    func enqueueEarly(_ frame: FrameMetadata, store: ObservationStore, instruction: SpatialInstruction?) throws {
+        guard localizationEnabled, let current = active, current.id == frame.session_id, current.model_version != "unbound", !frozen else { return }
+        guard !(journal.earlyEvidence ?? []).contains(where: { $0.observationID == frame.id }) else { return }
+        let folder = store.folder(frame.session_id).appendingPathComponent("observations/" + frame.id)
+        let metadata = try Data(contentsOf: folder.appendingPathComponent("frame.json"))
+        let files = [StoredFile(name: "frame.json", data: metadata), frame.rgb] + (frame.depth.map { [$0] } ?? []) + (frame.confidence.map { [$0] } ?? [])
+        let entry = EarlyEvidence(batchID: UUID().uuidString.lowercased(), sessionID: frame.session_id,
+                                  segmentID: frame.segment_id, observationID: frame.id, instructionID: instruction?.instruction_id,
+                                  purpose: instruction?.source == "inspector" ? "coverage" : "localization", files: files,
+                                  uploadRequestIDs: Dictionary(uniqueKeysWithValues: files.map { ($0.name, UUID().uuidString.lowercased()) }))
+        journal.earlyEvidence = (journal.earlyEvidence ?? []) + [entry]
+        try save()
+        Task { await sendEarlyEvidence() }
+    }
+    func sendEarlyEvidence() async {
+        guard foreground, localizationEnabled, !busy, !frozen, let current = active, let prefix = current.storage?.key_prefix else { return }
+        busy = true; defer { busy = false }
+        do {
+            for index in (journal.earlyEvidence ?? []).indices {
+                guard foreground, active?.id == current.id, !frozen else { return }
+                guard var entry = journal.earlyEvidence?[index], entry.sessionID == current.id,
+                      entry.segmentID == desiredSpatialSegment, entry.segmentID == registeredSpatialSegment, !entry.submitted else { continue }
+                if entry.batchBody == nil {
+                    var refs: [CaptureFileReference] = []
+                    for file in entry.files {
+                        let bytes = try Data(contentsOf: Self.store.folder(current.id).appendingPathComponent("observations/\(entry.observationID)/\(file.name)"))
+                        guard bytes.count == file.byte_length, StoredFile(name: file.name, data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("Изменились байты раннего наблюдения") }
+                        let mime = file.name == "rgb.jpg" ? "image/jpeg" : (file.name == "frame.json" ? "application/json" : "application/octet-stream")
+                        let id = entry.uploadRequestIDs[file.name]!
+                        let object = UploadObject(observation_id: entry.observationID, name: file.name, media_type: mime, byte_length: file.byte_length, sha256: file.sha256)
+                        let obj = try JSONSerialization.jsonObject(with: JSONEncoder().encode(object))
+                        let body = try JSONSerialization.data(withJSONObject: ["schema_version":"0.1", "request_id":id, "kind":"observation_files", "completion_id":NSNull(), "objects":[obj]], options: .sortedKeys)
+                        let plan = try JSONDecoder().decode(UploadPlanResponse.self, from: await request("v1/sessions/\(current.id)/upload-plans", method: "POST", body: body))
+                        guard plan.format == "supabase_upload_plan_v1", sameUUID(plan.session_id, current.id), sameUUID(plan.request_id, id),
+                              plan.items.count == 1, let item = plan.items.first, sameUUID(item.observation_id, entry.observationID),
+                              item.name == file.name, item.byte_length == file.byte_length, item.sha256 == file.sha256, item.media_type == mime,
+                              item.object_key == prefix + "observations/\(entry.observationID)/\(file.name)" else { throw CaptureError.invalid("Неверный план ранней загрузки") }
+                        if item.status == "upload_required" { try await storage.put(bytes: bytes, plan: item) }
+                        else if item.status != "already_uploaded" { throw CaptureError.invalid("Неверный статус ранней загрузки") }
+                        refs.append(CaptureFileReference(name: file.name, object_key: item.object_key, byte_length: file.byte_length, sha256: file.sha256))
+                    }
+                    let referenceObjects = try JSONSerialization.jsonObject(with: JSONEncoder().encode(refs))
+                    entry.batchBody = try JSONSerialization.data(withJSONObject: ["protocol":"live_bim_v1", "batch_id":entry.batchID,
+                        "purpose":entry.purpose, "instruction_id":entry.instructionID as Any? ?? NSNull(), "segment_id":entry.segmentID,
+                        "observations":[["observation_id":entry.observationID, "files":referenceObjects]]], options: .sortedKeys)
+                    journal.earlyEvidence?[index] = entry; try save()
+                }
+                let bytes = try await request("v1/sessions/\(current.id)/evidence-batches", method: "POST", body: entry.batchBody)
+                let receipt = try JSONSerialization.jsonObject(with: bytes) as? [String: Any]
+                guard receipt?["protocol"] as? String == "live_bim_v1", sameUUID(receipt?["session_id"] as? String, current.id), sameUUID(receipt?["batch_id"] as? String, entry.batchID),
+                      ["validating", "queued", "processing", "completed"].contains(receipt?["status"] as? String ?? "") else {
+                    throw CaptureError.invalid("Неверная квитанция ранних наблюдений")
+                }
+                entry.submitted = true; journal.earlyEvidence?[index] = entry; try save()
+            }
+        } catch { spatialStatus = "Ранние данные не отправлены: \(error.localizedDescription). Повтор автоматически; оригиналы сохранены." }
     }
 }

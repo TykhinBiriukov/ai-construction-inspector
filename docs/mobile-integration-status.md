@@ -1,3 +1,5 @@
+> 28 October update: new captures now prepare independently sized Geometry ZIP parts (`supabase_geometry_parts_v1`), gated by server capabilities. See revision 8 of the common contract. Individual-file and old ZIP pending requests remain compatible. The parts contain original frame IDs, exact depth bytes, segment-specific mesh and the Geometry metadata schema. Root-bucket writes and direct Geometry calls are not used. Code is prepared; cloud/device rollout must be reported separately.
+
 # iOS integration — updated 2026-10-28
 
 ## Current selected transport
@@ -8,7 +10,7 @@ Oleg approved switching to the server's implemented **signed upload plans**. The
 2. Foreground app opens `/v1/devices/{device_id}/events/ws`, sends JSON ping every 15 seconds and answers ping with pong. HTTP assignment reconciliation also runs, with failure backoff. Background suspension is expected.
 3. Persist assigned session and immutable context; acknowledge with a stable operation ID. Only a newly `assigned` session opens capture; historical sealed sessions do not.
 4. On camera start send `capture-start` with actual device/OS/app metadata. Persist the exact body for retries. Capture one ARFrame per observation, RGB-only or RGB-D. A reset creates a distinct segment. The first server case has `instruction_id=null`.
-5. On finish freeze inventory and build one ZIP: `capture-manifest.json` at archive root, and `observations/<observation_id>/{frame.json,rgb.jpg,depth.f32?,confidence.u8?}`. No mesh is required for this transport archive. The manifest keeps `format=capture_manifest_supabase_v1`; each file's `object_key` equals the assigned `session.storage.key_prefix` plus its relative path inside ZIP. Byte lengths and hashes describe the original bytes.
+5. **Superseded on 28 October for new captures:** upload individual observation files, then `capture-manifest.json`, using the already supported `observation_files` and `capture_manifest` plans; complete with `supabase_capture_v1`. This avoids the aggregate ZIP limit. Files upload sequentially and saved object keys resume progress. An old frozen ZIP without a prepared completion request migrates to files, keeping session/inventory/completion IDs and originals; already prepared completion requests retain their transport. Individual cloud objects remain limited to 16 MiB and the manifest to 4 MiB. The following describes the retained legacy ZIP path: on finish freeze inventory and build one ZIP: `capture-manifest.json` at archive root, and `observations/<observation_id>/{frame.json,rgb.jpg,depth.f32?,confidence.u8?}`. No mesh is required for this transport archive. The manifest keeps `format=capture_manifest_supabase_v1`; each file's `object_key` equals the assigned `session.storage.key_prefix` plus its relative path inside ZIP. Byte lengths and hashes describe the original bytes.
 6. Request `/upload-plans` with `kind=capture_archive`, the stable completion UUID, and one `capture.zip` object with media type `application/zip`. Upload exact ZIP bytes with the returned method/headers. Complete using `capture_ref.format=supabase_capture_zip_v1`, `storage_id`, returned `archive_key`, `archive_byte_length`, `archive_sha256`. No bucket name/HTTPS URL goes in the key. Persist ZIP, digest, plan request ID and completion before network retries. Pending is not accepted; rejected completion permits a new completion ID on manual retry. Earlier pending per-file submissions keep their previous protocol.
 7. Once accepted, return to waiting. Local originals and journal are retained. The server handles Geometry dispatch. The app labels `geometry_mode=mock` explicitly. It does not yet display Geometry artifacts or inspection conclusions.
 
@@ -41,3 +43,36 @@ On iPhone 11 RGB capture remains supported; Geometry mesh export requires a comp
 - The real receipt-casing bug is fixed: server UUIDs are compared semantically, not as case-sensitive strings; new generated UUIDs are lowercase. After installation, the phone journal confirmed preserved assignment, accepted acknowledgement and registered capture-start.
 - Remaining: validate real LiDAR/mesh export and agree Inspector-to-Geometry archive conversion; verify external Geometry/BIM/Meta components separately.
 - Native remote APNs remains unavailable on the Personal Team. Foreground WebSocket and optional local notification do not wake a suspended app.
+
+## Localization preparation (28 October, local development)
+
+The iOS client now has capability-gated live_bim_v1 models, single-owner guidance,
+registered ARKit segments, bounded pose telemetry, durable early per-observation
+uploads and evidence-batch retries. Original files still enter the final ZIP.
+Old servers without the capability keep the existing capture flow. Default endpoint
+for fresh installs is inspector.campuscompile.eu; saved settings are not overwritten.
+
+The shared contract remains the only protocol document:
+[revision 6, section 13](../ai_inspector/docs/iphone-geometry-bim-inspector-api-v0.1.md).
+It now includes spatial-segments registration so the server knows an ARKit coordinate
+frame before accepting poses. The Inspector owner must implement that endpoint,
+evidence-batches, spatial-state and camera.pose handling before advertising readiness.
+The app displays text/status only; a live BIM scene, coverage overlay and voice are
+not yet implemented. Early HTTP batch acknowledgement means queued, not successful
+localization. A dropped service does not delete local images or imply success.
+
+The new localization_service/ is a standalone local HTTP/domain harness with SQLite
+and a solver interface. It has no geometric registration implementation yet and is
+not deployed. Tests use an explicitly synthetic solver. Real known-door localization,
+quality thresholds and visibility/coverage require the matching BIM and LiDAR data.
+
+Checks (from checkout root):
+
+```sh
+xcrun swiftc -module-cache-path /tmp/inspector-swift-cache ios/AIInspector/Observation.swift ios/AIInspector/SessionLifecycle.swift ios/AIInspector/GeometryExport.swift ios/AIInspector/SpatialCapture.swift ios/Checks/main.swift -o /tmp/inspector-checks
+/tmp/inspector-checks
+python3 -m unittest discover -s localization_service/tests -v
+```
+
+No real phone installation, real Localization/Inspector exchange or BIM accuracy
+claim follows from these local tests and unsigned build.

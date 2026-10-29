@@ -19,7 +19,6 @@ An administrator runs `provision.py` once with explicit authorization:
 ```
 python -m localization_service.deploy.provision \
   --admin-env /private/path/to/admin.env \
-  --model /private/path/to/room.ifc \
   --output /private/path/to/runtime.json
 ```
 
@@ -30,9 +29,8 @@ The script refuses to overwrite an existing role or credential file.
 
 Set these runtime secrets/settings from the generated file:
 - `LOCALIZATION_SERVICE_TOKEN`: independent random secret, >=32ASCII characters.
-  The iPhone already sends it in `X-Localization-Code` over HTTPS.
+  Inspector sends it as Bearer to the internal provisioning endpoint. Never give it to the phone.
 - `LOCALIZATION_DATABASE_URL`: restricted role, Supabase pooler with TLS.
-- `LOCALIZATION_MODEL_SHA256`: privately provisioned model hash.
 - `PORT=8788`, optional `LOCALIZATION_DATA_DIR=/data` (disposable local cache).
 
 Session changes and associated evidence commit together before HTTP success.
@@ -45,17 +43,33 @@ containers during rollout. This is not a high-availability or high-load design.
 A100MiB aggregate evidence budget protects the shared free database; completed
 sessions need an explicitly approved cleanup/archive procedure when it fills.
 
-## Current verification and pending steps
+## Dynamic BIM handoff
 
-29October: GitHub repo connected in Northflank, free project/card setup confirmed.
-No service or paid disk created. Creating the DB role/schema and uploading the IFC
-was blocked by automatic approval review; explicit user approval is pending.
-Runtime credentials have NOT been generated or sent to Northflank.
+No model is preloaded. Phone calls `POST /v1/sessions/{id}/localization` on Inspector.
+Inspector authenticates the assigned device, reads the pinned BIM and posts the
+binding plus `ifc_base64` to `POST /internal/localization/sessions` using its service
+secret. Localization checks SHA256, parses the IFC and pins the session/model.
+The response contains a session-specific token; Inspector adds the public endpoint.
+The phone uses that token in X-Localization-Code only for its session routes:
+GET /v1/localization/sessions/{id}/config, POST start/observations/pose/finish, GET state.
+The old global config and phone-side session creation are not exposed in cloud mode.
 
-Local synthetic tests cover restart with an empty cache, preserved alignment and
-coverage, immutable retries, and rollback on storage failure. The database in those
-tests is a SQLite double; live PostgreSQL permissions/transactions, container build,
-public HTTPS and real-phone cloud behavior still require verification.
+Inspector settings: INSPECTOR_LOCALIZATION_BASE_URL (HTTPS) and
+INSPECTOR_LOCALIZATION_SERVICE_TOKEN (same service secret as Localization).
+The session token is deterministic, isolated by session, and valid until service-key
+rotation; this prototype does not implement immediate token revocation on abort.
+BIM storage is capped at50MiB and per-file IFC at8MiB. Existing evidence budget100MiB.
 
-Current geometry limitations remain: one prepared rectangular room and known door,
-not arbitrary IFC buildings. No Inspector control handoff/callback is added here.
+Current importer: one axis-aligned rectangular room, four walls, one floor, one
+space and one door/opening on min-X, metre units. New compatible IFC versions are
+accepted per session; whole buildings, other door walls and rotated rooms remain
+unsupported. This does not implement the Inspector LLM instruction-ownership
+handoff or a drift monitor.
+
+## Verification
+
+29October: restricted role/schema created and live PostgreSQL access checked;
+Inspector schema access denied. No BIM preloaded.24 local tests passed, including
+two model bindings, restart/retry recovery and commit failure. Inspector adapter
+has two tests covering authentication/scope, transfer and invalid upstream binding.
+Cloud deployment and real-phone cloud behavior still require verification.

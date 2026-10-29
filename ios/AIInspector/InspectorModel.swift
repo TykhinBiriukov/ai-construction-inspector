@@ -14,8 +14,9 @@ final class InspectorModel: ObservableObject {
     @Published var geometryZIP: URL?
     @Published var synthetic: Bool
     let capture = CaptureService()
+    let localization = SessionLocalization()
     let store: ObservationStore
-    private var segment: String?
+    @Published private(set) var segment: String?
 
     let assignment: InspectorAssignment
     @Published var frozen = false
@@ -25,7 +26,20 @@ final class InspectorModel: ObservableObject {
         synthetic = assignment.capture_origin == "synthetic"
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         store = ObservationStore(root: documents.appendingPathComponent("sessions"))
-        capture.onInterruption = { [weak self] in self?.segment = nil }
+        capture.onPose = { [weak self] frame in
+            guard let self, let segment = self.segment else { return }
+            let tracking: String, reason: String?
+            switch frame.camera.trackingState {
+            case .normal: tracking = "normal"; reason = nil
+            case .notAvailable: tracking = "not_available"; reason = nil
+            case .limited(let why): tracking = "limited"; reason = String(describing: why)
+            }
+            self.localization.pose(frame)
+            if !self.localization.enabled { InspectorConnection.shared.sendPose(timestamp: frame.timestamp, tracking: tracking, reason: reason,
+                pose: matrixRows(frame.camera.transform), intrinsics: matrixRows(frame.camera.intrinsics),
+                size: [Int(frame.camera.imageResolution.width), Int(frame.camera.imageResolution.height)], segment: segment) }
+        }
+        capture.onInterruption = { [weak self] in self?.segment = nil; self?.localization.stop(); InspectorConnection.shared.endSpatialSegment() }
     }
 
     func load() async {
@@ -66,14 +80,27 @@ final class InspectorModel: ObservableObject {
         do {
             try await InspectorConnection.shared.startCapture()
             try newSegment()
+            if let segment {
+                if assignment.model_version != "unbound", !capture.supportsDepth {
+                    throw CaptureError.invalid("Для локализации по BIM нужен LiDAR. Обычная съёмка доступна в задании без BIM.")
+                }
+                try await localization.start(assignment: assignment, segment: segment, store: store)
+            }
             try await capture.start()
+            if let segment, !localization.enabled {
+                do { try await InspectorConnection.shared.registerSpatialSegment(segment) }
+                catch { notice = "Локализация не подключилась: \(error.localizedDescription). Можно сохранять фото." }
+            }
         } catch {
-            segment = nil
+            segment = nil; localization.stop(); capture.stop()
+            localization.status = error.localizedDescription
             self.error = error.localizedDescription
         }
     }
 
     func pause() {
+        localization.stop()
+        InspectorConnection.shared.endSpatialSegment()
         persistMeshIfAvailable()
         capture.stop()
         segment = nil
@@ -86,7 +113,8 @@ final class InspectorModel: ObservableObject {
         do {
             if synthetic && segment == nil { try await InspectorConnection.shared.startCapture(); try newSegment() }
             guard let session = manifest, let segment else { throw CaptureError.invalid("Сначала включите камеру") }
-            let store = store, instruction = instructionID
+            let spatialInstruction = localization.enabled ? localization.instruction : InspectorConnection.shared.liveInstruction(segment: segment)
+            let store = store, instruction = spatialInstruction?.instruction_id ?? instructionID
             let frame: FrameMetadata
             if synthetic {
                 let payload = try SyntheticCapture.make()
@@ -100,6 +128,11 @@ final class InspectorModel: ObservableObject {
                 }.value
             }
             observations.append(frame)
+            if localization.enabled {
+                Task { await localization.flush(store: store) }
+            } else {
+                try InspectorConnection.shared.enqueueEarly(frame, store: store, instruction: spatialInstruction)
+            }
             persistMeshIfAvailable()
 
             notice = "Наблюдение сохранено на телефоне. Завершите съёмку для отправки."
@@ -122,14 +155,15 @@ final class InspectorModel: ObservableObject {
         guard !busy, !frozen, let manifest else { return }
         busy = true; defer { busy = false }
         persistMeshIfAvailable()
+        InspectorConnection.shared.endSpatialSegment()
         capture.stop(); segment = nil
         do {
             let segments = Set(observations.map(\.segment_id))
             guard segments.count == 1, let meshSegment = segments.first else { throw CaptureError.invalid("Для Geometry ZIP снимите кадры за один запуск камеры, без сбросов ARKit") }
-            let store = store
+            let store = store, projectID = assignment.project_id
             let mesh = try Data(contentsOf: store.folder(manifest.session_id).appendingPathComponent("mesh/" + meshSegment + ".ply"))
             geometryZIP = try await Task.detached {
-                try GeometryExport.export(sessionID: manifest.session_id, store: store, mesh: mesh, meshSegment: meshSegment)
+                try GeometryExport.export(sessionID: manifest.session_id, store: store, mesh: mesh, meshSegment: meshSegment, projectID: projectID)
             }.value
             notice = "ZIP готов локально. Он пока не передаётся Inspector."
         } catch { self.error = error.localizedDescription }
