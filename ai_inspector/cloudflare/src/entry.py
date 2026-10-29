@@ -1,4 +1,4 @@
-"""Cloudflare entrypoint: multi-element document context and active tool projection v2."""
+"""Cloudflare entrypoint: persisted Inspector activity attempts and timing v3."""
 from contextvars import ContextVar
 from pathlib import Path
 from workers import WorkerEntrypoint, DurableObject, Response, asgi
