@@ -107,3 +107,35 @@ These do not verify live Meta access, a physical iPhone or external Geometry.
 The Supabase chat schema/grants were verified separately; deployed Worker access
 to those tables still needs verification. Business messages from the phone, BIM tools, automatic model
 turns on Geometry completion and inspection verdicts are further increments.
+
+## Demo workspace and visual responses
+
+`/ui/demo.html` is the user-facing workspace; Control room remains the operational
+console. The demo uses the same operator credential and existing chat API. It shows
+project files/capture references, the latest loaded tasks, device status, service
+configuration and persisted tool results. It does not expose hidden model reasoning
+or claim a configured service is running. The project snapshot is calculated from
+the loaded server session page, not invented by the model; a `+` indicates more pages.
+File uploads/management remain in Control room. Capture references are not a full
+Storage object browser. New chat is required to change room context.
+
+Runs now include additive `display_reply` and `artifacts` fields. `reply` remains
+unchanged for older clients. The assistant may emit a fenced `inspector-ui` JSON
+block with `{ "artifacts": [...] }`. The server validates and extracts up to six
+items; malformed blocks remain ordinary text. Supported types:
+
+- `metric`: `title`, `value` (string or finite number), optional `unit`, `source`.
+- `bar_chart`: `title`, `labels`, nonnegative finite `values`, optional `unit`,
+  `source`; equal-length arrays, up to 20 bars.
+- `table`: `title`, `columns`, `rows`, `source`; up to 8 columns and 30 rows,
+  matching row widths, string/finite-number/null cells.
+
+The demo renders typed DOM components; it never executes model HTML, JavaScript,
+SVG, or embedded URLs. Source text is a model attribution, not independent proof:
+visuals are labelled AI summaries and must be checked against original evidence.
+No new model tools or measured geometry capability are added by this format.
+
+The demo stores its chat pointer separately from Control room. An unfinished
+request's ID and body are retained in sessionStorage for retry in the same tab;
+refresh loads server history. Polling shows completed tool results while a run is
+active; planned/in-flight tool names are not currently exposed by the API.

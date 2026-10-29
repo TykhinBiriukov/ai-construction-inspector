@@ -7,6 +7,7 @@ from uuid import UUID, uuid4, uuid5
 
 from pydantic import Field, field_validator
 
+from .artifacts import ARTIFACT_INSTRUCTIONS, presentation
 from .errors import APIError
 from .model_client import MetaModelClient, validated_message
 from .schemas import APIModel, CreateSessionRequest, Identifier, QuickSessionRequest
@@ -63,7 +64,7 @@ not establish construction compliance. Keep mock/synthetic outputs clearly label
 Use one tool call per response. Await tool results before reporting success. The original
 user task is included in the session assignment as capture_task, labelled operator_request.
 It is not a remote camera command. A linked rescan inherits the original inspection task.
-"""
+""" + ARTIFACT_INSTRUCTIONS
 
 
 def session_summary(session):
@@ -118,7 +119,7 @@ class ChatAgent:
         return {key: run.get(key) for key in (
             "schema_version", "run_id", "chat_id", "request_id", "text", "status", "reply",
             "error", "session_id", "created_at", "updated_at", "tool_results",
-        )}
+        )} | presentation(run.get("reply"))
 
     def get_chat(self, principal, chat_id, before=None, limit=30):
         with self.database.connection() as connection:
