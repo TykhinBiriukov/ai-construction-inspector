@@ -38,12 +38,13 @@
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;chosenFiles.clear();uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
-    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); $('selection').hidden=true; historySignature='';
+    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
   function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
     const unfinished=chat?.runs?.find(r=>!['completed','failed'].includes(r.status));
     $('chat-picker').disabled=sending||workspaceBusy||!!pending;
+    $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
     $('new-chat').disabled= !token || sending || workspaceBusy || !!pending || !!unfinished;
     $('attach-file').disabled=!token||sending||workspaceBusy||!!pending; $('add-plan-item').disabled=!token||workspaceBusy; $('import-plan').disabled=!chat||workspaceBusy;
     $('room').readOnly=!!chat || !!create || sending;
@@ -52,7 +53,7 @@
     $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
     $('resume').hidden=!pending || sending; $('resume').disabled=sending;
-    $('run-status').textContent=sending ? 'Inspector is working. Saved tool results appear on the right.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
   function renderRails() {
@@ -66,12 +67,6 @@
     if(!scopedSessions.length) $('tasks').append(node('p','muted','No capture tasks yet. Ask Inspector to create one.'));
     $('device-state').textContent=device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',device.online);
     $('device-name').textContent=device.device_id; $('device-seen').textContent=`Last seen · ${timestamp(device.last_seen_at)}`;
-    $('model-state').textContent=caps.agent_model_configured?'Configured':'Not configured';
-    $('geometry-state').textContent=caps.geometry_mode==='mock'?'Mock / synthetic':caps.geometry_configured?'Configured':'Not connected';
-    const counts={}; for(const session of scopedSessions) counts[session.processing_state]=(counts[session.processing_state]||0)+1;
-    $('snapshot').replaceChildren(node('div','snapshot-number',scopedSessions.length),node('small','','Captures linked to this conversation'));
-    for(const [label,value] of Object.entries(counts)) $('snapshot').append(bar(label.replaceAll('_',' '),value,scopedSessions.length,''));
-    if(!scopedSessions.length) $('snapshot').append(node('p','muted','A live summary will appear as captures are created.'));
     if(selected) { const session=scopedSessions.find(s=>s.session_id===selected); if(session) showTask(session); }
   }
   function showTask(session) {
@@ -108,7 +103,7 @@
       if(runs.length) {
         $('messages').replaceChildren();
         for(const run of runs) {
-          const user=node('article','message user'); user.append(node('div','message-author','YOU'),messageText(run.text)); $('messages').append(user);
+          const user=node('article','message user'); user.append(node('div','message-author','YOU'),messageText(run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
           const assistant=node('article','message assistant'); assistant.append(node('div','message-author','✳ INSPECTOR'));
           assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
           const grid=node('div','artifact-grid'); for(const item of run.artifacts||[]) { const artifact=renderArtifact(item); if(artifact) grid.append(artifact); } if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
@@ -168,7 +163,7 @@
     if(sending||workspaceBusy||!token||!overview) return;
     if(!pending && (!$('chat-form').reportValidity()||!$('message').value.trim())) return;
     const current=epoch; sending=true; notify();
-    if(!pending) pending={schema_version:'0.1',request_id:uid(),text:$('message').value.trim(),file_ids:[...chosenFiles]};
+    if(!pending) pending={schema_version:'0.1',request_id:uid(),text:$('message').value.trim(),file_ids:[...chosenFiles],...(documentContext?{document_selection:documentContext}:{})};
     if(!chat && !create) create={schema_version:'0.1',request_id:uid(),room_id:$('room').value.trim()};
     remember(); controls();
     try {
@@ -207,6 +202,7 @@
   function renderFiles() {
     const files=workState?.files||[];
     for(const id of chosenFiles) if(!files.some(f=>f.file_id===id&&!f.deleted)) chosenFiles.delete(id);
+    if(documentContext&&!files.some(f=>f.file_id===documentContext.file_id&&!f.deleted)){documentContext=null;$('document-context').hidden=true;}
     $('files').replaceChildren(); $('selected-files').replaceChildren();
     $('trash-toggle').textContent=showTrash?'Back to files':'Trash';
     for(const file of files.filter(f=>!!f.deleted===showTrash).sort((a,b)=>b.created_at.localeCompare(a.created_at))) {
@@ -216,28 +212,24 @@
         check.setAttribute('aria-label',`Use ${file.name} for AI`);
         check.addEventListener('change',()=>{
           if(check.checked&&chosenFiles.size>=8){check.checked=false;notify('Select up to 8 files per message.');return;}
-          if(check.checked)chosenFiles.add(file.file_id);else chosenFiles.delete(file.file_id);renderFiles();
+          if(check.checked)chosenFiles.add(file.file_id);else {chosenFiles.delete(file.file_id);if(documentContext?.file_id===file.file_id){documentContext=null;$('document-context').hidden=true;}}renderFiles();
         });row.append(check);
       }
-      const name=node('button','file-name',file.name);name.type='button';name.title='File details';
+      const name=node('button','file-name',file.name);name.type='button';name.title='Open document';
       name.append(node('small','',`${file.origin} · ${file.content_available?(file.text_truncated?'AI: text excerpt':'AI: text'):'AI: metadata only'}`));
-      name.addEventListener('click',()=>{
-        selected=null;$('selection').hidden=false;$('selection').className='selection';
-        $('selection').replaceChildren(node('h3','',file.name),node('p','',`${file.byte_length.toLocaleString()} bytes · ${file.origin}`),node('p','',file.content_available?'Selected text is included with your next message.':'This format is stored, but its content is not decoded for AI. Only name and metadata are sent.'));
-        if(!file.deleted){const download=node('button','','Download');download.addEventListener('click',()=>downloadFile(file).catch(e=>notify(e.message)));$('selection').append(download);}
-      });row.append(name);
+      name.addEventListener('click',()=>openDocument(file));row.append(name);
       const remove=node('button','file-delete',showTrash?'↶':'×');remove.type='button';remove.setAttribute('aria-label',`${showTrash?'Restore':'Delete'} ${file.name}`);
       remove.disabled=workspaceBusy;
       remove.addEventListener('click',async()=>{
         if(workspaceBusy)return;
         if(!showTrash&&!confirm(`Move ${file.name} to Trash? Saved observations and prior messages keep their evidence history. You can restore the file.`))return;
         workspaceBusy=true;controls();
-        try{await post(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/${file.deleted?'restore':'delete'}`,{});await loadWorkspace();}
+        try{await post(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/${file.deleted?'restore':'delete'}`,{});await loadWorkspace();if(documentOpenId===file.file_id)resetDocument();}
         catch(error){notify(error.message);}finally{workspaceBusy=false;controls();}
       });row.append(remove);$('files').append(row);
     }
     if(!$('files').childNodes.length)$('files').append(node('p','muted',showTrash?'Trash is empty.':'No files yet. Attach a file beside the message input.'));
-    for(const id of chosenFiles){const file=files.find(f=>f.file_id===id);if(file)$('selected-files').append(node('span','selected-chip',`${file.name} · ${file.content_available?'text':'metadata only'}`));}
+    for(const id of chosenFiles){const file=files.find(f=>f.file_id===id);if(file)$('selected-files').append(node('span','selected-chip',`${file.name} · ${documentContext?.file_id===file.file_id?'selected preview + reference':file.content_available?'text':'metadata only'}`));}
   }
   async function downloadFile(file) {
     const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});
@@ -253,6 +245,7 @@
         const entry=uploadQueue[0],form=new FormData();form.append('file_id',entry.id);form.append('file',entry.file);
         await api(`${workspacePath()}/files`,{method:'POST',body:form});
         uploadQueue.shift();await loadWorkspace(); if(chosenFiles.size<8)chosenFiles.add(entry.id);renderFiles();
+        const uploaded=workState?.files?.find(f=>f.file_id===entry.id);if(uploaded&&/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
       }
       $('file-input').value='';notify('Files uploaded. Checked files will be included with your next message.');
     }catch(error){if(error.status>=400&&error.status<500&&![408,429].includes(error.status)){uploadQueue=[];$('file-input').value='';notify(`Upload rejected: ${error.message}. Choose a file again.`);}else notify(`Upload was not confirmed: ${error.message}. Use Retry upload to reuse the same upload ID.`);}
@@ -329,6 +322,26 @@
     catch(error){$('observation-error').textContent=error.message;if(error.status===422)observationEditing.body=null;}
     finally{workspaceBusy=false;event.submitter.disabled=false;controls();}
   });
+
+  let documentContext=null,documentOpenId=null,documentGeneration=0;
+  const viewer=new ProjectDocuments.Viewer($('document-view'),context=>{
+    if(context&&!chosenFiles.has(context.file_id)&&chosenFiles.size>=8){notify('Select up to 8 files per message. Uncheck a file first.');return;}
+    documentContext=context;
+    $('document-context').hidden=!context;
+    if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
+  },text=>{$('document-status').textContent=text;});
+  function resetDocument(){documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
+  async function openDocument(file){if(file.deleted||sending||pending)return;const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  $('clear-document-context').onclick=()=>{viewer.clearSelection();renderFiles();};
+  $('document-download').onclick=()=>{const file=workState?.files?.find(f=>f.file_id===documentOpenId);if(file)downloadFile(file).catch(e=>notify(e.message));};
+  $('zoom-in').onclick=()=>viewer.zoom(1.2);$('zoom-out').onclick=()=>viewer.zoom(1/1.2);$('zoom-fit').onclick=()=>viewer.zoom(1);
+  $('page-prev').onclick=()=>viewer.next(-1).catch(e=>notify(e.message));$('page-next').onclick=()=>viewer.next(1).catch(e=>notify(e.message));
+  const root=document.documentElement;
+  const layoutKey='inspector-document-layout';let layout={files:210,dialogue:360,scale:1};
+  try{Object.assign(layout,JSON.parse(read(localStorage,layoutKey)||'{}'));}catch{}
+  function applyLayout(){layout.files=Math.max(150,Math.min(340,Number(layout.files)||210));layout.dialogue=Math.max(280,Math.min(innerWidth*.5,Number(layout.dialogue)||360));layout.scale=Math.max(.85,Math.min(1.3,Number(layout.scale)||1));root.style.setProperty('--files-width',layout.files+'px');root.style.setProperty('--dialogue-width',layout.dialogue+'px');root.style.setProperty('--ui-scale',layout.scale);$('ui-scale').value=String(layout.scale);write(localStorage,layoutKey,JSON.stringify(layout));}
+  for(const [id,key,direction] of [['resize-files','files',1],['resize-dialogue','dialogue',-1]]){const handle=$(id);let drag=null;handle.onpointerdown=e=>{if(e.button!==0)return;drag={x:e.clientX,width:layout[key]};handle.setPointerCapture(e.pointerId);};handle.onpointermove=e=>{if(!drag)return;layout[key]=drag.width+(e.clientX-drag.x)*direction;applyLayout();};handle.onpointerup=handle.onpointercancel=()=>{drag=null;};handle.onkeydown=e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();layout[key]+=(e.key==='ArrowRight'?20:-20)*direction;applyLayout();};}
+  $('ui-scale').onchange=()=>{layout.scale=Number($('ui-scale').value);applyLayout();};$('reset-layout').onclick=()=>{layout={files:210,dialogue:360,scale:1};applyLayout();viewer.zoom(1);};applyLayout();
   $('plan-template').addEventListener('click',()=>downloadBlob(new Blob(['title,location,reference\n'],{type:'text/csv'}),'plan-template.csv'));
   $('import-plan').addEventListener('click',async()=>{
     if(workspaceBusy)return;
@@ -352,13 +365,13 @@
     const id=$('chat-picker').value;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
     chat=id?{chat_id:id}:null;create=null;workState=null;chosenFiles.clear();selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
-    $('selection').hidden=true;$('message').value='';historySignature='';remember();renderRails();renderConversation();await refresh();
+    $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderRails();renderConversation();await refresh();
   });
   $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await refresh(); event.submitter.disabled=false;});
   $('lock').addEventListener('click',lock);
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
-  $('new-chat').addEventListener('click',()=>{if(sending||workspaceBusy||pending) return; workState=null;chosenFiles.clear();uploadQueue=[];importRequest=null;showTrash=false; chat=null;create=null; selected=null; scopedSessions=[]; scopedInspections=[]; $('selection').hidden=true; historySignature='';remember();$('message').value='';renderChatPicker();renderRails();renderConversation();notify();});
+  $('new-chat').addEventListener('click',()=>{if(sending||workspaceBusy||pending) return; workState=null;chosenFiles.clear();uploadQueue=[];importRequest=null;showTrash=false; chat=null;create=null; selected=null; scopedSessions=[]; scopedInspections=[]; $('selection').hidden=true; historySignature='';resetDocument();remember();$('message').value='';renderChatPicker();renderRails();renderConversation();notify();});
   for(const button of $('suggestions').querySelectorAll('button')) button.addEventListener('click',()=>{$('message').value=button.dataset.prompt;$('message').focus();});
   $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();send();}});
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);

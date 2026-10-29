@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"build":"node build.mjs"},"dependencies":{"three":"0.186.1","web-ifc":"0.0.78","pdfjs-dist":"6.4.299"},"devDependencies":{"esbuild":"0.28.2"}}

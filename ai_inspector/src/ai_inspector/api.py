@@ -145,7 +145,7 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         response.headers["X-Content-Type-Options"] = "nosniff"
         if request.url.path == "/" or request.url.path.startswith("/ui/"):
             response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; script-src 'self'; style-src 'self'; "
+                "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; "
                 "connect-src 'self'; img-src 'self' blob:; object-src 'none'; "
                 "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
             )

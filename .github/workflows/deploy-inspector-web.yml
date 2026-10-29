@@ -6,6 +6,7 @@ on:
     paths:
       - ai_inspector/src/ai_inspector/**
       - ai_inspector/cloudflare/**
+      - ai_inspector/viewer/**
       - .github/workflows/deploy-inspector-web.yml
   workflow_dispatch:
 
@@ -46,7 +47,7 @@ jobs:
           files = [] if all_components else subprocess.check_output(['git', 'diff', '--name-only', before, 'HEAD'], text=True).splitlines()
           if '.github/workflows/deploy-inspector-web.yml' in files:
               all_components = True
-          web = all_components or any(p.startswith(('ai_inspector/src/ai_inspector/web/', 'ai_inspector/cloudflare/frontend/')) for p in files)
+          web = all_components or any(p.startswith(('ai_inspector/src/ai_inspector/web/', 'ai_inspector/cloudflare/frontend/', 'ai_inspector/viewer/')) for p in files)
           backend = all_components or any(p.startswith(('ai_inspector/src/ai_inspector/', 'ai_inspector/cloudflare/')) and not p.startswith(('ai_inspector/src/ai_inspector/web/', 'ai_inspector/cloudflare/frontend/')) for p in files)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'web={str(web).lower()}\nbackend={str(backend).lower()}\n')
@@ -68,6 +69,12 @@ jobs:
           npm install --no-save --package-lock=false wrangler@4.154.0
           uv sync --locked
           ./deploy.sh
+      - name: Build document viewer
+        if: steps.changes.outputs.web == 'true'
+        working-directory: ai_inspector/viewer
+        run: |
+          npm ci --ignore-scripts
+          npm run build
       - name: Check JavaScript
         if: steps.changes.outputs.web == 'true'
         run: |

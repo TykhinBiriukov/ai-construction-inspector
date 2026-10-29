@@ -189,3 +189,39 @@ certification. Plan and observation summaries are included as a bounded snapshot
 in each new model request; the model may explain them or render widgets but cannot
 mark items complete. Files in Trash cannot be newly selected, while old evidence
 snapshots remain attributable. Concurrent edits return 409 without overwriting.
+
+### Project document workspace and selections
+
+The demo centers an IFC/PDF/image viewer with a resizable Files rail and Inspector
+conversation panel. Panel widths and UI text scale are local browser preferences.
+`Dialogue:` selects chat scope. Activity shows actual agent/tool events; backend
+service configuration and conversation snapshot are omitted from this user view.
+Work-plan data is retained but its controls remain hidden in the demo.
+
+Opening a file does not send it to the model. Selecting a drawing region or IFC
+element attaches a visible context chip to the next message. One selection per
+message; clear it with ×. PDF/image selection contains normalized `[x,y,width,height]`
+(top-left origin, current page), file ID, and a bounded JPEG preview. IFC selection
+contains STEP express_id, GlobalId, basic properties and the highlighted model view.
+The server binds the IFC STEP identity to the stored source and rejects mismatches.
+Preview/properties are browser-provided reference data, not trusted measurements.
+Image previews go to the existing Meta model only when the user sends the message.
+No external viewer service receives files. Imported files remain private in Storage.
+
+`POST /v1/chats/{chat_id}/messages` accepts optional `document_selection`:
+`file_id`, `kind` (`region` or `ifc`), `label`, optional `page`, `bbox`, `express_id`,
+`global_id`, `properties`, `image_data` (JPEG data URL, <=350000 characters).
+The file must also be in `file_ids` and available to this chat/operator. Selection
+and preview freeze with the durable request for exact retries; public run history
+contains reference metadata but not the image payload. No DB migration is required.
+Unselected PDF/image files still supply metadata only. A crop is not the whole page.
+One model-rendered view is not a measurement, a scan, or a compliance determination.
+
+Viewer sources: `ai_inspector/viewer/`. Build with `npm ci --ignore-scripts && npm run build`
+from that directory; dependencies are pinned by package-lock.json. GitHub Actions
+builds automatically for viewer changes. Generated assets are same-origin in
+`web/vendor/`; the Python runtime excludes vendor assets. CSP permits same-origin
+workers and WASM compilation only; it does not allow arbitrary JS eval or remote CDNs.
+Supported: IFC displayable geometry, PDF pages, PNG/JPEG/WebP. Native DWG/RVT are not
+supported; export to PDF/IFC. IFC rendering is capped at 1.5 million vertices. Existing
+8 MiB upload limits apply. The browser may reject more complex or malformed models.

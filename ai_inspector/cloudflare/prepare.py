@@ -6,4 +6,4 @@ source = root.parent / 'src' / 'ai_inspector'
 target = root / 'src' / 'ai_inspector'
 if target.exists():
     shutil.rmtree(target)
-shutil.copytree(source, target, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+shutil.copytree(source, target, ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'vendor'))
