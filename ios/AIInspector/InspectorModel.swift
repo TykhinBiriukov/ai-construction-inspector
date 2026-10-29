@@ -172,6 +172,17 @@ final class InspectorModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
+    /// Called only after explicit UI confirmation; normal assigned sessions cannot use this action.
+    func discardStandaloneCapture() throws {
+        guard standalone, !busy, UUID(uuidString: assignment.id) != nil else {
+            throw CaptureError.invalid("Нельзя сбросить съёмку во время операции")
+        }
+        pause()
+        let folder = store.folder(assignment.id)
+        if FileManager.default.fileExists(atPath: folder.path) { try FileManager.default.removeItem(at: folder) }
+        observations = []; manifest = nil; frozen = false
+    }
+
     func observationURL(_ frame: FrameMetadata) -> URL {
         store.folder(frame.session_id).appendingPathComponent("observations/\(frame.id)")
     }

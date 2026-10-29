@@ -26,7 +26,9 @@ private struct AssignmentWaitingView: View {
     var body: some View {
         Group {
             if let standalone {
-                StandaloneCaptureView(assignment: standalone) {
+                StandaloneCaptureView(assignment: standalone, restart: {
+                    self.standalone = StandaloneCapture.assignment()
+                }) {
                     self.standalone = nil
                     connection.localLabActive = false
                     connection.setForeground(true)
@@ -310,9 +312,12 @@ private struct StandaloneCaptureView: View {
     @State private var showSettings = false
     @State private var copiedSessionID = false
     @State private var showFinish = false
+    @State private var showReset = false
     @Environment(\.scenePhase) private var scenePhase
+    let restart: () -> Void
     let close: () -> Void
-    init(assignment: InspectorAssignment, close: @escaping () -> Void) {
+    init(assignment: InspectorAssignment, restart: @escaping () -> Void, close: @escaping () -> Void) {
+        self.restart = restart
         _model = StateObject(wrappedValue: InspectorModel(assignment: assignment, standalone: true))
         self.close = close
     }
@@ -373,12 +378,31 @@ private struct StandaloneCaptureView: View {
             .toolbarBackground(InspectorStyle.paper, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { model.pause(); close() } label: { Image(systemName: "xmark") }.accessibilityLabel("Закрыть, сохранив фото").disabled(upload.busy || model.busy) }
-                ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Настройки").disabled(upload.busy || model.busy) }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Настройки", systemImage: "gearshape") { showSettings = true }
+                        Button("Сбросить и начать заново", systemImage: "arrow.counterclockwise", role: .destructive) { showReset = true }
+                    } label: { Image(systemName: "ellipsis") }
+                        .accessibilityLabel("Действия со съёмкой").disabled(upload.busy || model.busy)
+                }
             }
             .confirmationDialog("Завершить съёмку?", isPresented: $showFinish, titleVisibility: .visible) {
                 Button("Сохранить в Supabase") { Task { await upload.upload(model) } }
                 Button("Посмотреть фото") { showEvidence = true }
+                Button("Сбросить и начать заново", role: .destructive) { showReset = true }
             } message: { Text("После начала загрузки набор фиксируется. Оригиналы сохранятся на телефоне.") }
+            .alert("Удалить текущую съёмку?", isPresented: $showReset) {
+                Button("Удалить и начать заново", role: .destructive) {
+                    do {
+                        try model.discardStandaloneCapture()
+                        UserDefaults.standard.removeObject(forKey: StandaloneCapture.sessionKey)
+                        restart()
+                    } catch { model.error = error.localizedDescription }
+                }
+                Button("Отмена", role: .cancel) {}
+            } message: {
+                Text("Все фото и метаданные этой сессии на телефоне будут удалены без отправки. Откроется пустая сессия с новым ID. Уже загруженные в Supabase файлы не удаляются.")
+            }
             .task { await model.load(); upload.restore(model) }
             .onDisappear { model.pause() }
             .onChange(of: scenePhase) { _, phase in if phase != .active { model.pause() } }
