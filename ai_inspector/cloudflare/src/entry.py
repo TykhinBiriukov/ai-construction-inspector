@@ -1,4 +1,4 @@
-"""Cloudflare entrypoint: Geometry ZIP parts v1. Supabase owns persistent data."""
+"""Cloudflare entrypoint: shared operator backlog and Geometry ZIP parts v1."""
 from contextvars import ContextVar
 from pathlib import Path
 from workers import WorkerEntrypoint, DurableObject, Response, asgi
