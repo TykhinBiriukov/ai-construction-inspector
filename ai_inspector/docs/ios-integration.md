@@ -264,3 +264,11 @@ Codex verification tests, diagnostic scripts and their temporary data live
 outside this checkout in the workspace's local-checks/inspector/ directory.
 These optional local files are not part of the distributed backend or its
 runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.
+
+## Independent test captures (29 October 2026)
+
+`POST /v1/standalone-captures/{session_id}/upload-plans` accepts a client-generated UUID and the existing `UploadPlanRequest`, limited to `observation_files` and `capture_manifest`. Requires the device bearer identity. It does not create/assign an Inspector session, invoke localization, accept a normal completion or enqueue Geometry. It uses the existing Supabase credentials only on the backend.
+
+Private bucket objects live under `standalone/{authenticated_project}/{authenticated_device}/{session_id}/`. Observation paths are `observations/{observation_id}/{sha256}/{name}`; manifests are `manifests/{sha256}/capture-manifest.json`. The response uses `supabase_upload_plan_v1`; repeated requests return `already_uploaded` only after matching stored length and SHA-256. Size limits and allowed names/media types are the same as normal per-file capture uploads. Content addressing and non-upsert signed URLs make retries immutable without Inspector database records.
+
+The iPhone uploads a `standalone_capture_v1` manifest last, after checking all uploaded files via renewed plans. It contains the normal capture inventory with exact `object_key`, length and digest. Manifest `inspection_id`/`project_id` values are `standalone` markers, not Inspector entities; ownership comes from the authenticated prefix. Consumers should discover manifests, not treat partial upload folders as complete. This is a test-data export, not an accepted inspection; authorized devices are responsible for publishing an accurate inventory. RGB/depth/pose formats are unchanged and coordinates are local to each ARKit segment.
