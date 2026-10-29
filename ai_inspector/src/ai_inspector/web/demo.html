@@ -3,9 +3,9 @@
 <body><div class="shell">
 <aside class="sidebar"><a class="brand" href="/ui/demo.html"><span class="brand-icon">✳</span> inspector<span class="beta">DEMO</span></a>
 <div class="project-label"><span class="project-icon">⌂</span><div><strong>Inspection workspace</strong><small id="project-name">Connect to your project</small></div></div>
-<nav aria-label="Workspace"><a class="current" href="/ui/demo.html">◉ &nbsp; AI workspace</a><a href="/">▦ &nbsp; Control room <span>↗</span></a><a href="/#backlog">☷ &nbsp; Backlog <span>↗</span></a></nav>
-<div class="rail-heading">FILES <a href="/" title="Upload a reference BIM in Control room">＋</a></div><div id="files" class="rail-list"><p class="muted">Sign in to see project files.</p></div>
-<div class="rail-heading">TASKS <span id="task-count">0</span></div><div id="tasks" class="rail-list"><p class="muted">Your captures will appear here.</p></div>
+
+<p class="scope-caption">THIS CONVERSATION</p><div class="rail-heading">FILES <span>LINKED EVIDENCE</span></div><div id="files" class="rail-list"><p class="muted">Evidence linked to this conversation will appear here.</p></div>
+<div class="rail-heading">TASKS <span id="task-count">0</span></div><div id="tasks" class="rail-list"><p class="muted">Capture tasks from this conversation will appear here.</p></div>
 <div class="rail-bottom"><span class="avatar">I</span><div><strong>Inspector workspace</strong><small>Evidence before conclusions</small></div><button id="lock" class="icon-button" hidden title="Lock workspace" aria-label="Lock workspace">⇥</button></div></aside>
 <main><header><div class="breadcrumbs">Workspace <span>/</span> <strong>Inspector</strong></div><div class="header-right"><span id="connection" class="connection">Not connected</span><button id="new-chat" class="quiet" disabled>＋ New chat</button></div></header>
 <div id="notice" class="notice" role="status" hidden></div>
@@ -17,5 +17,5 @@
 <section class="insight-panel" aria-label="Inspector activity and results"><div class="device-card"><div class="eyebrow">CAPTURE DEVICE <span id="device-dot" class="status-dot"></span></div><div class="device-title"><span class="phone-icon">▯</span><div><h3 id="device-state">Checking…</h3><p id="device-name">—</p></div></div><small id="device-seen">Waiting for a server status</small></div>
 <div class="insight-heading"><h3>Inspector activity</h3><span class="live-label">● LIVE</span></div><div id="activity" class="activity"><p class="muted">No agent request in this conversation yet.</p></div>
 <div class="services"><div><span>Meta model</span><strong id="model-state">—</strong></div><div><span>Geometry</span><strong id="geometry-state">—</strong></div><small>Configured does not mean a service is currently running. Completed tool calls appear above; internal reasoning is not exposed.</small></div>
-<div class="insight-heading"><h3>Project snapshot</h3><span class="snapshot-label">SERVER DATA</span></div><div id="snapshot" class="snapshot"></div><div id="selection" hidden></div>
+<div class="insight-heading"><h3>Conversation snapshot</h3><span class="snapshot-label">SERVER DATA</span></div><div id="snapshot" class="snapshot"></div><div id="selection" hidden></div>
 </section></div><footer>Built for the field. Designed for clarity.<span>AI Inspector / Demo workspace</span></footer></main></div></body></html>

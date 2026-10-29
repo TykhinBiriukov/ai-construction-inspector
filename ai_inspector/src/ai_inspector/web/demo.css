@@ -2,3 +2,5 @@
 
 .message-text code{background:#eef1e7;border-radius:4px;padding:1px 4px;font-size:11px;color:#5a7247}.message-text strong{font-weight:600}
 @media(min-width:851px){.shell{height:100dvh;overflow:hidden}.sidebar{height:100dvh}.rail-bottom{padding-top:24px}main{display:flex;flex-direction:column;min-height:0}header,footer{flex-shrink:0}.workspace{flex:1;min-height:0}.conversation{min-height:0;overflow:hidden}.conversation-top{flex-shrink:0}.messages{overflow:auto;min-height:0;padding-right:9px;scrollbar-width:thin;scrollbar-color:#d8dfce transparent}.composer-wrap{position:static;flex-shrink:0}.insight-panel{overflow:auto;scrollbar-width:thin;scrollbar-color:#d8dfce transparent}.login{overflow:auto}}
+
+.scope-caption{font-size:8px;letter-spacing:1.2px;color:#8a9480;margin:30px 6px 0}.rail-heading span{font-size:7px;letter-spacing:.7px}.rail-list .muted{font-size:10px}@media(max-width:600px){.scope-caption{display:none}}

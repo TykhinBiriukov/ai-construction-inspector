@@ -112,12 +112,14 @@ turns on Geometry completion and inspection verdicts are further increments.
 
 `/ui/demo.html` is the user-facing workspace; Control room remains the operational
 console. The demo uses the same operator credential and existing chat API. It shows
-project files/capture references, the latest loaded tasks, device status, service
+files/capture references and tasks linked by session_id to the current chat (its
+current session plus the loaded run history), device status, service
 configuration and persisted tool results. It does not expose hidden model reasoning
-or claim a configured service is running. The project snapshot is calculated from
-the loaded server session page, not invented by the model; a `+` indicates more pages.
-File uploads/management remain in Control room. Capture references are not a full
-Storage object browser. New chat is required to change room context.
+or claim a configured service is running. The conversation snapshot is calculated from these linked sessions, not invented
+by the model. Older chat runs outside the loaded history page are not included.
+Demo navigation hides the operational Control room and Backlog menu. There is no
+misleading upload button: chat attachments are not supported yet. Operational file
+uploads remain in Control room. Capture references are not a full Storage browser. New chat is required to change room context.
 
 Runs now include additive `display_reply` and `artifacts` fields. `reply` remains
 unchanged for older clients. The assistant may emit a fenced `inspector-ui` JSON
