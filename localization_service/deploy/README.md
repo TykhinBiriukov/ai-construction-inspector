@@ -1,4 +1,4 @@
-# Northflank cloud deployment (prepared, not yet deployed)
+# Northflank cloud deployment
 
 Build context: repository root. Dockerfile: `localization_service/deploy/Dockerfile`.
 The adjacent ignore list excludes unrelated sources, secrets and local captures.
@@ -72,4 +72,9 @@ handoff or a drift monitor.
 Inspector schema access denied. No BIM preloaded.24 local tests passed, including
 two model bindings, restart/retry recovery and commit failure. Inspector adapter
 has two tests covering authentication/scope, transfer and invalid upstream binding.
-Cloud deployment and real-phone cloud behavior still require verification.
+Cloud deployed at https://p01--localization-service--p65k2lfwxlhl.code.run
+(Northflank Default Free, one0.1vCPU/256MB instance). Public health200 and two
+synthetic IFCs5x4m/6x3.5m passed the live Inspector handoff, including session-token
+isolation. Readiness probe /healthz passes. iOS unsigned build succeeds but is not
+installed in this cloud verification. No real photographs/private IFC were uploaded;
+real-phone geometry accuracy/performance remain unverified.
