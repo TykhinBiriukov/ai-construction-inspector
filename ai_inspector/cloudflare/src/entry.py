@@ -1,4 +1,4 @@
-"""Cloudflare entrypoint: document selection and image context v1."""
+"""Cloudflare entrypoint: multi-element document context and active tool projection v2."""
 from contextvars import ContextVar
 from pathlib import Path
 from workers import WorkerEntrypoint, DurableObject, Response, asgi
