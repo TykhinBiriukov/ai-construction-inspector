@@ -119,6 +119,44 @@ final class InspectorConnection: ObservableObject {
         }
         return data
     }
+    /// Independent test upload; never mutates the assigned-session journal or dispatches Geometry.
+    func uploadStandalone(sessionID: String, object: UploadObject, bytes: Data, completionID: String?) async throws -> String {
+        try prepare()
+        let requestID = UUID().uuidString.lowercased()
+        struct Body: Encodable {
+            let schema_version = "0.1"
+            let request_id: String
+            let kind: String
+            let completion_id: String?
+            let objects: [UploadObject]
+        }
+        let body = try JSONEncoder().encode(Body(request_id: requestID,
+            kind: completionID == nil ? "observation_files" : "capture_manifest", completion_id: completionID, objects: [object]))
+        func plan() async throws -> UploadPlanResponse.Item {
+            let response = try JSONDecoder().decode(UploadPlanResponse.self, from: await request(
+                "v1/standalone-captures/\(sessionID)/upload-plans", method: "POST", body: body))
+            guard sameUUID(response.session_id, sessionID), sameUUID(response.request_id, requestID),
+                  response.format == "supabase_upload_plan_v1", response.items.count == 1,
+                  let item = response.items.first, item.name == object.name,
+                  item.observation_id == object.observation_id, item.byte_length == bytes.count,
+                  item.sha256 == StoredFile(name: object.name, data: bytes).sha256,
+                  item.media_type == object.media_type, item.object_key.hasPrefix("standalone/"),
+                  item.object_key.contains("/" + sessionID + "/") else {
+                throw CaptureError.invalid("Неверный план тестовой загрузки")
+            }
+            return item
+        }
+        let item = try await plan()
+        if item.status == "upload_required" {
+            try await storage.put(bytes: bytes, plan: item)
+            let verified = try await plan()
+            guard verified.status == "already_uploaded", verified.object_key == item.object_key else {
+                throw CaptureError.invalid("Файл отправлен, но проверка Supabase ещё не завершена. Повторите отправку.")
+            }
+        } else if item.status != "already_uploaded" { throw CaptureError.invalid("Неверный статус загрузки") }
+        return item.object_key
+    }
+
     struct LocalizationAccess: Decodable {
         let session_id: String
         let model_version: String
@@ -170,6 +208,7 @@ final class InspectorConnection: ObservableObject {
                     cursor = page.next_cursor
                     if let cursor, !seen.insert(cursor).inserted { throw CaptureError.invalid("Повтор курсора Inspector") }
                 } while cursor != nil
+                guard foreground, !localLabActive else { return false }
                 if let chosen { journal.active = chosen; try save(); active = chosen; await PushService.shared.notifyAssignment(sessionID: chosen.id) }
             }
             if let active { try await acknowledge(active) }

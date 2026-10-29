@@ -4,12 +4,12 @@ Current integration: [server contract](../docs/inspector-server-integration.md),
 
 Native SwiftUI / ARKit app, deployment target iOS 17. iPhone 11 supports RGB-only observations; compatible LiDAR devices support depth and optional local Geometry ZIP export. Simulator cannot validate live ARKit/LiDAR.
 
-Open `AIInspector.xcodeproj`. In the app's settings enter Inspector HTTPS origin, device ID and device token. Token is stored in Keychain; do not put it in source or Info.plist. No Supabase Auth login is required in the selected signed-upload transport. A new assigned session comes from Inspector; the waiting screen does not create demo sessions.
+Open `AIInspector.xcodeproj`. In the app's settings enter Inspector HTTPS origin, device ID and device token. Token is stored in Keychain; do not put it in source or Info.plist. No Supabase Auth login is required in the selected signed-upload transport. Normal inspection sessions come from Inspector. The waiting screen also offers independent test capture with a random session UUID, without an assignment or BIM localization; see the implementation guide for the required standalone upload endpoint.
 
 Local tests from repository root:
 
 ```sh
-xcrun swiftc -module-cache-path /tmp/inspector-swift-cache ios/AIInspector/Observation.swift ios/AIInspector/SessionLifecycle.swift ios/AIInspector/GeometryExport.swift ios/Checks/main.swift -o /tmp/inspector-checks
+xcrun swiftc -module-cache-path /tmp/inspector-swift-cache ios/AIInspector/Observation.swift ios/AIInspector/SessionLifecycle.swift ios/AIInspector/GeometryExport.swift ios/AIInspector/SpatialCapture.swift ios/Checks/main.swift -o /tmp/inspector-checks
 /tmp/inspector-checks
 ```
 

@@ -9,10 +9,17 @@ struct AIInspectorApp: App {
 private struct AssignmentWaitingView: View {
     @ObservedObject private var connection = InspectorConnection.shared
     @State private var showStorage = false
+    @State private var standalone: InspectorAssignment?
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         Group {
-            if let assignment = connection.active {
+            if let standalone {
+                StandaloneCaptureView(assignment: standalone) {
+                    self.standalone = nil
+                    connection.localLabActive = false
+                    connection.setForeground(true)
+                }.id(standalone.id)
+            } else if let assignment = connection.active {
                 InspectorView(assignment: assignment).id(assignment.id)
             } else {
                 NavigationStack {
@@ -21,6 +28,12 @@ private struct AssignmentWaitingView: View {
                         Image(systemName: "tray").font(.system(size: 52, weight: .light)).foregroundStyle(.secondary)
                         Text("Нет активной сессии").font(.title2.bold())
                         Text("Ожидаем задание от Inspector").foregroundStyle(.secondary)
+                        Button("Тестовая съёмка без задания") {
+                            connection.localLabActive = true
+                            connection.setForeground(false)
+                            standalone = StandaloneCapture.assignment()
+                        }.buttonStyle(.borderedProminent)
+                        Text("Фото и метаданные в Supabase, без локализации").font(.caption).foregroundStyle(.secondary)
                         Spacer()
                     }.frame(maxWidth: .infinity).padding(24)
                         .navigationTitle("AI Inspector").navigationBarTitleDisplayMode(.inline)
@@ -208,5 +221,69 @@ private struct ObservationDetail: View {
             }
             Text(frame.id).font(.caption.monospaced()).textSelection(.enabled)
         }.navigationTitle("Наблюдение").navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct StandaloneCaptureView: View {
+    @StateObject private var model: InspectorModel
+    @StateObject private var upload = StandaloneCapture()
+    @State private var showModel = false
+    @State private var showEvidence = false
+    @State private var showSettings = false
+    @Environment(\.scenePhase) private var scenePhase
+    let close: () -> Void
+    init(assignment: InspectorAssignment, close: @escaping () -> Void) {
+        _model = StateObject(wrappedValue: InspectorModel(assignment: assignment, standalone: true))
+        self.close = close
+    }
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Без задания Inspector и локализации по BIM").font(.headline)
+                    Text("Положение камеры — в локальной системе ARKit; каждый запуск камеры создаёт отдельный сегмент.").font(.caption)
+                    if !model.frozen { CapturePanel(model: model, capture: model.capture, showModel: $showModel) }
+                    Text("Снимков: \(model.observations.count)")
+                    Button("Посмотреть наблюдения") { showEvidence = true }
+                    Text(upload.status).font(.footnote)
+                    if upload.busy { ProgressView(value: upload.progress) }
+                    if let key = upload.manifestKey {
+                        Text("Bucket: inspection-captures").font(.caption)
+                        Text(key).font(.caption.monospaced()).textSelection(.enabled)
+                        ShareLink(item: key) { Label("Поделиться путём к данным", systemImage: "square.and.arrow.up") }
+                        Button("Новая тестовая сессия") {
+                            UserDefaults.standard.removeObject(forKey: StandaloneCapture.sessionKey)
+                            close()
+                        }.buttonStyle(.borderedProminent)
+                    } else {
+                        Button(model.frozen ? "Повторить загрузку в Supabase" : "Завершить и сохранить в Supabase") {
+                            Task { await upload.upload(model) }
+                        }.buttonStyle(.bordered).disabled(upload.busy || model.busy || model.observations.isEmpty)
+                    }
+                    Text("SESSION " + model.assignment.id).font(.caption.monospaced()).textSelection(.enabled)
+                    Text("Оригиналы остаются на телефоне. Микросервис запускается отдельно.").font(.caption)
+                }.padding(20)
+            }
+            .navigationTitle("Тестовая съёмка").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Закрыть") { model.pause(); close() }.disabled(upload.busy || model.busy) }
+                ToolbarItem(placement: .topBarTrailing) { Button { showSettings = true } label: { Image(systemName: "gearshape") }.disabled(upload.busy) }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if !model.frozen {
+                    Button { Task { await model.takeObservation() } } label: {
+                        Label("Сделать фото", systemImage: "camera.fill").frame(maxWidth: .infinity).padding(12)
+                    }.buttonStyle(.borderedProminent).padding().disabled(model.busy || upload.busy || model.segment == nil)
+                }
+            }
+            .task { await model.load(); upload.restore(model) }
+            .onDisappear { model.pause() }
+            .onChange(of: scenePhase) { _, phase in if phase != .active { model.pause() } }
+            .sheet(isPresented: $showEvidence) { EvidenceView(model: model) }
+            .sheet(isPresented: $showSettings) { StorageConnectionView() }
+            .alert("Не удалось выполнить действие", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+                Button("OK") { model.error = nil }
+            } message: { Text(model.error ?? "") }
+        }
     }
 }

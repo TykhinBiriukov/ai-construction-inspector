@@ -76,3 +76,18 @@ python3 -m unittest discover -s localization_service/tests -v
 
 No real phone installation, real Localization/Inspector exchange or BIM accuracy
 claim follows from these local tests and unsigned build.
+
+## Standalone test capture (29 October 2026)
+
+The waiting screen offers **Тестовая съёмка без задания**. The phone generates and retains a random session UUID, captures RGB + frame metadata (and depth/confidence when available), with no assignment, BIM localization, early evidence or Geometry dispatch. Each camera restart remains a separate ARKit segment. Closing/reopening resumes the same local test session; after a successful upload, **Новая тестовая сессия** clears only the pointer, preserving originals.
+
+Uploading still requires the configured Inspector HTTPS endpoint/device token, solely to obtain signed Storage permissions from `POST /v1/standalone-captures/{session_id}/upload-plans`. No Supabase secret is embedded in iOS. The backend must include `standalone_capture.py` and its API route before use. This endpoint accepts the existing `observation_files` and `capture_manifest` request schemas and enforces device authentication and configured file-size limits.
+
+Files are private objects in bucket `inspection-captures`:
+
+- `standalone/{authenticated_project}/{authenticated_device}/{session_uuid}/observations/{frame_uuid}/{sha256}/{filename}`
+- `standalone/{authenticated_project}/{authenticated_device}/{session_uuid}/manifests/{sha256}/capture-manifest.json`
+
+The manifest has format `standalone_capture_v1`, carries exact object keys, sizes and SHA-256, and is uploaded last after server-side readback verification of every file. Consumers discover manifests rather than incomplete folders. `inspection_id` and `project_id` in this standalone manifest are the literal marker `standalone`, not Inspector entity IDs; the authenticated storage prefix determines ownership. `model_version=unbound`; camera poses refer only to each local ARKit segment, not BIM. Frame metadata retains the existing schema, intrinsics, transform convention and depth encoding; RGB-only data has no fabricated depth. No Inspector DB session/completion record is created. Retries use immutable content-addressed paths; frozen local inventory survives app restart.
+
+Validation: unsigned iOS build succeeded; local FastAPI checks with a fake Storage adapter passed authentication, namespace, retry, invalid path, file-size and no-session cases. Real phone/Supabase flow is pending deployment and installation.
