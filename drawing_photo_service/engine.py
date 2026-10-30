@@ -1,6 +1,8 @@
 """Bounded Meta tool loop. Tool output is evidence, not executable instruction."""
 import hashlib
 import json
+import os
+import socket
 import time
 
 import httpx
@@ -66,6 +68,13 @@ class MetaClient:
         result={"model": self.model, "key_fingerprint": hashlib.sha256(self.api_key.encode()).hexdigest()[:16],
                 "request_fingerprint": hashlib.sha256(json.dumps(body,sort_keys=True).encode()).hexdigest(),
                 "httpx_version": httpx.__version__}
+        result["proxy_environment_present"] = [name for name in
+            ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy") if os.environ.get(name)]
+        try:
+            result["api_dns_addresses"] = sorted({entry[4][0] for entry in
+                socket.getaddrinfo("api.meta.ai", 443, type=socket.SOCK_STREAM)})
+        except OSError:
+            result["api_dns_error"] = True
         def read(response):
             raw=bytearray()
             for chunk in response.iter_bytes():
@@ -76,6 +85,11 @@ class MetaClient:
             with httpx.Client(timeout=30, follow_redirects=False) as client:
                 with client.stream("GET", "https://api.meta.ai/v1/models", headers=headers) as response:
                     result["catalog_http_status"]=response.status_code
+                    result["catalog_http_version"] = response.http_version
+                    stream = response.extensions.get("network_stream")
+                    if stream:
+                        result["api_peer"] = stream.get_extra_info("server_addr")
+                    result["catalog_request_id"] = response.headers.get("x-request-id", "")[:200]
                     value=read(response)
                     if response.status_code==200:
                         result["catalog_models"]=[str(m.get("id", ""))[:100] for m in value.get("data", [])[:100]]

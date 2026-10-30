@@ -53,7 +53,7 @@ class BodyLimitMiddleware:
 
 
 def create_app(*, data_dir=None, service_token=None, model_client=None, database_url=None):
-    app = FastAPI(title="Drawing/photo comparison minion", version="0.3.0")
+    app = FastAPI(title="Drawing Analysis Agent", version="0.3.0")
     app.add_middleware(BodyLimitMiddleware)
 
     @app.exception_handler(StorageFull)

@@ -1,4 +1,4 @@
-# Drawing/photo comparison service
+# Drawing Analysis Agent
 
 Standalone v0.3.0 service for supplied photographs and 2D drawings. No integration
 with Inspector, Localization, BIM or 3D; no file discovery or remote asset fetching.

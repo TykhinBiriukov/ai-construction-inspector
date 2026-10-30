@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: drawing-photo-minion
+    name: drawing-analysis-agent
     runtime: docker
     plan: free
     region: frankfurt
