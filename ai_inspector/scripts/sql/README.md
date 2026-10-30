@@ -48,7 +48,7 @@ TRUNCATE, sequence reset, role creation or data migration is performed.
 
 A successful migration prepares persistence only. Workers HTTP transport,
 Meta credentials, deployment and a real phone test remain separate checks.
-See [Cloudflare preparation](../../docs/cloudflare-deployment.md#agent-integration-local-preparation).
+See [database and secret setup](../../docs/cloudflare-deployment.md#database-and-secrets).
 
 ## Local verification
 
