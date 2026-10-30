@@ -119,7 +119,7 @@ Remote A2A workflows also continue through the poller without the browser. Drawi
 
 Workspace needs 003_workspace.sql for PostgreSQL; native SQLite initializes its equivalent schema. APIs are operator/chat-scoped. Schemas and numeric limits come from [workspace.py](../src/ai_inspector/workspace.py), [document_selection.py](../src/ai_inspector/document_selection.py) and OpenAPI.
 
-Uploads are private immutable content-addressed blobs. Same file ID with changed bytes/metadata conflicts. Trash removes the current chat reference, not persisted blobs/history or earlier frozen model input; restore does not rewrite the original record. Derived reply/tool/capture files are context, not independent evidence. Files in Trash cannot be newly selected.
+Uploads are private immutable content-addressed blobs. Same file ID with changed bytes/metadata conflicts. Trash removes the current chat reference, not persisted blobs/history or earlier frozen model input; restore does not rewrite the original record. Derived reply/tool/capture JSON records are internal context, not user deliverables or independent evidence: workspace Files omits them, while existing scoped download links/history remain available. User-uploaded JSON remains visible. Files in Trash cannot be newly selected.
 
 Text formats yield bounded marked excerpts; opaque PDF/images are metadata-only without a sent preview or a real minion report. Opening a file alone sends no model input. A selected region sends a bounded crop; selected IFC elements send source-bound STEP identities and browser reference properties/view. One crop is not a whole document. IFC rendering and caller room IDs do not validate model geometry, units, room membership, alignment or measurements. Files, notes and previews remain untrusted data.
 
@@ -137,9 +137,15 @@ An assistant may emit a validated inspector-ui JSON block for metric/bar_chart/t
 
 Set INSPECTOR_DRAWING_PHOTO_BASE_URL and a distinct INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN in runtime Secrets. The [adapter](../src/ai_inspector/drawing_photo.py) calls the [independent minion HTTP API](../../drawing_photo_service/README.md); this is separate from A2A registration.
 
-The comparison tool accepts one explicitly selected drawing and photo, and caller-specified page for a PDF. It sends the full selected sources, not just a viewer crop; no arbitrary URLs, IFC/3D or automatic search across drawings. Source roles/hash/page and the current user question are pinned before submission. Typed argument/file/question/size limits are defined in the adapter. Retries preserve the operation UUID and exact POST body.
+The comparison tool accepts one explicitly selected drawing and photo, and caller-specified page for a PDF. It sends the full selected sources, not just a viewer crop; no arbitrary URLs, IFC/3D or automatic search across drawings. The orchestrator supplies a self-contained `task` from the user's request and relevant clarifications, rather than forwarding a bare confirmation. For compatibility with previously frozen tool calls, an omitted task falls back to that run's text. Source roles/hash/page and the task are pinned before submission. Typed argument/file/question/size limits are defined in the adapter. Retries preserve the operation UUID and exact POST body.
 
 The adapter requests async admission. Running is not a verdict: a later user request can select drawing_photo_result for a task bound to the same chat (within the latest 200 runs). This is not autonomous background polling. Timeout/busy leaves the same Inspector request retryable; cold starts may require its exact retry. Findings retain report/evidence/provenance/audit and initial source bindings. Technical failure and inconclusive visual findings remain distinct; neither is certified approval. Minion database/model credentials remain private to that service.
+
+A `needs_input` report is a clarification, not a technical failure. Explain any
+reported role conflict and ask the user; do not silently swap sources. The known
+`invalid_report_schema` failure maps to `comparison_invalid_report` with a safe
+explanation about report/evidence validation; unknown upstream errors remain generic.
+A technical failure alone is not a reason to blame photo quality or request new images.
 
 ## Verification boundary
 

@@ -110,7 +110,9 @@ class Workspace:
                 counts[item['status']] += 1
         total = sum(counts.values())
         public_files = [{k:v for k,v in f.items() if k not in ('text','content','sha256')} |
-                        {'content_available': f.get('text') is not None} for f in files.values()]
+                        {'content_available': f.get('text') is not None} for f in files.values()
+                        if not (f.get('origin') in ('inspector', 'capture') and
+                                f['file_id'].startswith(('result-', 'capture-')))]
         return dict(files=public_files, items=items, observations=observations,
                     progress=dict(counts=counts,total=total,confirmed_percent=round(counts['confirmed']/total*100,1) if total else None,
                                   basis='operator observations; equal weight per planned item'))

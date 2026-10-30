@@ -14,6 +14,8 @@ class CompareArguments(APIModel):
     drawing_file_id: str = Field(min_length=1, max_length=150)
     photo_file_id: str = Field(min_length=1, max_length=150)
     drawing_page: int | None = Field(default=None, ge=1, le=200)
+    task: str | None = Field(default=None, min_length=1, max_length=4000,
+        description='Self-contained user comparison request, including relevant earlier instructions and confirmed file roles. Always supply this, even after a short confirmation. Do not invent criteria.')
 
 
 class ResultArguments(APIModel):
@@ -21,7 +23,7 @@ class ResultArguments(APIModel):
 
 
 DESCRIPTIONS = {
-    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files. PDF drawings require the caller-specified page; ask if missing. No IFC/BIM/3D. The task is the current user message. Returns running or a saved report; running is not a verdict.',
+    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. PDF drawings require the caller-specified page; ask if missing. No IFC/BIM/3D. Returns running or a saved report; running is not a verdict.',
     'drawing_photo_result': 'Read a previously submitted drawing/photo task belonging to this chat. Do not repeatedly poll in one turn; if still running, tell the user and check on their next request.',
 }
 SCHEMAS = {'drawing_photo_compare': CompareArguments, 'drawing_photo_result': ResultArguments}
@@ -30,7 +32,11 @@ TOOLS = [{'type':'function','function':{'name':name,'description':DESCRIPTIONS[n
 
 
 def plan_compare(service, principal, run, args, operation_id):
-    if len(run['text']) > 4000:
+    # Optional only for compatibility with already frozen pre-task tool calls.
+    question = args.task if args.task is not None else run['text']
+    if not question.strip():
+        raise APIError(422,'comparison_task_required','Specify the comparison task')
+    if len(question) > 4000:
         raise APIError(422,'comparison_task_too_long','Please shorten the comparison task to 4000 characters')
     if args.drawing_file_id == args.photo_file_id:
         raise APIError(422,'comparison_inputs_invalid','Select separate drawing and photo files')
@@ -49,7 +55,7 @@ def plan_compare(service, principal, run, args, operation_id):
         if f['byte_length'] > 6_000_000:
             raise APIError(422,'comparison_file_too_large','Each minion input must be at most 6 MB')
         assets.append(dict(asset_id=kind,kind=kind,mime_type=mime,page=page,file_id=file_id,sha256=f['sha256']))
-    return {'task_id':operation_id,'question':run['text'],'assets':assets}
+    return {'task_id':operation_id,'question':question,'assets':assets}
 
 
 def bound_task(service, principal, chat_id, task_id):
@@ -101,6 +107,10 @@ class MinionClient:
             result={k:value.get(k) for k in ('task_id','status','report','assets','provenance','audit')}
             if value['status']=='failed':
                 result['error']={'code':'comparison_failed','message':'Minion analysis failed; no inspection verdict is available','retryable':False}
+                if value.get('error') == 'invalid_report_schema':
+                    result['error']={'code':'comparison_invalid_report',
+                        'message':'The analysis service could not validate its generated report or evidence references. No verdict is available. This technical failure does not establish a problem with image quality.',
+                        'retryable':False}
             return result
         except httpx.HTTPError:
             raise APIError(503,'comparison_unavailable','Drawing/photo service did not respond; retry the same message',retryable=True) from None
