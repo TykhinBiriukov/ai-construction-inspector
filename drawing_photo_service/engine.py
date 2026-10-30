@@ -146,6 +146,12 @@ class MetaClient:
                             independent.close()
                     except (urllib.error.URLError, TimeoutError, OSError):
                         result["stdlib_error"] = "transport_error"
+                    with httpx.Client(timeout=30, follow_redirects=False, http2=True) as h2_client:
+                        with h2_client.stream("POST", "https://api.meta.ai/v1/chat/completions", headers=headers, json=body) as h2_response:
+                            detail = read(h2_response)
+                            result["http2_status"] = h2_response.status_code
+                            result["http2_negotiated"] = h2_response.http_version
+                            result["http2_error"] = str(detail.get("error", {}).get("code", ""))[:100]
                 return result
         except (httpx.HTTPError, ValueError, AttributeError, TypeError):
             return result | {"ok": False, "error": "diagnostic_request_failed"}
