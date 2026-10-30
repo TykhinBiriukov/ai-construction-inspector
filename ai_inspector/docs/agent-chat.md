@@ -147,6 +147,30 @@ reported role conflict and ask the user; do not silently swap sources. The known
 explanation about report/evidence validation; unknown upstream errors remain generic.
 A technical failure alone is not a reason to blame photo quality or request new images.
 
+## Recovery of invalid tool calls and follow-up context
+
+Before execution, invalid model arguments receive safe field/type feedback in the
+tool protocol. The shared harness allows at most two repair attempts within the
+existing model-step budget. Rejected calls never execute; their internal messages,
+safe `tool_validation_errors` and failed activity events are checkpointed. Permission,
+lease and infrastructure errors do not enter this repair path. Repeating the same
+request preserves the repair count and frozen pending model/tool request.
+
+The orchestrator receives chat-scoped `comparison_tasks` derived from persisted tool
+results (last observed status, not a new upstream status probe), plus recent errors.
+`drawing_photo_result` needs no selected files; its optional `task_id` may be omitted
+only when exactly one known task is available. Ambiguous or cross-chat references
+are rejected. Historical file identities help interpret clarifications but never
+grant new input permission. The comparison tool is not advertised without at least
+two currently selected files. Diagnostic questions should explain errors rather than
+start another comparison; task IDs are the assistant's responsibility to retain.
+
+The demo remembers selected file IDs per project/chat in this browser tab's
+sessionStorage. Reload and switching back restore only available files. Explicitly
+unchecking/removing a selection persists, including an empty selection; no files are
+automatically borrowed from another chat. No document preview or image bytes are
+stored by this preference. Delete controls are disabled while a request is pending.
+
 ## Verification boundary
 
 Local fixtures cover model/tool validation, scopes, retries/restart, separate HTTP services/stores and cancellation fencing. They do not establish deployed connectivity, live Meta access, a real phone, inspection accuracy or a configured external Geometry service. Capture_task display in the actual phone, business messages, BIM measurements and automatic Geometry continuation require separate implementation/integration acceptance.

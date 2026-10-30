@@ -80,7 +80,39 @@ class AgentHarness:
                 state["pending_model"] = None
                 state["steps"] += 1
                 if message.get("tool_calls"):
-                    plan = self.plan_tool(message["tool_calls"][0])
+                    call = message["tool_calls"][0]
+                    try:
+                        plan = self.plan_tool(call)
+                    except APIError as error:
+                        # Planning has not executed a command. Keep the rejected call
+                        # privately and return safe validation feedback to the model.
+                        # Never repair ownership, permission or infrastructure failures.
+                        recoverable = error.body["code"] in {
+                            "invalid_tool_arguments", "unknown_model_tool",
+                            "comparison_file_not_selected", "comparison_inputs_invalid",
+                            "comparison_file_type", "comparison_file_unavailable", "comparison_page_required",
+                            "comparison_task_too_long", "comparison_task_required",
+                            "comparison_task_not_found", "comparison_task_ambiguous",
+                        }
+                        if not recoverable or error.body["retryable"]:
+                            raise
+                        state["messages"].append(message)
+                        feedback = {"error": error.body, "executed": False}
+                        state["messages"].append({"role": "tool", "tool_call_id": call["id"],
+                                                   "content": canonical_json(feedback)})
+                        rejected, since = self._start_activity("tool", call["function"]["name"],
+                                                               f"validation-{state['steps']}")
+                        self._finish_activity(rejected, since, "failed", error.body["message"])
+                        state.setdefault("tool_validation_errors", []).append({
+                            "name": call["function"]["name"], "error": error.body,
+                            "event_id": rejected["event_id"], "executed": False})
+                        state["tool_validation_repairs"] = state.get("tool_validation_repairs", 0) + 1
+                        self.checkpoint()
+                        if state["tool_validation_repairs"] > 2:
+                            raise APIError(502, "tool_validation_exhausted",
+                                           "The assistant could not prepare a valid tool request. No action was taken by the rejected calls.",
+                                           details={"last_error": error.body}) from None
+                        continue
                     state["messages"].append(message)
                     state["pending_tool"] = plan
                     self.checkpoint()

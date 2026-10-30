@@ -7,7 +7,7 @@ import time
 from typing import Annotated, Literal
 from uuid import UUID, uuid4, uuid5
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 
 from .workspace import FileIDs
 from . import drawing_photo
@@ -110,6 +110,13 @@ visual roles. If the service requests role confirmation, explain that conflict t
 never silently swap sources or treat a needs_input response as a failed inspection.
 This tool sends the full selected files, not only a viewer crop. It cannot compare IFC/3D.
 Use drawing_photo_result for a task already bound to this chat. Never invent a task ID.
+Use comparison_tasks in the current server context for IDs and last observed states;
+the user need not copy or remember internal IDs. A status/report request reads the
+existing task even when no files are selected. Do not start a new analysis to answer
+why a previous action failed. Explain previous_errors; do not infer lost arguments.
+If a tool call is rejected before execution, correct its arguments using the feedback
+and supplied schema, or ask one concrete clarification. Never blame the user for
+malformed tool arguments. Do not bypass selection or scope checks while repairing.
 If running, report that analysis is in progress, keep its task ID for follow-up, and do
 not busy-poll or submit the same comparison again. A report's claims are minion findings,
 not independent verification by you. Preserve inconclusive results, limitations and
@@ -181,7 +188,7 @@ class OrchestratorAgent:
     def public_run(run):
         return {key: run.get(key) for key in (
             "schema_version", "run_id", "chat_id", "request_id", "text", "status", "reply",
-            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection", "activity_events",
+            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection", "activity_events", "tool_validation_errors",
         )} | {"active_tool": (run.get("pending_tool") or {}).get("name"),
               "agent_role": run.get("agent_role", "chat"), "auto_resume": bool(run.get("remote_waiting")),
               "delegations": [public_delegation(item) for item in run.get("delegations", [])]} | presentation(run.get("reply"))
@@ -227,9 +234,20 @@ class OrchestratorAgent:
                 history = []
                 for item in reversed(rows):
                     prior = json.loads(item["data"])
-                    history.append({"role": "user", "content": prior["text"]})
-                    history.append({"role": "assistant", "content": prior["reply"] or "The previous agent run failed; consult the current session state."})
+                    previous_files = [{key: f[key] for key in ('file_id', 'name')}
+                                      for f in prior.get('workspace_context', {}).get('selected_files', [])]
+                    reference = "\nPreviously attached files (historical references, not current selection):\n" + canonical_json(previous_files) if previous_files else ""
+                    history.append({"role": "user", "content": prior["text"] + reference})
+                    history.append({"role": "assistant", "content": prior["reply"] or
+                                    "The previous run failed: " + canonical_json(prior.get('error'))})
                 workspace_context = self.service.workspace.context(connection, principal, chat_id, request.file_ids)
+                comparison_rows = connection.execute("SELECT data FROM agent_runs WHERE chat_id=? ORDER BY sequence DESC LIMIT 200", (chat_id,)).fetchall()
+                workspace_context['comparison_tasks'] = drawing_photo.task_context(
+                    json.loads(item['data']) for item in comparison_rows)
+                workspace_context['previous_errors'] = [
+                    {'run_id': prior['run_id'], 'error': prior['error'],
+                     'tool_validation_errors': prior.get('tool_validation_errors', [])}
+                    for prior in (json.loads(item['data']) for item in rows) if prior.get('error')][:3]
                 selection = selection_context(self.service, connection, principal, chat_id, request)
                 if selection:
                     workspace_context['document_selection'] = selection
@@ -282,8 +300,11 @@ class OrchestratorAgent:
         try:
             schema = DelegateInspectionRequest if name == "delegate_inspection" else drawing_photo.SCHEMAS.get(name, NoArguments)
             arguments = schema.model_validate_json(call["function"]["arguments"])
-        except ValueError:
-            raise APIError(502, "invalid_tool_arguments", "The model supplied invalid tool arguments") from None
+        except ValidationError as error:
+            issues = [{"loc": list(item['loc']), "type": item['type']}
+                      for item in error.errors(include_input=False, include_context=False)][:12]
+            raise APIError(502, "invalid_tool_arguments", "The model supplied invalid tool arguments",
+                           details={"tool": name, "issues": issues}) from None
         if name == "delegate_inspection" and arguments.inspector_id not in {item["inspector_id"] for item in catalog}:
             raise APIError(502, "invalid_tool_arguments", "The model selected an unregistered inspector")
         operation_id = str(uuid5(UUID(run["run_id"]), "tool:" + str(run["steps"])))
@@ -339,7 +360,14 @@ class OrchestratorAgent:
         if name == "drawing_photo_compare":
             plan['comparison'] = drawing_photo.plan_compare(self.service, principal, run, arguments, operation_id)
         elif name == "drawing_photo_result":
-            plan['task_id'] = str(arguments.task_id)
+            if arguments.task_id is None:
+                tasks = run.get('workspace_context', {}).get('comparison_tasks', [])
+                if len(tasks) != 1:
+                    raise APIError(422, 'comparison_task_ambiguous',
+                                   'Select a task from comparison_tasks; no unique comparison is available')
+                plan['task_id'] = tasks[0]['task_id']
+            else:
+                plan['task_id'] = str(arguments.task_id)
             drawing_photo.bound_task(self.service, principal, run['chat_id'], plan['task_id'])
         elif name == "session_create":
             chat, session = self._context(principal, run)
@@ -575,8 +603,10 @@ class OrchestratorAgent:
             context = {"project_id": chat["project_id"], "device_id": chat["device_id"],
                        "room_id": chat["room_id"], "session": session_summary(session),
                        "registered_inspectors": self.inspectors.catalog()}
+            tools = [tool for tool in TOOLS if tool['function']['name'] != 'drawing_photo_compare'
+                     or len(run.get('file_ids', [])) >= 2]
             return ([{"role": "developer", "content": SYSTEM_PROMPT + "\nServer context: " + canonical_json(context)}]
-                    + run["history"] + run["messages"], TOOLS + self.inspectors.tools())
+                    + run["history"] + run["messages"], tools + self.inspectors.tools())
         def execute_tool(plan):
             if plan["name"] == "delegate_inspection":
                 return self._delegate(principal, run, plan, lease)

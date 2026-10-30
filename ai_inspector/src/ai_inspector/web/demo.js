@@ -9,6 +9,18 @@
   let chatChoices=null;
   let workState=null,workspaceBusy=false,showTrash=false,uploadQueue=[],planEditing=null,observationEditing=null,importRequest=null;
   const chosenFiles=new Set();
+  let selectionScope=null;
+  const fileSelectionKey=()=>overview?.project_id&&chat?.chat_id?`inspector-files:${overview.project_id}:${chat.chat_id}`:null;
+  function restoreFileSelection(){
+    const key=fileSelectionKey();
+    if(!key||selectionScope===key)return;
+    chosenFiles.clear();selectionScope=key;
+    try{const ids=JSON.parse(read(sessionStorage,key)||'[]');if(Array.isArray(ids))for(const id of ids.slice(0,8))if(typeof id==='string')chosenFiles.add(id);}catch{}
+  }
+  function saveFileSelection(){
+    const key=fileSelectionKey();
+    if(key&&key===selectionScope)write(sessionStorage,key,JSON.stringify([...chosenFiles]));
+  }
   let sending = false, refreshing = false, selected = null, historySignature = '';
   const uid = () => crypto.randomUUID();
   const timestamp = value => value ? new Date(value).toLocaleString() : 'Not reported';
@@ -36,7 +48,7 @@
   }
   function lock() {
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
-    chatChoices=null;workState=null;chosenFiles.clear();uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
+    chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
@@ -288,8 +300,10 @@
     workState=result; renderFiles();renderProgress();
   }
   function renderFiles() {
+    if(workState)restoreFileSelection();
     const files=workState?.files||[];
     for(const id of chosenFiles) if(!files.some(f=>f.file_id===id&&!f.deleted)) chosenFiles.delete(id);
+    if(workState)saveFileSelection();
     if(documentContext&&!files.some(f=>f.file_id===documentContext.file_id&&!f.deleted)){documentContext=null;$('document-context').hidden=true;}
     $('files').replaceChildren(); $('selected-files').replaceChildren();
     $('trash-toggle').textContent=showTrash?'Back to files':'Trash';
@@ -307,7 +321,7 @@
       name.append(node('small','',`${file.origin} · ${file.content_available?(file.text_truncated?'AI: text excerpt':'AI: text'):'AI: metadata only'}`));
       name.addEventListener('click',()=>openDocument(file));row.append(name);
       const remove=node('button','file-delete',showTrash?'↶':'×');remove.type='button';remove.setAttribute('aria-label',`${showTrash?'Restore':'Delete'} ${file.name}`);
-      remove.disabled=workspaceBusy;
+      remove.disabled=workspaceBusy||sending||!!pending;
       remove.addEventListener('click',async()=>{
         if(workspaceBusy)return;
         if(!showTrash&&!confirm(`Move ${file.name} to Trash? Saved observations and prior messages keep their evidence history. You can restore the file.`))return;
@@ -456,14 +470,14 @@
     if(sending||workspaceBusy||pending)return;
     const id=$('chat-picker').value;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
-    chat=id?{chat_id:id}:null;create=null;workState=null;chosenFiles.clear();selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
+    chat=id?{chat_id:id}:null;create=null;workState=null;chosenFiles.clear();selectionScope=null;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
     $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderRails();renderConversation();await refresh();
   });
   $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await refresh(); event.submitter.disabled=false;});
   $('lock').addEventListener('click',lock);
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
-  $('new-chat').addEventListener('click',()=>{if(sending||workspaceBusy||pending) return; workState=null;chosenFiles.clear();uploadQueue=[];importRequest=null;showTrash=false; chat=null;create=null; selected=null; scopedSessions=[]; scopedInspections=[]; $('selection').hidden=true; historySignature='';resetDocument();remember();$('message').value='';renderChatPicker();renderRails();renderConversation();notify();});
+  $('new-chat').addEventListener('click',()=>{if(sending||workspaceBusy||pending) return; workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];importRequest=null;showTrash=false; chat=null;create=null; selected=null; scopedSessions=[]; scopedInspections=[]; $('selection').hidden=true; historySignature='';resetDocument();remember();$('message').value='';renderChatPicker();renderRails();renderConversation();notify();});
   for(const button of $('suggestions').querySelectorAll('button')) button.addEventListener('click',()=>{$('message').value=button.dataset.prompt;$('message').focus();});
   $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();send();}});
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);

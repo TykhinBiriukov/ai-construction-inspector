@@ -19,16 +19,40 @@ class CompareArguments(APIModel):
 
 
 class ResultArguments(APIModel):
-    task_id: UUID
+    task_id: UUID | None = Field(default=None, description='ID from comparison_tasks. May be omitted only when this chat has exactly one comparison.')
 
 
 DESCRIPTIONS = {
     'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. PDF drawings require the caller-specified page; ask if missing. No IFC/BIM/3D. Returns running or a saved report; running is not a verdict.',
-    'drawing_photo_result': 'Read a previously submitted drawing/photo task belonging to this chat. Do not repeatedly poll in one turn; if still running, tell the user and check on their next request.',
+    'drawing_photo_result': 'Read a previously submitted drawing/photo task from comparison_tasks. No selected files are needed. Omit task_id only if there is exactly one task. Do not repeatedly poll in one turn; if still running, tell the user and check on their next request.',
 }
 SCHEMAS = {'drawing_photo_compare': CompareArguments, 'drawing_photo_result': ResultArguments}
 TOOLS = [{'type':'function','function':{'name':name,'description':DESCRIPTIONS[name],
           'parameters':schema.model_json_schema()}} for name,schema in SCHEMAS.items()]
+
+
+def task_context(runs):
+    """Latest observed task states from persisted tool results, never assistant prose.
+
+    Caller supplies this chat's bounded runs newest first. Keep multiple identities
+    so omitted-ID status requests fail closed when the target is ambiguous.
+    """
+    tasks = {}
+    for run in runs:
+        for tool in reversed(run.get('tool_results', [])):
+            if tool.get('name') not in SCHEMAS:
+                continue
+            result = tool.get('result', {})
+            try:
+                task_id = str(UUID(result.get('task_id', '')))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if task_id not in tasks:
+                tasks[task_id] = {'task_id': task_id, 'last_observed_status': result.get('status'),
+                                  'observed_at': run.get('updated_at')}
+            if result.get('source_bindings'):
+                tasks[task_id]['source_bindings'] = result['source_bindings']
+    return list(tasks.values())[:5]
 
 
 def plan_compare(service, principal, run, args, operation_id):
@@ -44,7 +68,13 @@ def plan_compare(service, principal, run, args, operation_id):
     for kind,file_id in [('drawing',args.drawing_file_id),('photo',args.photo_file_id)]:
         if file_id not in run.get('file_ids',[]):
             raise APIError(422,'comparison_file_not_selected','Only files selected for this message may be compared')
-        f=service.workspace.download(principal,run['chat_id'],file_id)
+        try:
+            f=service.workspace.download(principal,run['chat_id'],file_id)
+        except APIError as error:
+            if error.body['code'] != 'not_found':
+                raise
+            raise APIError(422, 'comparison_file_unavailable',
+                           'A selected comparison file is no longer available. Ask the user to select an available file.') from None
         ext=PurePosixPath(f['name']).suffix.lower()
         mime={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.pdf':'application/pdf'}.get(ext)
         if not mime or (kind=='photo' and mime=='application/pdf') or not f.get('sha256'):
