@@ -96,13 +96,16 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
             return
         stop = threading.Event()
         thread = threading.Thread(target=service.capture.run, args=(stop,), name="capture-worker", daemon=True)
+        agent_thread = threading.Thread(target=service.agent.run, args=(stop,), name="remote-inspector-poller", daemon=True)
         application.state.capture_worker = thread
         thread.start()
+        agent_thread.start()
         try:
             yield
         finally:
             stop.set()
             await asyncio.to_thread(thread.join, 5)
+            await asyncio.to_thread(agent_thread.join, 5)
 
     errors = {status: {"model": ErrorEnvelope} for status in (400, 401, 403, 404, 409, 413, 422, 503)}
     app = FastAPI(
@@ -248,6 +251,19 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     def create_chat(request: CreateChatRequest, response: Response, principal: Annotated[Principal, Depends(operator)]):
         result, response.status_code = service.agent.create_chat(principal, request)
         return result
+
+    @app.post("/v1/inspector-tools/{inspector_id}/{tool_name}", tags=["inspector services"])
+    async def inspector_tool(inspector_id: str, tool_name: str, request: Request):
+        content = bytearray()
+        async for chunk in request.stream():
+            content.extend(chunk)
+            if len(content) > 16384:
+                raise APIError(413, "request_too_large", "Inspector tool request exceeds its size limit")
+        try:
+            body = json.loads(content)
+        except (ValueError, UnicodeError, RecursionError):
+            raise APIError(400, "invalid_argument", "Invalid inspector tool request") from None
+        return await run_in_threadpool(service.agent.remote_tool, inspector_id, request.headers.get("authorization"), tool_name, body)
 
     @app.get("/v1/chats/{chat_id}", tags=["agent chat"])
     def get_chat(chat_id: UUID, principal: Annotated[Principal, Depends(operator)],

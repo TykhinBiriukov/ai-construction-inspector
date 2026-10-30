@@ -50,13 +50,15 @@ class WorkerModelTransport(httpx.BaseTransport):
         timeout = request.extensions.get("timeout", {}).get("read") or 30.0
         deadline = _Deadline(timeout)
         try:
-            response = run_sync(js.fetch(str(request.url), to_js({
+            options = {
                 "method": request.method,
                 "headers": dict(request.headers),
-                "body": request.read(),
                 "redirect": "manual",
                 "signal": deadline.controller.signal,
-            }, dict_converter=js.Object.fromEntries)))
+            }
+            if request.method not in ("GET", "HEAD"):
+                options["body"] = request.read()
+            response = run_sync(js.fetch(str(request.url), to_js(options, dict_converter=js.Object.fromEntries)))
         except JsException:
             kind = httpx.ConnectTimeout if deadline.controller.signal.aborted else httpx.ConnectError
             deadline.close()

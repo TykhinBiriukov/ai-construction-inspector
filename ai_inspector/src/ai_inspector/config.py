@@ -55,6 +55,8 @@ class Settings:
     meta_api_key: str = field(default="", repr=False)
     meta_timeout_s: float = 30.0
     agent_max_steps: int = 6
+    remote_agents_json: str = field(default="[]", repr=False)
+    remote_agent_secrets: dict[str, str] = field(default_factory=dict, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.meta_timeout_s) or not 1 <= self.meta_timeout_s <= 120:
@@ -158,12 +160,18 @@ class Settings:
         values = {key: value for key, value in dotenv_values(env_file or Path.cwd() / ".env", interpolate=False).items() if value is not None}
         values.update(os.environ)
         get = values.get
+        from .a2a_protocol import remote_profiles
+        agents_json = get("INSPECTOR_REMOTE_AGENTS_JSON", "[]")
+        profiles = remote_profiles(agents_json)
+        credential_refs = {name for profile in profiles for name in (profile.token_env, profile.tool_token_env) if name}
         return cls(
             meta_base_url=get("INSPECTOR_META_BASE_URL", "https://api.meta.ai/v1"),
             meta_model=get("INSPECTOR_META_MODEL", "muse-spark-1.3"),
             meta_api_key=get("INSPECTOR_META_API_KEY", ""),
             meta_timeout_s=float(get("INSPECTOR_META_TIMEOUT_S", "30")),
             agent_max_steps=int(get("INSPECTOR_AGENT_MAX_STEPS", "6")),
+            remote_agents_json=agents_json,
+            remote_agent_secrets={name: get(name, "") for name in credential_refs},
             database_url=get("INSPECTOR_DATABASE_URL", ""),
             bim_storage=get("INSPECTOR_BIM_STORAGE", "local"),
             data_dir=Path(get("INSPECTOR_DATA_DIR", "data")).resolve(),

@@ -2,7 +2,7 @@
 
 Current developer handoff:
 
-- [Web agent → iPhone assignment](docs/agent-chat.md) — Meta Model API / Muse Spark 1.3, durable chat and predefined tools
+- [Main inspector → tools and specialist inspectors](docs/agent-chat.md) — Meta Model API / Muse Spark 1.3, durable chat, inspector harnesses and separate A2A HTTP+JSON services
 - [Cloudflare agent deployment handoff](docs/cloudflare-agent-handoff.md) — completed preparation and remaining account-owner steps
 
 - [Cloudflare + Supabase deployment](docs/cloudflare-deployment.md) — permanent HTTPS, no Mac required
@@ -241,8 +241,11 @@ input and included in new assignments as `capture_task` with
 `source=operator_request`. It is not converted into remote camera commands or
 verified measurements.
 
-The web agent accepts text through `/v1/chats` and uses Meta Model API / Muse Spark
-1.3 with predefined session/device tools; see [configuration and recovery](docs/agent-chat.md).
+The main inspector (OrchestratorAgent) accepts text through `/v1/chats` and uses
+Meta Model API / Muse Spark 1.3 with predefined session/device tools and optional
+registered specialist inspectors with their own tool loops, history and state.
+No specialists are registered by default; see
+[registration, configuration and recovery](docs/agent-chat.md).
 Remote BIM integration, measured coverage and rendering belong to later increments.
 Source access is available only to the configured Geometry
 identity and only for accepted source copies/versions. The first case completes

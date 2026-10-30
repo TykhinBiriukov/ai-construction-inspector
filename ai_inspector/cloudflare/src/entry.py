@@ -47,10 +47,12 @@ class InspectorRuntime(DurableObject):
             geometry_base_url=getattr(env,'INSPECTOR_GEOMETRY_BASE_URL',''),
             geometry_api_token=getattr(env,'INSPECTOR_GEOMETRY_API_TOKEN',''),
             geometry_service_token=getattr(env,'INSPECTOR_GEOMETRY_SERVICE_TOKEN',''),
+            remote_agents_json=getattr(env,'INSPECTOR_REMOTE_AGENTS_JSON','[]') or '[]',
         )
         service = InspectorService(settings,
             database=WorkerDatabase(env.HYPERDRIVE.connectionString, hyperdrive=True),
-            model_client=MetaModelClient(settings, transport=WorkerModelTransport()))
+            model_client=MetaModelClient(settings, transport=WorkerModelTransport()),
+            remote_transport=WorkerModelTransport(), secret_resolver=lambda name: getattr(env, name, None))
         service.localization_transport = WorkerModelTransport()
         return service
 
@@ -67,7 +69,9 @@ class InspectorRuntime(DurableObject):
             _settings.reset(settings_token)
 
     async def process(self):
-        return self.service().capture.process_next(heartbeat_enabled=False)
+        service = self.service()
+        captured = service.capture.process_next(heartbeat_enabled=False)
+        return service.agent.process_next() or captured
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):

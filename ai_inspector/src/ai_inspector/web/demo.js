@@ -52,8 +52,8 @@
     $('message').disabled=sending || !!pending;
     $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
-    $('resume').hidden=!pending || sending; $('resume').disabled=sending;
-    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
+    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? 'Waiting for the specialist inspector. This request continues automatically.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     updateActivityStatus();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
@@ -108,7 +108,7 @@
   function updateActivityStatus(){
     const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event);
     let text=last?'Response ready':'Inspector is ready';
-    if(last?.status==='retryable')text='Waiting for retry';
+    if(last?.status==='retryable')text=last.auto_resume?'Waiting for specialist inspector':'Waiting for retry';
     else if(last?.status==='failed')text='Request failed';
     else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||event.name:'Preparing response'):'Waiting for server update';
     else if(sending)text='Sending request';
@@ -209,7 +209,7 @@
       if(!pending||pending.request_id!==last.request_id){
         // Preserve an existing frozen payload, including its image, on refresh.
         pending={schema_version:'0.1',request_id:last.request_id,text:last.text,file_ids:last.file_ids||[]};
-        if(last.document_selection) { notify('This request is still running. Resume from the browser tab that sent its document selection.'); pending=null; }
+        if(last.document_selection&&!last.auto_resume) { notify('This request is still running. Resume from the browser tab that sent its document selection.'); pending=null; }
         remember();
       }
     } else if(last&&pending?.request_id===last.request_id){pending=null;remember();if(!sending)$('message').value='';}
@@ -248,7 +248,7 @@
     finally { refreshing=false; }
   }
   async function send() {
-    if(sending||workspaceBusy||!token||!overview) return;
+    if(sending||workspaceBusy||!token||!overview||chat?.runs?.at(-1)?.auto_resume) return;
     if(!pending && (!$('chat-form').reportValidity()||!$('message').value.trim())) return;
     const current=epoch; sending=true; notify();
     if(!pending) pending={schema_version:'0.1',request_id:uid(),text:$('message').value.trim(),file_ids:[...chosenFiles],...(documentContext?{document_selection:documentContext}:{})};

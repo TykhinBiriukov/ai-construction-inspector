@@ -52,8 +52,9 @@ class MetaModelClient:
     def complete(self, messages: list[dict], tools: list[dict]) -> dict:
         if not self.configured:
             raise APIError(503, "model_not_configured", "Configure the Meta Model API endpoint, model and API key on the server", retryable=True)
-        body = {"model": self.settings.meta_model, "messages": messages, "tools": tools,
-                "tool_choice": "auto", "parallel_tool_calls": False, "stream": False}
+        body = {"model": self.settings.meta_model, "messages": messages, "stream": False}
+        if tools:
+            body.update(tools=tools, tool_choice="auto", parallel_tool_calls=False)
         try:
             with httpx.Client(timeout=self.settings.meta_timeout_s, follow_redirects=False, transport=self.transport) as client:
                 with client.stream("POST", self.settings.meta_base_url.rstrip("/") + "/chat/completions",

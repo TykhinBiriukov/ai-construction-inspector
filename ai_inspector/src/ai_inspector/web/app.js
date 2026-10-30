@@ -230,9 +230,9 @@ function renderAgent() {
   $('agent-text').disabled = agentSending || !!agentPending;
   $('agent-send').disabled = agentSending || !!agentPending;
   $('agent-new').disabled = agentSending || !!agentPending;
-  $('agent-retry').hidden = !agentPending;
+  $('agent-retry').hidden = !agentPending || !!last?.auto_resume;
   $('agent-retry').disabled = agentSending;
-  $('agent-progress').textContent = agentSending ? 'Request saved as it is received. You can resume after a connection issue.' : unfinished ? 'This message is pending. Resume it to keep the same request and session.' : 'Messages and sessions are saved on the server.';
+  $('agent-progress').textContent = agentSending ? 'Request saved as it is received. You can resume after a connection issue.' : last?.auto_resume ? 'Waiting for the specialist inspector. This request continues automatically.' : unfinished ? 'This message is pending. Resume it to keep the same request and session.' : 'Messages and sessions are saved on the server.';
 }
 async function refreshAgent() {
   if (agentSending || !token || !overview) return;
