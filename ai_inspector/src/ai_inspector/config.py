@@ -27,6 +27,8 @@ class Settings:
     max_capture_files: int = 40000
     max_capture_bytes: int = 50 * 1024**3
     source_url_lifetime_s: int = 900
+    drawing_photo_base_url: str = ""
+    drawing_photo_service_token: str = field(default="", repr=False)
     localization_base_url: str = ""
     localization_service_token: str = field(default="", repr=False)
     geometry_base_url: str = ""
@@ -104,14 +106,14 @@ class Settings:
             if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
                 raise ValueError("CORS origins must be HTTP(S) origins")
         tokens = [self.operator_token, self.device_token]
-        for token in (self.geometry_api_token, self.geometry_service_token, self.localization_service_token):
+        for token in (self.geometry_api_token, self.geometry_service_token, self.localization_service_token, self.drawing_photo_service_token):
             if token:
                 if not token.isascii() or token != token.strip():
                     raise ValueError("Service tokens must be ASCII without surrounding whitespace")
                 tokens.append(token)
         if len(tokens) != len(set(tokens)):
             raise ValueError("Operator, device and service tokens must differ")
-        for name in ("geometry_base_url", "inspector_public_base_url", "localization_base_url"):
+        for name in ("geometry_base_url", "inspector_public_base_url", "localization_base_url", "drawing_photo_base_url"):
             value = getattr(self, name)
             if value:
                 parsed = urlsplit(value)
@@ -187,6 +189,8 @@ class Settings:
             max_capture_files=int(get("INSPECTOR_MAX_CAPTURE_FILES", "40000")),
             max_capture_bytes=int(get("INSPECTOR_MAX_CAPTURE_BYTES", "53687091200")),
             source_url_lifetime_s=int(get("INSPECTOR_SOURCE_URL_LIFETIME_S", "900")),
+            drawing_photo_base_url=get("INSPECTOR_DRAWING_PHOTO_BASE_URL", ""),
+            drawing_photo_service_token=get("INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN", ""),
             localization_base_url=get("INSPECTOR_LOCALIZATION_BASE_URL", ""),
             localization_service_token=get("INSPECTOR_LOCALIZATION_SERVICE_TOKEN", ""),
             geometry_base_url=get("INSPECTOR_GEOMETRY_BASE_URL", ""),
