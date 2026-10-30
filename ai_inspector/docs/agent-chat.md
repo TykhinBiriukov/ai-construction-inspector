@@ -250,3 +250,25 @@ Only fresh running events animate actual tool links and the run's selected docum
 context. Polling is every five seconds; quick calls may first appear completed.
 Historical calls without timestamps have no invented duration. Result links open
 available selected files/regions/elements or capture/device context.
+
+## Drawing/photo minion (30 October 2026)
+
+Configure `INSPECTOR_DRAWING_PHOTO_BASE_URL` and a distinct
+`INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN` in runtime Secrets. Predefined tools:
+`drawing_photo_compare` (selected drawing_file_id, photo_file_id and explicit
+drawing_page for PDF), and `drawing_photo_result` (bound task_id).
+The question is the original user message, limited to 4000 characters.
+Only files selected in that message may be sent; no arbitrary URLs, IFC or 3D.
+The whole selected source is sent, not only a viewer selection crop. PNG/JPEG and
+PDF drawings are supported, at most 6MB per file. A saved command pins hashes,
+roles and page before HTTP submission. Retries reuse the same UUID/body.
+
+POST uses `Prefer: respond-async`; running is not a verdict. Polling is a separate
+tool on a later user message, not an autonomous background loop. Result access is
+restricted to tasks submitted in this chat's latest 200 runs. Tool output includes
+report, original-image boxes, provenance, audit and initial source bindings.
+Findings are evidence to review, not a certified inspection. Technical failure is
+distinct from an inconclusive visual finding. A timeout or busy service leaves the
+same Inspector message retryable. Cold starts may require retrying that message;
+the HTTP timeout is 20 seconds per I/O phase. Minion retains data in its own scoped
+Supabase schema and uses its own Meta key; Inspector receives neither credential.

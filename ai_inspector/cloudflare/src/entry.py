@@ -42,6 +42,8 @@ class InspectorRuntime(DurableObject):
             supabase_storage_bucket=env.SUPABASE_STORAGE_BUCKET,
             supabase_secret_key=env.SUPABASE_SECRET_KEY,
             inspector_public_base_url=getattr(env,'INSPECTOR_PUBLIC_BASE_URL',''),
+            drawing_photo_base_url=getattr(env,'INSPECTOR_DRAWING_PHOTO_BASE_URL',''),
+            drawing_photo_service_token=getattr(env,'INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN',''),
             localization_base_url=getattr(env,'INSPECTOR_LOCALIZATION_BASE_URL',''),
             localization_service_token=getattr(env,'INSPECTOR_LOCALIZATION_SERVICE_TOKEN',''),
             geometry_base_url=getattr(env,'INSPECTOR_GEOMETRY_BASE_URL',''),
