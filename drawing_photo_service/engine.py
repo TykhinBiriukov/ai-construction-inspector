@@ -2,12 +2,8 @@
 import hashlib
 import json
 import os
-import socket
-import ssl
-import sys
 import time
-import urllib.request
-import urllib.error
+from urllib.parse import urlsplit
 
 import httpx
 from pydantic import ValidationError
@@ -61,110 +57,54 @@ class MetaClient:
     def __init__(self, api_key: str, model: str = "muse-spark-1.3"):
         self.api_key, self.model = api_key, model
         self.last_diagnostic = {}
+        proxy = os.environ.get("MINION_META_PROXY_URL", "").strip().rstrip("/")
+        self.transport_mode = "cloudflare_relay" if proxy else "direct"
+        self.token = os.environ.get("MINION_META_PROXY_TOKEN", "") if proxy else api_key
+        if proxy:
+            parsed = urlsplit(proxy)
+            if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+                    or parsed.query or parsed.fragment or parsed.path or parsed.port not in (None, 443)
+                    or not self.token):
+                raise ValueError("Configure an HTTPS relay origin and dedicated token")
+        self.base_url = proxy + "/v1" if proxy else "https://api.meta.ai/v1"
 
     def probe(self):
-        """Fixed inputs only: catalog + one short inference, with safe transport metadata."""
-        if not self.api_key:
-            return {"ok": False, "error": "model_not_configured"}
-        headers={"Authorization": "Bearer " + self.api_key}
-        body={"model": self.model, "messages": [{"role": "user", "content": "Reply OK. Integration health check."}],
-              "max_completion_tokens": 100}
-        result={"model": self.model, "key_fingerprint": hashlib.sha256(self.api_key.encode()).hexdigest()[:16],
-                "request_fingerprint": hashlib.sha256(json.dumps(body,sort_keys=True).encode()).hexdigest(),
-                "httpx_version": httpx.__version__}
-        result["runtime"] = {"python": sys.version.split()[0], "openssl": ssl.OPENSSL_VERSION, "platform": sys.platform}
-        result["proxy_environment_present"] = [name for name in
-            ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy") if os.environ.get(name)]
+        """One fixed text-only request over the same transport as real inference."""
+        result = {"model": self.model, "transport": self.transport_mode, "ok": False}
+        if not self.token:
+            return result | {"error": "model_not_configured"}
         try:
-            result["api_dns_addresses"] = sorted({entry[4][0] for entry in
-                socket.getaddrinfo("api.meta.ai", 443, type=socket.SOCK_STREAM)})
-        except OSError:
-            result["api_dns_error"] = True
-        def read(response):
-            raw=bytearray()
-            for chunk in response.iter_bytes():
-                raw.extend(chunk)
-                if len(raw)>32000: raise ValueError("oversized_response")
-            return json.loads(raw)
-        try:
-            with httpx.Client(timeout=30, follow_redirects=False) as client:
-                prepared = client.build_request("POST", "https://api.meta.ai/v1/chat/completions", headers=headers, json=body)
-                result["wire_request"] = {"method": prepared.method, "url": str(prepared.url),
-                    "headers": {k: v for k, v in prepared.headers.items() if k in
-                        ("host", "accept", "accept-encoding", "connection", "user-agent", "content-type", "content-length")},
-                    "body_sha256": hashlib.sha256(prepared.content).hexdigest()}
-                with client.stream("GET", "https://api.meta.ai/v1/models", headers=headers) as response:
-                    result["catalog_http_status"]=response.status_code
-                    result["catalog_http_version"] = response.http_version
-                    stream = response.extensions.get("network_stream")
-                    if stream:
-                        result["api_peer"] = stream.get_extra_info("server_addr")
-                    result["catalog_request_id"] = response.headers.get("x-request-id", "")[:200]
-                    value=read(response)
-                    if response.status_code==200:
-                        result["catalog_models"]=[str(m.get("id", ""))[:100] for m in value.get("data", [])[:100]]
-                with client.stream("POST", "https://api.meta.ai/v1/chat/completions", headers=headers, json=body) as response:
-                    value=read(response)
-                    result.update(ok=response.status_code==200, http_status=response.status_code)
-                    result["request_id"]=response.headers.get("x-request-id", "")[:200]
-                    if response.status_code!=200:
-                        error=value.get("error", {})
-                        result["provider_code"]=str(error.get("code", ""))[:100]
-                        # Fixed non-private request; never include the bearer key or model reasoning.
-                        result["provider_message"]=str(error.get("message", "")).replace(self.api_key,"[redacted]")[:500]
-                if not result["ok"]:
-                    with client.stream("POST", "https://api.meta.ai/v1/responses", headers=headers,
-                            json={"model": self.model, "input": "Reply OK. Integration health check.", "max_output_tokens": 100}) as alternative:
-                        value=read(alternative)
-                        result["responses_http_status"]=alternative.status_code
-                        result["responses_request_id"]=alternative.headers.get("x-request-id", "")[:200]
-                        if alternative.status_code!=200:
-                            error=value.get("error", {})
-                            result["responses_error"]=str(error.get("code", ""))[:100]
-                    # Independent stdlib client, exact same bytes/key/URL. This
-                    # distinguishes our HTTPX transport from upstream responses.
-                    class NoRedirect(urllib.request.HTTPRedirectHandler):
-                        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-                            return None
-                    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-                    request = urllib.request.Request(str(prepared.url), data=prepared.content,
-                        headers={"Authorization": "Bearer " + self.api_key,
-                            "Content-Type": "application/json", "Accept": "application/json",
-                            "User-Agent": "DrawingAnalysisAgent/0.3"}, method="POST")
-                    try:
-                        with opener.open(request, timeout=30) as independent:
-                            result["stdlib_http_status"] = independent.status
-                            independent.read(32001)
-                    except urllib.error.HTTPError as independent:
-                        result["stdlib_http_status"] = independent.code
-                        try:
-                            detail = json.loads(independent.read(32001))
-                            result["stdlib_error"] = str(detail.get("error", {}).get("code", ""))[:100]
-                        except (ValueError, AttributeError):
-                            result["stdlib_error"] = "unparseable_response"
-                        finally:
-                            independent.close()
-                    except (urllib.error.URLError, TimeoutError, OSError):
-                        result["stdlib_error"] = "transport_error"
-                    with httpx.Client(timeout=30, follow_redirects=False, http2=True) as h2_client:
-                        with h2_client.stream("POST", "https://api.meta.ai/v1/chat/completions", headers=headers, json=body) as h2_response:
-                            detail = read(h2_response)
-                            result["http2_status"] = h2_response.status_code
-                            result["http2_negotiated"] = h2_response.http_version
-                            result["http2_error"] = str(detail.get("error", {}).get("code", ""))[:100]
-                return result
-        except (httpx.HTTPError, ValueError, AttributeError, TypeError):
-            return result | {"ok": False, "error": "diagnostic_request_failed"}
+            with httpx.Client(timeout=40, follow_redirects=False) as client:
+                with client.stream("POST", self.base_url + "/chat/completions",
+                        headers={"Authorization": "Bearer " + self.token},
+                        json={"model": self.model, "messages": [{"role": "user", "content": "Reply OK. Integration health check."}],
+                              "max_completion_tokens": 100}) as response:
+                    raw = bytearray()
+                    for chunk in response.iter_bytes():
+                        raw.extend(chunk)
+                        if len(raw) > 32000:
+                            raise ValueError("oversized_response")
+                    value = json.loads(raw)
+                    result.update(http_status=response.status_code,
+                        ok=response.status_code == 200 and isinstance(value.get("choices"), list))
+                    result["request_id"] = response.headers.get("x-request-id", "")[:200]
+                    if response.status_code != 200:
+                        code = str(value.get("error", {}).get("code", ""))
+                        result["provider_code"] = code if code in ("model_not_found", "invalid_api_key",
+                            "rate_limit_exceeded", "relay_transport_error") else "upstream_error"
+            return result
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+            return result | {"error": "diagnostic_request_failed"}
 
     def complete(self, messages: list, timeout: float = 60, *, final_only: bool = False) -> dict:
         self.last_diagnostic = {}
-        if not self.api_key:
+        if not self.token:
             raise ModelFailure("model_not_configured")
         deadline = time.monotonic() + timeout
         try:
             with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-                with client.stream("POST", "https://api.meta.ai/v1/chat/completions",
-                                   headers={"Authorization": f"Bearer {self.api_key}"},
+                with client.stream("POST", self.base_url + "/chat/completions",
+                                   headers={"Authorization": f"Bearer {self.token}"},
                                    json={"model": self.model, "messages": messages, "tools": [] if final_only else TOOLS,
                                          "tool_choice": "auto", "parallel_tool_calls": False,
                                          "max_completion_tokens": MAX_COMPLETION_TOKENS, "stream": False,

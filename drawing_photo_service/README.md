@@ -1,5 +1,22 @@
 # Drawing Analysis Agent
 
+Cloud deployment can use the dedicated `deploy/meta-relay` Cloudflare Worker
+for Meta connectivity. Render keeps image/PDF processing, evidence validation
+and Supabase persistence; Inspector's task API does not change. Set the Worker's
+`META_API_KEY` and a dedicated random `RELAY_TOKEN` as Secrets. On Render set
+`MINION_META_PROXY_URL` to its HTTPS origin and `MINION_META_PROXY_TOKEN` to that
+relay token. In relay mode the Meta key is not sent by Render and is not required
+there. Empty proxy URL preserves direct local Meta access; incomplete relay config
+fails closed. `POST /v1/provider-check` uses the configured inference transport.
+
+The Worker only forwards authenticated POST `/v1/chat/completions` to the fixed
+Meta endpoint. It streams without parsing/storing image bodies, caps request/
+response sizes at22MiB/256KiB, refuses redirects and has a65s upstream deadline.
+Observability is disabled; no automatic retries. Deploy with Wrangler using
+`deploy/meta-relay/wrangler.jsonc`, then provision Secrets separately. Worker
+Free quotas and Render sleep/cold-start limits still apply. To return to direct
+Meta, restore its key on Render and remove both proxy settings.
+
 Standalone v0.3.0 service for supplied photographs and 2D drawings. No integration
 with Inspector, Localization, BIM or 3D; no file discovery or remote asset fetching.
 Meta performs visual analysis; Python validates the report and renders evidence.
