@@ -3,7 +3,11 @@ import hashlib
 import json
 import os
 import socket
+import ssl
+import sys
 import time
+import urllib.request
+import urllib.error
 
 import httpx
 from pydantic import ValidationError
@@ -68,6 +72,7 @@ class MetaClient:
         result={"model": self.model, "key_fingerprint": hashlib.sha256(self.api_key.encode()).hexdigest()[:16],
                 "request_fingerprint": hashlib.sha256(json.dumps(body,sort_keys=True).encode()).hexdigest(),
                 "httpx_version": httpx.__version__}
+        result["runtime"] = {"python": sys.version.split()[0], "openssl": ssl.OPENSSL_VERSION, "platform": sys.platform}
         result["proxy_environment_present"] = [name for name in
             ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy") if os.environ.get(name)]
         try:
@@ -83,6 +88,11 @@ class MetaClient:
             return json.loads(raw)
         try:
             with httpx.Client(timeout=30, follow_redirects=False) as client:
+                prepared = client.build_request("POST", "https://api.meta.ai/v1/chat/completions", headers=headers, json=body)
+                result["wire_request"] = {"method": prepared.method, "url": str(prepared.url),
+                    "headers": {k: v for k, v in prepared.headers.items() if k in
+                        ("host", "accept", "accept-encoding", "connection", "user-agent", "content-type", "content-length")},
+                    "body_sha256": hashlib.sha256(prepared.content).hexdigest()}
                 with client.stream("GET", "https://api.meta.ai/v1/models", headers=headers) as response:
                     result["catalog_http_status"]=response.status_code
                     result["catalog_http_version"] = response.http_version
@@ -111,6 +121,31 @@ class MetaClient:
                         if alternative.status_code!=200:
                             error=value.get("error", {})
                             result["responses_error"]=str(error.get("code", ""))[:100]
+                    # Independent stdlib client, exact same bytes/key/URL. This
+                    # distinguishes our HTTPX transport from upstream responses.
+                    class NoRedirect(urllib.request.HTTPRedirectHandler):
+                        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                            return None
+                    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+                    request = urllib.request.Request(str(prepared.url), data=prepared.content,
+                        headers={"Authorization": "Bearer " + self.api_key,
+                            "Content-Type": "application/json", "Accept": "application/json",
+                            "User-Agent": "DrawingAnalysisAgent/0.3"}, method="POST")
+                    try:
+                        with opener.open(request, timeout=30) as independent:
+                            result["stdlib_http_status"] = independent.status
+                            independent.read(32001)
+                    except urllib.error.HTTPError as independent:
+                        result["stdlib_http_status"] = independent.code
+                        try:
+                            detail = json.loads(independent.read(32001))
+                            result["stdlib_error"] = str(detail.get("error", {}).get("code", ""))[:100]
+                        except (ValueError, AttributeError):
+                            result["stdlib_error"] = "unparseable_response"
+                        finally:
+                            independent.close()
+                    except (urllib.error.URLError, TimeoutError, OSError):
+                        result["stdlib_error"] = "transport_error"
                 return result
         except (httpx.HTTPError, ValueError, AttributeError, TypeError):
             return result | {"ok": False, "error": "diagnostic_request_failed"}
