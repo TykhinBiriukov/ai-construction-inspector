@@ -10,6 +10,13 @@ from pydantic import Field, model_validator
 from .models import StrictModel, Claim, Finding, Report, Region
 
 
+class ReportReferenceError(ValueError):
+    """Safe, actionable report diagnostics without raw model/provider output."""
+    def __init__(self, code, loc=(), **details):
+        self.issue = {"type": code, "loc": list(loc), **details}
+        super().__init__(code)
+
+
 class GridRegion(StrictModel):
     view_id: Annotated[str, Field(min_length=1, max_length=80)]
     top_left: Annotated[str, Field(pattern=r"^[A-J](?:10|[1-9])$")]
@@ -107,18 +114,23 @@ class Views:
     def report(self, draft, kinds):
         value = draft.model_dump()
         refs = []
-        for finding in value["findings"]:
+        for index, finding in enumerate(value["findings"]):
             for key, kind in (("design_claim", "drawing"), ("photo_claim", "photo")):
                 resolved = []
-                for raw in finding[key]["evidence"]:
+                for evidence_index, raw in enumerate(finding[key]["evidence"]):
                     ref = GridRegion.model_validate(raw)
+                    loc = ("findings", index, key, "evidence", evidence_index, "view_id")
+                    allowed = [name for name, view in self.views.items() if kinds.get(view.asset_id) == kind]
+                    if ref.view_id not in self.views:
+                        raise ReportReferenceError("unknown_evidence_view", loc, allowed_view_ids=allowed)
                     region = self.resolve(ref)
                     if kinds.get(region.asset_id) != kind:
-                        raise ValueError("Wrong evidence role")
+                        raise ReportReferenceError("wrong_evidence_role", loc, expected_kind=kind,
+                                                   allowed_view_ids=allowed)
                     resolved.append(region.model_dump())
                     refs.append({"criterion": finding["criterion"], "claim": key,
                                  "grid": raw, "original": region.model_dump()})
                 finding[key]["evidence"] = resolved
         if len(refs) > 32:
-            raise ValueError("Too many evidence regions")
+            raise ReportReferenceError("too_many_evidence_regions", ("findings",), max_regions=32)
         return Report.model_validate(value), refs

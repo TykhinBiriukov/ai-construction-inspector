@@ -109,7 +109,7 @@ No decimal coordinate arithmetic is delegated to the model.
 Cells are inclusive and snapped to integer pixel bounds with outward rounding. Public report evidence
 remains the same original-coordinate format. Source pixels are never altered; the
 grid and margins exist only in inference previews. Nested crops preserve provenance.
-A mandatory second pass shows the exact evidence rectangle in red with nearby context to the model for
+A second pass for reports with findings shows the exact evidence rectangle in red with nearby context to the model for
 review/correction. This self-check is not independent proof of visual correctness. No web,
 filesystem, arbitrary URL, BIM, measurement or generation tools. No OCR yet.
 PDF rendering uses PDFium, serialized across threads. Full previews are at most
@@ -127,6 +127,15 @@ per I/O phase and elapsed time between calls, not by forcibly killing native cod
 No automatic HTTP retries. Numeric provider usage/finish reasons and schema error
 locations are audited without raw source payloads or internal model reasoning. Malformed output and exhausted budgets produce a
 technical failure, never a guessed inspection result.
+
+A valid `needs_input` report with empty findings returns immediately: there are no
+evidence rectangles to review. If supplied drawing/photo roles appear inconsistent
+with the pixels, the model must request role confirmation rather than swap sources.
+Explicit criterion labels are preserved when findings exist; they do not prevent
+a clarification. Without labels the model may choose criteria within the user's task.
+Reference validation records distinct `wrong_evidence_role`, `unknown_evidence_view`,
+`too_many_evidence_regions` and `criterion_identity_mismatch` issues with locations
+and bounded repair guidance. Raw provider output/reasoning is not persisted.
 
 ## Deployable packaging
 
