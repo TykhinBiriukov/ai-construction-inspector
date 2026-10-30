@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12.16-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MINION_DATA_DIR=/data
 WORKDIR /app
 COPY requirements.lock /app/requirements.lock
