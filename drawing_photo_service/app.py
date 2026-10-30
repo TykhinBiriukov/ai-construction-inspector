@@ -3,9 +3,7 @@ import hashlib
 import hmac
 import json
 import os
-import sqlite3
 import threading
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -15,6 +13,7 @@ from fastapi.responses import JSONResponse, Response
 from .engine import MetaClient, ModelFailure, provenance, run
 from .images import decode, evidence_image, identity
 from .models import Report, TaskRequest
+from .storage import SQLiteStore, PostgresStore, StorageFull
 
 BODY_LIMIT = 22_000_000
 
@@ -53,30 +52,26 @@ class BodyLimitMiddleware:
         await self.app(scope, replay, send)
 
 
-def create_app(*, data_dir=None, service_token=None, model_client=None):
-    app = FastAPI(title="Drawing/photo comparison minion", version="0.2.3")
+def create_app(*, data_dir=None, service_token=None, model_client=None, database_url=None):
+    app = FastAPI(title="Drawing/photo comparison minion", version="0.3.0")
     app.add_middleware(BodyLimitMiddleware)
+
+    @app.exception_handler(StorageFull)
+    async def full_storage(_request, _exc):
+        return JSONResponse(status_code=507, content={"detail": "storage_budget_exceeded"})
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(_request, exc):
         # Pydantic error input can contain image data or private document text.
         return JSONResponse(status_code=422, content={"detail": "invalid_request", "errors": [
             {"loc": list(error["loc"]), "type": error["type"]} for error in exc.errors()]})
-    root = Path(data_dir or os.environ.get("MINION_DATA_DIR", "/tmp/drawing-photo-minion"))
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    db_path = root / "tasks.sqlite3"
+    dsn = database_url if database_url is not None else os.environ.get("MINION_DATABASE_URL", "")
+    if os.environ.get("MINION_REQUIRE_DATABASE") == "1" and not dsn:
+        raise RuntimeError("MINION_DATABASE_URL is required")
+    store = PostgresStore(dsn) if dsn else SQLiteStore(data_dir or os.environ.get("MINION_DATA_DIR", "/tmp/drawing-photo-minion"))
     token = service_token if service_token is not None else os.environ.get("MINION_SERVICE_TOKEN", "")
     client = model_client or MetaClient(os.environ.get("MINION_META_API_KEY", ""))
-    lock = threading.Lock()
-
-    def db():
-        conn = sqlite3.connect(db_path, timeout=10)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    with db() as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, digest TEXT NOT NULL, request TEXT NOT NULL, response TEXT NOT NULL)")
-    os.chmod(db_path, 0o600)
+    lock = store.lock
 
     def auth(authorization: str | None = Header(default=None)):
         if not token:
@@ -85,15 +80,13 @@ def create_app(*, data_dir=None, service_token=None, model_client=None):
             raise HTTPException(401, "unauthorized")
 
     def load(task_id):
-        with db() as conn:
-            row = conn.execute("SELECT * FROM tasks WHERE id=?", (str(task_id),)).fetchone()
+        row = store.get(task_id)
         if row is None:
             raise HTTPException(404, "task_not_found")
         return row
 
     def save(task_id, response):
-        with db() as conn:
-            conn.execute("UPDATE tasks SET response=? WHERE id=?", (json.dumps(response), str(task_id)))
+        store.save(task_id, response)
 
     def recover(task_id, response):
         if response["status"] == "running" and lock.acquire(blocking=False):
@@ -133,16 +126,15 @@ def create_app(*, data_dir=None, service_token=None, model_client=None):
 
     @app.get("/healthz")
     def health():
-        return {"status": "ok", "version": "0.2.3", "async_tasks": True,
-                "storage": "sqlite", "retention": os.environ.get("MINION_RETENTION", "local"),
+        return {"status": "ok", "version": "0.3.0", "async_tasks": True,
+                "storage": store.kind, "retention": "durable" if dsn else os.environ.get("MINION_RETENTION", "local"),
                 "configured": bool(token)}
 
     @app.post("/v1/tasks", dependencies=[Depends(auth)])
     def create(request: TaskRequest, prefer: str | None = Header(default=None)):
         serialized = request.model_dump_json()
         digest = hashlib.sha256(serialized.encode()).hexdigest()
-        with db() as conn:
-            old = conn.execute("SELECT * FROM tasks WHERE id=?", (str(request.request_id),)).fetchone()
+        old = store.get(request.request_id)
         if old:
             if old["digest"] != digest:
                 raise HTTPException(409, "request_id_content_conflict")
@@ -153,8 +145,7 @@ def create_app(*, data_dir=None, service_token=None, model_client=None):
             raise HTTPException(409, "service_busy")
         transferred = False
         try:
-            with db() as conn:
-                old = conn.execute("SELECT * FROM tasks WHERE id=?", (str(request.request_id),)).fetchone()
+            old = store.get(request.request_id)
             if old:
                 if old["digest"] != digest:
                     raise HTTPException(409, "request_id_content_conflict")
@@ -179,8 +170,7 @@ def create_app(*, data_dir=None, service_token=None, model_client=None):
                         "status": "running", "provenance": provenance(client),
                         "assets": [identity(a, images[a.asset_id]) for a in request.assets],
                         "audit": [], "report": None, "error": None}
-            with db() as conn:
-                conn.execute("INSERT INTO tasks VALUES (?,?,?,?)", (str(request.request_id), digest, serialized, json.dumps(response)))
+            store.insert(request.request_id, digest, serialized, response)
             if prefer == "respond-async":
                 accepted = json.loads(json.dumps(response))
                 thread = threading.Thread(target=execute, args=(request, images, parent, response), daemon=True)

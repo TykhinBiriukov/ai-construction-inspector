@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: drawing-photo-minion
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: feat/drawing-photo-minion
+    dockerfilePath: ./drawing_photo_service/Dockerfile
+    dockerContext: ./drawing_photo_service
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: MINION_REQUIRE_DATABASE
+        value: "1"
+      - key: MINION_DATABASE_URL
+        sync: false
+      - key: MINION_SERVICE_TOKEN
+        sync: false
+      - key: MINION_META_API_KEY
+        sync: false

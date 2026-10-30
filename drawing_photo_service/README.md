@@ -1,6 +1,6 @@
 # Drawing/photo comparison service
 
-Standalone v0.2.3 service for supplied photographs and 2D drawings. No integration
+Standalone v0.3.0 service for supplied photographs and 2D drawings. No integration
 with Inspector, Localization, BIM or 3D; no file discovery or remote asset fetching.
 Meta performs visual analysis; Python validates the report and renders evidence.
 Validation is not proof that a visual claim is true.
@@ -80,8 +80,7 @@ presentation derivative; the stored source hash identifies original bytes.
 
 Provenance includes model, inference mode, prompt version/hash and tool schema
 hash. The audit records actual model calls and crop requests. Source base64 and
-provider internal reasoning are not exposed in task responses. Originals remain
-in the private SQLite file for evidence reopening.
+provider internal reasoning are not exposed in task responses. Originals remain in the configured private database for evidence reopening.
 
 ## Tools and limits
 
@@ -124,29 +123,61 @@ docker run --rm -p 127.0.0.1:8080:8080 \
   drawing-photo-minion:0.1
 ```
 
-Container runs as UID 10001; mounted data must be writable by it. Use ONE process,
-ONE replica and a private persistent volume. Without persistent storage, a pod
-replacement loses task history and originals. The default `/tmp` directory is
-only for development. SQLite is not a multi-replica deployment design.
+Container runs as UID 10001. Local development defaults to SQLite in
+`MINION_DATA_DIR`; mounted directories must be writable by that UID. Cloud hosting
+sets `MINION_REQUIRE_DATABASE=1` and `MINION_DATABASE_URL` and never falls back to
+SQLite if the database configuration is missing or unavailable.
 
-This implementation requires native PDFium/Pillow wheels and a conventional
-container. It is not packaged for Cloudflare Workers. Measure memory on the
-largest intended files before choosing free compute; do not assume it fits the
-existing 256 MB Localization instance. Do not colocate it with that service.
-Northflank integration-demo configuration: separate combined service, build context
-`/drawing_photo_service`, Dockerfile `/drawing_photo_service/Dockerfile`, one Free
-256 MB instance, HTTP port 8080 and health `/healthz`. Set `MINION_RETENTION=ephemeral`.
-This deliberately temporary deployment loses tasks and source images on pod replacement.
-The orchestrator must retain submitted inputs and final results; a 404 after a restart
-is not an inspection verdict. No cross-restart exactly-once guarantee is provided.
-Use a persistent volume or a separately scoped database before relying on retention.
-The two initial development cases do not establish the memory limit for all accepted files.
+### Supabase persistence
 
-The service token grants access to this entire single-tenant instance, not to
-separate projects. Expose only through HTTPS with the Bearer token. Only one inference is admitted;
-request rate limiting and durable storage are required before production use. Store Meta key
-only in this service's Secrets. Meta calls may consume credits independently of
-hosting costs. No existing Inspector key is read or copied automatically.
+The admin-only helper `deploy/provision.py` creates private schema `drawing_photo`
+and restricted login `drawing_photo_app` in the existing PostgreSQL database:
+
+```sh
+python -m drawing_photo_service.deploy.provision \
+  --admin-env /private/path/to/admin.env \
+  --output /private/path/to/minion-runtime.json
+```
+
+Run only after approval for creating this role/schema. The helper reads the
+administrator connection from `INSPECTOR_DATABASE_URL`, refuses existing roles or
+credential files, and saves the new scoped URI in a mode0600 file. The runtime must
+never receive the administrator URI. It gets only SELECT/INSERT and UPDATE(response)
+on `drawing_photo.tasks`, no schema ownership or DELETE. The helper verifies denied
+access to Inspector and Localization schemas. Migration is not run on app startup.
+
+Requests (including original file base64), reports, source identities and audit are
+stored together in PostgreSQL. This deliberately bounded MVP uses Postgres rather
+than adding a privileged Storage API key. Admission caps stored UTF-8 request/report
+payload at 100MB, reserving at least 2MB for each response; this excludes database
+indexes/physical overhead. A full budget returns HTTP507, never silently deletes
+history. Larger datasets need an explicitly designed object-storage/retention path.
+
+Use TLS and the SESSION pooler on 5432 (or direct PostgreSQL), never transaction
+pooling on 6543. A session advisory lock admits one analysis globally, including
+overlapping containers during deployment. Reservation and final save use the lock
+connection; a disconnected worker cannot write a stale result through a fresh
+connection. A crashed task becomes execution_interrupted on later read, not an
+automatic model retry. Durable data is not a durable job queue. Keep one worker and
+one instance; callers poll async tasks and explicitly create a new ID to retry a
+failed task. No existing local evaluation data is migrated automatically.
+
+### Render configuration
+
+`deploy/render.yaml` is the prepared Free Docker blueprint (select this custom path
+when creating a Blueprint). It specifies the isolated branch, component build
+context, HTTP8080, health `/healthz` and the three runtime secrets. No paid disk or
+Render database is requested. Credentials must be entered in hosting Secrets only.
+Free services sleep after 15 minutes idle and may take about a minute to wake;
+Inspector must tolerate cold-start delay before submission. Saved tasks/evidence
+remain in Supabase across restarts. Native Pillow/PDFium dependencies require a
+conventional container; this is not packaged for Cloudflare Workers.
+
+The service token grants access to the entire single-tenant minion instance.
+Expose only through HTTPS with Bearer authentication. Only one inference is admitted;
+request rate limiting and memory testing on maximum-size inputs remain production
+requirements. Meta usage is separate from hosting. No deployment or real PostgreSQL
+integration is established merely by this configuration.
 
 ## Quality workflow
 
