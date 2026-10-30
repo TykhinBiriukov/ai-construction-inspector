@@ -1,91 +1,39 @@
-# Operator / web application connection
+# Operator and web integration
 
-Use `.local/web-connection.json` for the current `inspector_base_url`, scoped
-operator token and device ID. This is a private operator configuration; the
-separate iOS config contains only the device identity. API documentation is at
-`<BASE_URL>/docs` and `<BASE_URL>/openapi.json`.
+Use the configured backend base URL and the **operator** bearer identity. Keep credentials out of public bundles, URLs and source control. The device token has a different scope and cannot access operator chat/workspace/backlog APIs. Full request/response schemas are at `<BASE_URL>/openapi.json` and `/docs`; this guide records behavior that clients must preserve.
 
-## Start the first capture case
+## Console and login
 
-For natural-language requests through Meta Model API / Muse Spark 1.3, use the
-console's **Ask Inspector** or the new `/v1/chats` API. See
-[agent chat configuration, requests and recovery](agent-chat.md). Direct session
-creation below remains available.
+`/` is the operational Control room; `/ui/demo.html` is the document/chat workspace. Both use the same backend API. The operational UI supports capture creation, session/status browsing, source/result inspection, export, reference BIM upload and abort. The demo supports files, IFC/PDF/image viewing, document selections, agent conversation and activity. See [viewer build](../viewer/README.md) and [agent behavior](agent-chat.md).
 
-The phone may already be connected, or it can connect later. Create a server-owned
-session without requiring a reference BIM upload:
+Operator login is stored in `sessionStorage` for the site/tab. Reload retains it; Lock workspace/logout and HTTP 401 clear it. Storage-blocking browsers require manual login. Closing the browser is not a promised persistence boundary. Shared operator credentials do not authenticate individual observation authors.
 
-```javascript
-const response = await fetch(`${config.inspector_base_url}/v1/capture-sessions`, {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${config.operator_token}`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    schema_version: "0.1",
-    request_id: crypto.randomUUID(),
-    device_id: config.device_id,
-    room_id: "room-204",
-    capture_origin: "device",
-    input_mode: "live_capture",
-    prompt: "Record the selected room."
-  })
-});
-const session = await response.json();
-```
+Native FastAPI serves the UI from the Python package; Cloudflare uses the JavaScript assets gateway. A separate-origin browser client needs exact `INSPECTOR_CORS_ORIGINS`. Native phone requests are not governed by browser CORS.
 
-Persist `request_id` while the operation is pending and reuse it after a timeout.
-201 creates, 200 replays, 409 reports conflicting reuse. The first-case inspection
-has `inspection_kind=capture_only`, `model_version=unbound`, and no reference BIM.
-The existing BIM intake plus inspection-specific session endpoint remain available.
+## Intake and capture creation
 
-The backend creates the Supabase session folder before advertising the assignment
-to the device. The phone then acknowledges, captures and uploads through the API
-documented in `ios-integration.md`.
+Use `POST /v1/capture-sessions` for capture without reference BIM. Inspector creates the inspection/session IDs, assigns the configured device and pins provenance. For a reference workflow, upload through `POST /v1/inspections` and create its capture session. These multipart/JSON schemas are in OpenAPI, not duplicated here.
 
-## Monitor
+BIM intake stores opaque bytes by hash with `status=stored_unvalidated` and immutable `upload-sha256:...` identity. It does not validate IFC/RVT, choose a real room, normalize geometry or prove dimensions. A future parser must not silently replace a model already pinned to sessions. Uploading/selecting an IFC in chat is a different action from attaching reference BIM to an inspection.
 
-| Request | Purpose |
-|---|---|
-| `GET /v1/devices/iphone-1/status` | Current authenticated foreground channel presence |
-| `GET /v1/sessions/{session_id}` | Session acknowledgement, capture/source/job states and final geometry response |
-| `GET /v1/capabilities` | API limits and explicit generator test/real/unconfigured mode |
+For intake idempotency, validated metadata, sanitized filename, media type, byte length and exact hash define identity; multipart boundaries do not. Failed validation does not consume the key. Successful replay retains the original inspection/model/policy even if server configuration changes.
 
-The first case completes when `processing_state=completed`,
-`processing_scope=geometry_only_v1`, and `geometry_result` is present. A mock result
-is explicitly labelled. Failure is a terminal `failed` or `cancelled` state with
-saved error. No inspection verdict or BIM comparison is implied.
+Persist each request ID and its exact contents until confirmed. Creation returns 201, exact successful replay 200, and changed content under the same key 409. An uncertain timeout requires the same operation, not a new UUID. Console mutation forms retain frozen pending requests in memory, lock their inputs and allow retry/discard; reconcile the server list before closing a pending tab. Chat has its own durable retry behavior described in [agent-chat](agent-chat.md#execution-retry-and-recovery).
 
-For a browser app hosted on a different origin, set its exact origin in
-`INSPECTOR_CORS_ORIGINS` (comma-separated) before starting the server. Native iOS
-requests do not use browser CORS. Do not place an operator token in a public web
-bundle: keep it in the authenticated operator environment or web backend.
+A session is advertised to the phone only after its storage folder is ready. Creation may retain the session/operation ID while storage is temporarily unavailable; retry completes the same assignment. Online, assignment, acknowledgement, camera start, accepted source and Geometry completion are distinct facts. Offline does not cancel a session. Phone behavior is in [iOS integration](ios-integration.md).
 
-## Run or stop the remote test environment
+## Status, cancellation and interpretation
 
-```powershell
-.\scripts\start-remote-test.ps1 -MockGeometry
-.\.venv\Scripts\python.exe -B ../../local-checks/inspector/scripts/simulate_iphone.py
-.\scripts\stop-remote-test.ps1
-```
+Read device channel presence, session state and capabilities from the running API. Operator overview is project-scoped and paginated; follow returned cursors instead of deriving them. Device channel event cursors and overview/assignment pagination are different namespaces.
 
-The start script launches hidden backend/mock/tunnel helpers, uses the verified
-official `tools/cloudflared.exe`, and writes private role-specific connection
-files. `-MockGeometry` changes process configuration only; it does not overwrite
-the real generator address in `.env`. Without that flag, the configured real
-Geometry Service is used; an empty address leaves verified work queued.
+`POST /v1/sessions/{session_id}/abort` accepts either the matching operator or assigned device identity. It is idempotent after cancellation, invalidates Inspector work leases, rejects pending completion and preserves uploaded files/history. Completed/failed sessions reject a new abort. Issued upload URLs and already dispatched external Geometry work are not recalled. The phone should act on a confirmed matching cancelled response. This endpoint does not restart the server or cancel an arbitrary agent task.
 
-For real G, provide its base URL and the two distinct service tokens. The backend
-submits `PUT /internal/v1/jobs/{job_id}`, polls `GET` for the same job and accepts
-durable notifications at `POST /internal/v1/geometry-events`. G obtains source
-access through the fixed Inspector service routes; the phone never calls G.
+`processing_state=completed` with `processing_scope=geometry_only_v1` means a verified Geometry result, not BIM compliance. Preserve `analysis_origin` and synthetic/mock provenance. Configuration flags, rendered IFC, AI summaries and capture counters do not establish measurements, coverage or construction completion.
 
-Temporary Cloudflare URLs change when the tunnel restarts, so create new test
-sessions after changing the public origin. For a permanent deployment use a stable
-HTTPS hostname. The test URL exists only while this computer and tunnel run.
+## Files, observations and backlog
 
-Codex verification tests, diagnostic scripts and their temporary data live
-outside this checkout in the workspace's local-checks/inspector/ directory.
-These optional local files are not part of the distributed backend or its
-runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.
+Chat files/selections and progress semantics are in [agent-chat](agent-chat.md#files-work-plans-and-observations). API schemas define upload, import and observation fields; source code enforces concurrent revision checks and immutable retry identity.
+
+Backlog is a separate project-scoped manual handoff board with independent Web/Backend status, contract notes and a self-reported editor. It is not automatic Git/CI tracking. Saves are full-record updates using the last read revision; stale writes return 409. Device credentials cannot access it. Apply `002_backlog.sql` separately for PostgreSQL; workspace features require `003_workspace.sql`. See [deployment database setup](cloudflare-deployment.md#database-and-secrets).
+
+For native/container startup use [backend README](../README.md). Cloud publication and verification use [the deployment guide](cloudflare-deployment.md). No workstation configuration or historical test run establishes the current deployment's state.

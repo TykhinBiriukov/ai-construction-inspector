@@ -152,9 +152,7 @@ Run the synthetic complete network test with:
 .\.venv\Scripts\python.exe -B ../../local-checks/inspector/scripts/simulate_iphone.py --zip
 ```
 
-Geometry remains explicitly `mock` in the current remote test environment.
-
-Codex verification tests, diagnostic scripts and their temporary data live
-outside this checkout in the workspace's local-checks/inspector/ directory.
-These optional local files are not part of the distributed backend or its
-runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.
+Read Geometry mode and payload limits from the running instance's capabilities;
+an old test environment does not define a deployment's current configuration.
+The synthetic helper above is optional companion-workspace tooling; see
+[verification](../README.md#verification). It is not distributed backend runtime.

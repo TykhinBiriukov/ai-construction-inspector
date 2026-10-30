@@ -1,278 +1,64 @@
-# iPhone integration — first capture-to-geometry case
+# iPhone integration
 
-This guide describes the implemented API. No backend or Supabase admin credential
-belongs in the iPhone app. The app uses the scoped Inspector device token from
-the owner's `.local/ios-connection.json`. That ignored file contains the **current**
-HTTPS base URL, WSS device-channel URL, `device_id`, `project_id`, and device token.
-Send only that file and this guide to the iOS developer. The separate
-`.local/web-connection.json` is for the operator who creates sessions.
+Use the configured HTTPS origin, device ID and scoped **device** bearer token. Only the operator uses the separate operator identity. No Supabase administrator key, backend database credential or model API key belongs on the phone. Private connection files exported by a test host are optional conveniences, not checked-in configuration or proof that the host is running.
 
-## Current testing mode
+HTTP schemas/limits come from `<BASE_URL>/openapi.json`, `/docs` and `/v1/capabilities`. [schemas.py](../src/ai_inspector/schemas.py) defines the implemented wire models. This guide records lifecycle, retry and source rules; the broader [team API proposal](../../docs/iphone-geometry-bim-inspector-api-v0.1.md) remains a draft.
 
-The remotely accessible development server can run with an explicitly labelled
-mock Geometry Service. It checks the source exchange and returns a synthetic PLY;
-it does not reconstruct a room. `GET /v1/capabilities` reports `geometry_mode` as
-`mock`, `external`, or `unconfigured`. A completed mock case records
-`geometry_result.analysis_origin=mock`. The real generator address in `.env`
-remains unchanged until its owner supplies it.
+## Connect and restore assignment
 
-The temporary tunnel hostname changes after a new start, and the computer and
-tunnel must stay running. Re-export the connection files after changing it.
+The phone initiates `wss://<HOST>/v1/devices/{device_id}/events/ws` with `Authorization: Bearer <DEVICE_TOKEN>`. [InspectorConnection.swift](../examples/InspectorConnection.swift) is a URLSession reference, not a complete capture app or proof of device integration.
 
-## 1. Connect before a capture session exists
+Clients unable to set WebSocket headers may send `{"type":"authenticate","token":"<DEVICE_TOKEN>"}` as the first message within the server authentication deadline. Never put the token in the URL. The server sends device.connected and then a snapshot/replay. Follow the advertised heartbeat interval, answer server ping with `{"type":"pong"}`, and send control messages within the inactivity deadline. Business comments/instructions are not arbitrary messages on this control channel.
 
-New session assignments optionally include `capture_task` with `text` (the
-original operator request) and `source="operator_request"`. Display it as task
-context; receiving it does not mean the camera should start automatically.
-Older sessions may have no task. The field is delivered through both snapshot
-and `session.assigned` events and persists across reconnect. Web-agent details:
-[agent-chat.md](agent-chat.md). This backend increment does not implement the
-corresponding iOS UI change.
+Persist assigned session ID, model/room context and revision locally before acknowledging. Inspector generates capture session IDs. Only an assigned session is a new capture task; restore capturing work rather than create a replacement. Sealed/completed sessions in snapshots are history. Optional capture_task.text with source=operator_request contains the original operator request; it is not permission to start the camera remotely. Older sessions may omit it. Display in the actual phone app requires that client's implementation.
 
-Open the exact `device_websocket_url` from the connection JSON:
+Apply a whole event packet before saving its next_cursor. Reconnect using that event cursor, deduplicate event IDs and reject older session revisions. Invalid cursors require a fresh snapshot. For paginated assignments follow returned cursors; those differ from event-resume cursors. Sessions created while offline appear after reconnect. Offline/background/restart is not cancellation and does not require a new session.
 
-```text
-wss://<HOST>/v1/devices/iphone-1/events/ws
-Authorization: Bearer <DEVICE_TOKEN>
-```
+## Acknowledge and start
 
-Swift's `URLSessionWebSocketTask` supports a `URLRequest` with this header; see
-`examples/InspectorConnection.swift`. Browser clients that cannot set WebSocket
-headers can instead send this as the first message within ten seconds:
+After durable local receipt, call `POST /v1/sessions/{session_id}/acknowledgements` with a retained operation_id. This confirms only receipt: it does not start capture or change capture/processing state. The first acknowledgement records device_acknowledged_at and advances revision once. A later acknowledgement ID returns the same first timestamp without another session revision; exact successful replay returns the original receipt. Backend receipt cannot independently prove phone disk state.
 
-```json
-{"type":"authenticate","token":"<DEVICE_TOKEN>"}
-```
+Call `POST .../capture-start` only when recording actually starts. Its operation-ID namespace is separate from acknowledgement; acknowledgement is not a prerequisite, but capture-start is required before upload plans. A start on an already capturing session is a no-op success without another revision.
 
-Do not put the token in the URL. The device does not create its own capture ID.
-The server responds:
+New operation success is 201, exact replay 200, changed content under the same ID 409. Accepted retries replay before terminal-state checks; new start/ack operations after submitted/sealed/cancelled are rejected. Keep the same ID and exact body after uncertain network outcomes.
 
-```json
-{"type":"device.connected","device_id":"iphone-1","schema_version":"0.1","heartbeat_interval_s":15}
-```
+## Capture and source formats
 
-Then, on a fresh connection:
+Read supported formats and limits from capabilities. Normal assigned-session formats include:
 
-```json
-{"type":"device.snapshot","schema_version":"0.1","device_id":"iphone-1","sessions":[],"has_more":false,"resume_cursor":"OPAQUE_CURSOR"}
-```
+| Format | Input |
+|---|---|
+| supabase_capture_v1 | Individual files plus final capture_manifest_supabase_v1 |
+| supabase_capture_zip_v1 | One complete ZIP; [exact layout/key rules](zip-capture.md) |
+| supabase_geometry_parts_v1 | Numbered independent geometry_archive ZIP parts plus final index manifest |
+| versioned_s3_v1 | Versioned S3 manifest/files; [Geometry/source contract](capture-to-geometry.md) |
 
-Sessions created while the phone was offline appear in this snapshot. For more
-than 100 existing sessions, retrieve the paginated assignment list as well.
-Restore sessions by ID and revision. **Only `capture_state=assigned` starts a new
-capture; completed/sealed sessions in a snapshot are history, not new tasks.**
+Each ARKit reset starts a new local segment_id inside the same server session. Preserve frame IDs, original poses/RGB-depth alignment, exact file bytes and SHA-256; segments are not automatically aligned. New frame.json uses 0.2, with legacy RGB-D 0.1 supported. For RGB-only, depth_source=none and depth-related fields/confidence are explicit null, not empty files. Real captures retain device provenance; synthetic fixtures must not masquerade as real measurements. Until business instruction history exists, instruction_id is null.
 
-When the operator creates a session, the channel sends:
+For individual files, request `POST .../upload-plans` with retained request_id and kind=observation_files. Allowed frame/RGB/depth/confidence names and media types are validated by the backend; use returned keys, method, headers and size limits. PUT raw bytes to upload_url without the Inspector Authorization header. Never derive an object key from a sample or silently overwrite changed bytes. Renew expired permissions using the same file identity; already_uploaded is valid only after length/hash match.
 
-```json
-{
-  "type":"events",
-  "events":[{
-    "schema_version":"0.1","event_id":"EVENT_UUID","type":"session.assigned",
-    "session_id":"SESSION_UUID","created_at":"UTC_TIMESTAMP","cursor":"OPAQUE_CURSOR",
-    "session":{"session_id":"SESSION_UUID","capture_state":"assigned","revision":2,"storage":{"provider":"supabase","bucket":"inspection-captures","key_prefix":"projects/demo-building/sessions/SESSION_UUID/","folder_status":"ready"}}
-  }],
-  "next_cursor":"OPAQUE_CURSOR","has_more":false
-}
-```
+For a final capture manifest use kind=capture_manifest and the completion_id it belongs to. Upload it last, after all referenced files are present. Copy the assignment context and exact returned logical object keys; Supabase has no fictitious S3 version IDs. Do not substitute a relative ZIP member path for a bucket-root object_key, or standalone export keys for assigned-session keys.
 
-The example session is abbreviated; the actual event carries the full session,
-including inspection/project/room/model IDs, capture origin and input mode.
-Persist the ID and pinned context locally. Never substitute a new local session ID.
+For geometry parts use kind=geometry_archive, the same completion_id and validated part identity. Each part stays within the instance's archive limit. Upload all independent ZIPs, then the exact index manifest, and complete with supabase_geometry_parts_v1. The request/index/part shapes are in [schemas.py](../src/ai_inspector/schemas.py), [upload planning](../src/ai_inspector/capture_uploads.py) and [parts validation](../src/ai_inspector/geometry_parts.py); do not concatenate parts into the legacy single-ZIP format. Backend intake support does not establish that the external Geometry consumer supports the format.
 
-Send `{"type":"pong"}` when the server sends `{"type":"ping"}`. A client may
-also send `{"type":"ping"}` and receive `pong`. The server closes after 45 seconds
-without a client control message. Background iOS execution is not required; reopen
-and resynchronize when the app becomes active.
+## Complete and observe
 
-After applying an entire event packet, persist `next_cursor`. Reconnect with
-`?after=OPAQUE_CURSOR` or include `after` in the initial authentication message.
-Replay uses the same packets/cursors as authenticated
-`GET /v1/devices/{device_id}/events?after=...&limit=100`. Deduplicate by event ID
-and reject older session revisions. On an invalid cursor, discard it and obtain
-a fresh snapshot. This event resume cursor differs from assignment-list pagination.
+Seal the local capture set, finish uploads and POST `.../complete` with a stable completion_id and exact manifest/archive reference. HTTP 202 means durable receipt, not validated source. Exact replay returns the current status of that operation; changed content conflicts and another completion is blocked while one is pending.
 
-## 2. Acknowledge and start
+Source validation verifies assigned scope, inventory, hashes, frame/segment metadata and safe archive structure before sealing. Missing/corrupt input is rejected without dispatch, returning capture to capturing; a corrected set needs a new manifest/completion ID. Transient failures preserve the operation and retry. Keep local files until the accepted source and required result have been observed.
 
-Every HTTP call to Inspector uses `Authorization: Bearer <DEVICE_TOKEN>` and JSON
-requests use `Content-Type: application/json`.
+A sealed session does not reopen for new photos; an explicitly requested rescan gets a new linked server session. Observe session events/GET for acknowledgement, capture state, source and processing state. Accepted source, Geometry admission and verified result are separate facts. completed with geometry_only_v1 means the saved verified Geometry response, not construction approval. Mock origin must remain visible; configuration alone is not reconstruction.
 
-After saving the ID, POST `/v1/sessions/{session_id}/acknowledgements`:
+## Cancellation and failures
 
-```json
-{"schema_version":"0.1","operation_id":"ACK_UUID"}
-```
+The assigned device or matching operator may POST `.../abort`. Ownership is checked; cancellation is idempotent, invalidates Inspector work leases, rejects pending completion and retains files/history. Completed/failed sessions reject a new abort. Issued upload URLs and dispatched external jobs cannot be recalled. Clear the phone's active assignment only after a matching cancelled response; failure leaves a visible retryable assignment.
 
-This confirms receipt and leaves capture `assigned`. When recording actually
-starts, POST `/v1/sessions/{session_id}/capture-start`:
+401/403 requires identity/scope correction; inspect the code for 409/422 rather than blindly retrying. Transient errors use backoff with the same IDs/body. Preserve cursor, local pending operations, files, upload receipts and manifest bytes across app restart. Actual iOS background/ARKit behavior needs device verification; the backend does not promise continuous background capture.
 
-```json
-{"schema_version":"0.1","operation_id":"START_UUID","device":{"name":"iPhone","os_version":"ACTUAL_OS_VERSION","app_version":"ACTUAL_APP_VERSION"}}
-```
+## Independent test captures
 
-Keep the same operation IDs and content on retry. New success is 201, replay is
-200, conflicting reuse is 409. `capture-start` is required before upload plans.
+`POST /v1/standalone-captures/{session_id}/upload-plans` is a distinct device-scoped export path that accepts a client-generated UUID, observation_files and capture_manifest only. It creates no Inspector session, assignment, accepted normal completion, Localization operation or Geometry job.
 
-## 3. Save observations and request upload permissions
+Objects are scoped to standalone/{project}/{device}/{session_id}/, using content-addressed observation/manifests keys and immutable upload plans. Upload standalone_capture_v1 manifest last, after verifying all referenced uploads. Its standalone inspection/project markers are not Inspector entities; ownership comes from the authenticated prefix. Discover a completed manifest instead of assuming a partial folder is complete. Incorporating this data into an inspection requires a separately implemented validated import.
 
-For **one ZIP containing the whole capture**, use the alternative protocol in
-[zip-capture.md](zip-capture.md). It uses `kind=capture_archive`, a raw
-`application/zip` signed upload, and `format=supabase_capture_zip_v1` on completion.
-The following individual-photo workflow remains supported.
-
-Each ARKit reset uses a new client-generated `segment_id` within the same session.
-Each observation gets a UUID. Store `frame.json`, original `rgb.jpg`, and depth /
-confidence files when available. File hashes are lowercase SHA-256 of the exact
-stored bytes. Preserve original RGB/depth alignment and poses from the same frame.
-Use frame.json 0.2 (legacy RGB-D 0.1 remains supported).
-
-For RGB-only 0.2: `depth_source="none"`; `depth`, `depth_size`, `depth_unit`,
-`depth_to_rgb_mapping`, and `confidence` must all be explicit null. No empty depth
-files. Real captures use `capture_origin=device`, `tracking_state=normal`; the
-test fixture's synthetic origin/tracking must not be used for real measurements.
-For this first case `instruction_id=null`.
-
-POST `/v1/sessions/{session_id}/upload-plans`:
-
-```json
-{
-  "schema_version":"0.1","request_id":"UPLOAD_REQUEST_UUID","kind":"observation_files","completion_id":null,
-  "objects":[
-    {"observation_id":"OBSERVATION_UUID","name":"frame.json","media_type":"application/json","byte_length":2048,"sha256":"ACTUAL_SHA256"},
-    {"observation_id":"OBSERVATION_UUID","name":"rgb.jpg","media_type":"image/jpeg","byte_length":123456,"sha256":"ACTUAL_SHA256"}
-  ]
-}
-```
-
-Send at most 50 objects per request. Allowed names/media types:
-
-| Name | Media type | Required |
-|---|---|---|
-| `frame.json` | `application/json` | Yes |
-| `rgb.jpg` | `image/jpeg` | Yes |
-| `depth.f32` | `application/octet-stream` | When frame.depth is non-null |
-| `confidence.u8` | `application/octet-stream` | When frame.confidence is non-null |
-
-The backend returns `format=supabase_upload_plan_v1` and an item for each object.
-For `status=upload_required`, PUT **raw file bytes** to its `upload_url` using the
-exact `headers` and `method` returned. Use a fresh request to that URL, with **no
-Inspector Authorization header, Supabase admin key, or API token added**. Supabase
-signed URLs grant only that path and prohibit overwrite. `version_id` is null,
-because these are Supabase objects, not versioned S3 objects.
-
-For `already_uploaded`, retain `object_key`, hash and size; no upload is needed.
-A timeout or duplicate-object response can be resolved by repeating the same
-upload-plan request: the backend checks actual bytes and returns existing status.
-Renew permissions through the same request ID; never change an observation's bytes
-under its existing ID. JSON bodies and binary bytes must be retained offline.
-
-## 4. Upload the final manifest last
-
-Use the exact pinned context from the assignment. Supabase manifest contents:
-
-```json
-{
-  "schema_version":"0.1","format":"capture_manifest_supabase_v1",
-  "session_id":"SESSION_UUID","inspection_id":"INSPECTION_UUID","project_id":"demo-building",
-  "room_id":"room-204","model_version":"unbound","capture_origin":"device","input_mode":"live_capture",
-  "capture_closed_at":"2026-10-27T14:00:00Z","observation_count":1,
-  "segments":[{"segment_id":"SEGMENT_UUID","created_at":"2026-10-27T13:59:00Z","units":"m","coordinate_convention":"arkit_world_camera_v1","matrix_layout":"rows_column_vectors"}],
-  "observations":[{"observation_id":"OBSERVATION_UUID","segment_id":"SEGMENT_UUID","files":[
-    {"name":"frame.json","object_key":"RETURNED_FRAME_KEY","byte_length":2048,"sha256":"ACTUAL_FRAME_SHA256"},
-    {"name":"rgb.jpg","object_key":"RETURNED_RGB_KEY","byte_length":123456,"sha256":"ACTUAL_RGB_SHA256"}
-  ]}]
-}
-```
-
-All placeholders require real values. Copy returned object keys, do not invent
-paths. Include every recorded observation intended for processing, no duplicates.
-Include depth/confidence refs when present; omit S3 `version_id` entirely.
-
-Create a UUID `completion_id` and exact final UTF-8 manifest bytes. Get another
-upload plan with `kind=capture_manifest`, that completion ID, and one object:
-`observation_id=null`, `name=capture-manifest.json`, `media_type=application/json`,
-and the manifest's real byte length/hash. Upload the exact bytes to its signed URL.
-
-## 5. Notify completion
-
-POST `/v1/sessions/{session_id}/complete`:
-
-```json
-{
-  "schema_version":"0.1","completion_id":"COMPLETION_UUID",
-  "capture_ref":{
-    "format":"supabase_capture_v1","storage_id":"capture-supabase",
-    "manifest_key":"RETURNED_MANIFEST_OBJECT_KEY","manifest_byte_length":4096,"manifest_sha256":"ACTUAL_MANIFEST_SHA256"
-  }
-}
-```
-
-202 means the completion message was durably saved, not that geometry is ready.
-Replay returns 200 with that operation's current status. The backend verifies the
-source and pins the exact accepted bytes in a separate server-owned Supabase
-snapshot. Existing phone upload grants cannot modify the accepted copy. The original
-manifest hash and logical file keys remain intact; G receives download URLs for
-the verified copies. No S3 version IDs are invented.
-
-## 6. Observe the first-case result
-
-`session.updated` events carry the latest full session. HTTP fallback is
-`GET /v1/sessions/{session_id}`. Typical states:
-
-| capture_state | processing_state | Meaning |
-|---|---|---|
-| `assigned` | `idle` | Session delivered, capture has not started |
-| `capturing` | `idle` | Recording / uploads |
-| `submitted` | `validating` | Completion received, checking storage |
-| `sealed` | `queued_geometry` | Source pinned, generator job waiting |
-| `sealed` | `building_geometry` | Generator processing |
-| `sealed` | `completed` | First case done; server saved verified Geometry response |
-| `sealed` | `failed` / `cancelled` | Terminal generator failure/cancellation |
-
-On completion, read `geometry_result`, `geometry_job`, and `processing_scope`.
-`processing_scope=geometry_only_v1`; the separate inspection-analysis `result`
-remains null. A mock result has `analysis_origin=mock` and synthetic artifact
-metadata. Artifact URLs are service-facing; the app does not receive G credentials.
-
-If source validation rejects the set, capture returns to `capturing`; correct the
-files and create a **new** completion ID/manifest. Temporary storage/generator
-failures remain queued and are retried. A sealed session never reopens for new photos.
-
-## Failure and reconnect handling
-
-API errors have `code`, `message`, `retryable`, `details`. 401/403 requires fixing
-identity; 409 requires inspecting the code; 422 requires fixing the request;
-transient failures retry the same IDs/body with backoff. Preserve local capture
-files until the application has observed the accepted source and required result.
-
-The operator can check `/v1/devices/{device_id}/status` for channel presence. If a
-WebSocket closes, reconnect with the last applied event cursor and exponential
-backoff. Snapshot/replay survives backend restart. The app itself initiates the
-network connection; it does not need an inbound HTTP server or a public phone IP.
-
-## Reference implementation and public documentation
-
-- `examples/InspectorConnection.swift`: small URLSession transport helper; integrate
-  capture generation/state handling in the actual app. It is a reference example,
-  not an Xcode project validated on this Windows host.
-- `../../local-checks/inspector/scripts/simulate_iphone.py`: owner-side synthetic full-case network test.
-- API schema: `<BASE_URL>/openapi.json`; interactive HTTP docs: `<BASE_URL>/docs`.
-- [Apple URLSessionWebSocketTask](https://developer.apple.com/documentation/foundation/urlsessionwebsockettask)
-- [Supabase signed upload URLs](https://supabase.com/docs/reference/swift/storage-from-uploadtosignedurl)
-
-Codex verification tests, diagnostic scripts and their temporary data live
-outside this checkout in the workspace's local-checks/inspector/ directory.
-These optional local files are not part of the distributed backend or its
-runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.
-
-## Independent test captures (29 October 2026)
-
-`POST /v1/standalone-captures/{session_id}/upload-plans` accepts a client-generated UUID and the existing `UploadPlanRequest`, limited to `observation_files` and `capture_manifest`. Requires the device bearer identity. It does not create/assign an Inspector session, invoke localization, accept a normal completion or enqueue Geometry. It uses the existing Supabase credentials only on the backend.
-
-Private bucket objects live under `standalone/{authenticated_project}/{authenticated_device}/{session_id}/`. Observation paths are `observations/{observation_id}/{sha256}/{name}`; manifests are `manifests/{sha256}/capture-manifest.json`. The response uses `supabase_upload_plan_v1`; repeated requests return `already_uploaded` only after matching stored length and SHA-256. Size limits and allowed names/media types are the same as normal per-file capture uploads. Content addressing and non-upsert signed URLs make retries immutable without Inspector database records.
-
-The iPhone uploads a `standalone_capture_v1` manifest last, after checking all uploaded files via renewed plans. It contains the normal capture inventory with exact `object_key`, length and digest. Manifest `inspection_id`/`project_id` values are `standalone` markers, not Inspector entities; ownership comes from the authenticated prefix. Consumers should discover manifests, not treat partial upload folders as complete. This is a test-data export, not an accepted inspection; authorized devices are responsible for publishing an accurate inventory. RGB/depth/pose formats are unchanged and coordinates are local to each ARKit segment.
-
-### Device cancellation
-
-The assigned device may call `POST /v1/sessions/{session_id}/abort` with its existing bearer token. Project/device ownership is checked before mutation, as with other session actions; operator cancellation remains supported. Cancellation is idempotent, invalidates pending worker leases, rejects pending completion, and retains capture files. Completed/failed sessions retain the existing terminal-state rejection. The phone stops capture and clears its active assignment only after a matching `capture_state=cancelled` response; failure leaves a retryable visible assignment. This does not revoke a signed upload URL already issued or terminate an external job already dispatched.
+Native/cloud setup and optional test tools are in [backend README](../README.md). Operator intake and reference-BIM semantics are in [web integration](web-integration.md).

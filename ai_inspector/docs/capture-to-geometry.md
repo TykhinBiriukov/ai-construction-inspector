@@ -1,164 +1,54 @@
-# Первая версия: iPhone → ссылка на съёмку → Geometry Service
+# Accepted capture → Geometry handoff
 
-В исходном контракте генератор называется **Geometry Service (G)** или Geometry
-Builder. Backend Inspector создаёт сессию, получает от iPhone ссылку на завершённый
-набор и передаёт принятый источник генератору. Языковая модель в этом процессе не
-вызывается.
+Inspector owns source validation, the durable Geometry operation and verified final result. The phone never calls Geometry directly; an LLM request is not required for capture processing. Native/cloud setup is in [backend README](../README.md) and [deployment](cloudflare-deployment.md); HTTP models are in OpenAPI/[schemas.py](../src/ai_inspector/schemas.py).
 
-## Последовательность
+## Source and state transitions
 
-1. Создать инспекцию и capture session существующими endpoint.
-2. iPhone получает назначенную сессию через `GET capture-assignments`, сохраняет ID
-   и при желании подтверждает получение через `POST acknowledgements`.
-3. При начале съёмки приложение отправляет `POST capture-start`.
-4. Приложение загружает кадры в S3, последним — `capture_manifest_v1` со ссылками
-   на конкретные версии файлов.
-5. Приложение отправляет `POST /v1/sessions/{session_id}/complete`.
-6. Backend сохраняет сообщение и отвечает `202`. Фоновый worker проверяет manifest,
-   принадлежность данных сессии и целостность перечисленных версий файлов.
-7. После успешной проверки backend фиксирует источник, закрывает capture для новых
-   данных и создаёт задание генератору. Worker передаёт задание, когда настроен адрес
-   генератора; пока адрес пуст, оно остаётся в сохраняемой очереди.
+The device completes an assigned capture using a supported format from `/v1/capabilities`. [iOS integration](ios-integration.md) describes assigned uploads, independent test exports and reconnect; [ZIP format](zip-capture.md) defines single-archive layout. Supabase per-file, single-ZIP and geometry-parts inputs normalize to accepted source inventory. The versioned S3 path remains supported separately.
 
-## Сообщение от iPhone
+The first completion response is 202: the reference is durable but not accepted yet. Same completion ID/content replay returns 200 with that operation's current status; changed content is 409. Another completion cannot overtake a pending one. Permanent input rejection is retained; a corrected set needs a new manifest/completion ID. Temporary storage/service failures retain IDs and pending state.
 
-```json
-{
-  "schema_version": "0.1",
-  "completion_id": "e6d4920b-352a-4c2f-8f1e-4de4b0bfdbdf",
-  "capture_ref": {
-    "storage_id": "capture-s3",
-    "manifest_key": "projects/demo-building/sessions/SESSION_UUID/manifests/e6d4920b-352a-4c2f-8f1e-4de4b0bfdbdf.json",
-    "manifest_version_id": "EXACT_S3_VERSION_ID",
-    "manifest_byte_length": 4096,
-    "manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
-  }
-}
-```
+Validation enforces scope, schema, frame/segment identities, file count/size/hash, archive safety and required RGB/metadata plus conditional depth/confidence. It accepts frame.json 0.1/0.2; source validity does not establish geometric quality, units/alignment across segments, measured coverage or construction compliance. RGB-only dispatch needs the configured consumer's explicit support.
 
-`SESSION_UUID`, размер, hash и version ID в примере — placeholders. Приложение
-передаёт реальные значения. Backend выбирает bucket из конфигурации по storage ID;
-клиент не задаёт произвольный bucket или внешний URL. Ключ manifest должен совпадать
-с выделенным session prefix и completion ID. Требуется токен назначенного устройства.
+| State/fact | Meaning |
+|---|---|
+| submitted / validating | Completion stored; source verification unfinished |
+| rejected, capture returns to capturing | Invalid/missing/corrupt input; no Geometry dispatch |
+| sealed / queued_geometry | Source accepted and pinned; Geometry result not ready |
+| dispatch delivered | Geometry accepted the job; no result implied |
+| completed / geometry_only_v1 | Terminal Geometry response reconciled and saved as geometry_result |
 
-Первый ответ:
+Model/room context is copied from server assignment. Opaque BIM intake is not validated IFC/room membership. In Supabase mode, accepted bytes are copied/pinned under server ownership and checked on reuse. In S3 mode, exact versions are pinned. Signed URLs are refreshed for authorized consumers and do not become operation identity or model context.
 
-```json
-{
-  "session_id": "SESSION_UUID",
-  "completion": {
-    "completion_id": "e6d4920b-352a-4c2f-8f1e-4de4b0bfdbdf",
-    "status": "pending",
-    "error": null
-  }
-}
-```
+## Versioned S3 compatibility
 
-Точный повтор ID/содержимого возвращает `200` с **текущим статусом этой операции**.
-Другое содержимое под тем же ID — `409`. При pending другая completion запрещена.
-После постоянной ошибки файлов нужна новая completion и новый manifest; повтор
-старой операции возвращает сохранённый отказ, даже если новый набор уже принят.
+S3 completion uses capture_manifest_v1 and exact manifest version/length/SHA-256. The bucket is chosen from configured storage identity, never an arbitrary caller URL/bucket. Manifest prefix/completion/session must match, and every referenced object has its exact version. Multipart boundaries and expiring links are not identity. Trusted full checksums may avoid re-downloading large objects; otherwise hash verification streams the bytes.
 
-Полученный `capture_ref` и статус видны оператору в `GET /v1/sessions/{session_id}`.
-Это позволяет получить ссылку от телефона без отдельного webhook на пользовательский
-компьютер.
+Only this S3 path requires INSPECTOR_CAPTURE_BUCKET/AWS versioned-object access. The Supabase formats use backend Supabase credentials and scoped upload plans instead. Do not invent S3 version IDs for Supabase objects or require AWS credentials for a Supabase deployment.
 
-## Проверка и состояния
+## Geometry service contract
 
-- `submitted / validating`: сообщение сохранено, проверка ещё не завершена.
-- Если bucket не настроен либо S3 временно недоступен, completion остаётся pending;
-  причина доступна в `source.validation_error`.
-- Отсутствующий файл, неверный hash или некорректный manifest дают rejected;
-  capture возвращается в `capturing`, задание генератора не создаётся.
-- После проверки: `sealed / queued_geometry`, completion accepted, источник
-  закреплён по точным версиям и hashes.
-- Пустой адрес генератора: `geometry_job.dispatch_status=pending` с причиной
-  `geometry_not_configured` после первой попытки доставки.
-- Получено подтверждение генератора: `dispatch_status=delivered`. Это означает
-  приём задания генератором, а не готовность геометрии или результат инспекции.
-
-Проверяются manifest 0.1, frame.json 0.1/0.2, обязательные RGB/metadata, условные
-depth/confidence, IDs/segments, размеры и SHA-256. Для доверенного полного checksum
-S3 не требуется скачивать каждый большой файл; при отсутствии подходящего checksum
-байты читаются потоком и hash вычисляется заново. Геометрическое качество остаётся
-за Geometry Service. До появления истории инструкций поддерживается
-`frame.instruction_id=null`. RGB-only наборы можно принять как визуальные данные;
-передача таких наборов генератору требует явного включения его поддержки.
-
-## Передача в генератор
-
-Backend вызывает предложенный контрактом endpoint генератора:
+Inspector persists job/operation IDs and the concrete request before:
 
 ```text
 PUT {INSPECTOR_GEOMETRY_BASE_URL}/internal/v1/jobs/{job_id}
 ```
 
-В запросе находятся job/operation/session/inspection/project/room/model/profile IDs
-и `source_ref`:
+The body binds session/inspection/project/room/model/profile and source_ref containing the protected Inspector source endpoint plus exact manifest identity. Consumers use their dedicated Geometry identity:
 
-```json
-{
-  "source_ref": {
-    "url": "https://inspector.example/internal/v1/sessions/SESSION_UUID/capture-source",
-    "manifest_sha256": "EXACT_MANIFEST_SHA256",
-    "manifest_version_id": "EXACT_MANIFEST_VERSION_ID"
-  }
-}
-```
+- `GET /internal/v1/sessions/{session_id}/capture-source` returns the authorized exact manifest reference and file-list address.
+- `GET .../capture-source/files` supplies cursor-paginated short-lived links to accepted files/versions only.
 
-Это служебная ссылка Inspector. Генератор с отдельным токеном читает:
+Download directly from the selected storage using returned links. Never re-discover a mutable folder or substitute a newer manifest. Supabase and versioned S3 retain their distinct provenance. Numbered Geometry parts/ARKit segment support must be checked against the actual consumer; backend upload acceptance does not certify external interoperability.
 
-- `GET /internal/v1/sessions/{session_id}/capture-source` — временный URL точной
-  версии manifest, hash/размер и адрес списка файлов.
-- `GET /internal/v1/sessions/{session_id}/capture-source/files?after=...&limit=100`
-  — страницы временных URL только принятых версий файлов.
+`POST /v1/sessions/{id}/geometry-jobs/dispatch` only accelerates an existing pending delivery; it does not create another processing pipeline. An agent tool must reuse this same operation. Transport timeouts/429/transient failures preserve job ID, operation key and exact request; redirects are refused and retry delay is bounded by the adapter policy. Missing service configuration leaves work pending, never a fake success.
 
-Генератор скачивает файлы напрямую из S3. Телефон не вызывает генератор. Временные
-подписи выдаются заново по запросу и не записываются в состояние задания.
+Callbacks enter the durable authenticated inbox as hints. Inspector reads/reconciles the exact job through the Geometry status API and checks source/result bindings before accepting ready/failed. Polling recovers lost callbacks. A ready admission receipt is not a verified result. [geometry_results.py](../src/ai_inspector/geometry_results.py) defines accepted result validation; [workflow.py](../src/ai_inspector/workflow.py) defines source/dispatch transitions.
 
-Отправка автоматическая. Для ручного ускорения pending retry оператор может вызвать
-`POST /v1/sessions/{session_id}/geometry-jobs/dispatch`: `202`, если задание ожидает
-доставки; `200`, если оно уже доставлено; `409`, если источник ещё не принят либо
-генератор окончательно отклонил это задание. Endpoint не создаёт новую обработку.
+## Ownership and recovery
 
-При timeout, 429 и временных ошибках сохраняются job ID, operation key и точные
-байты исходящего запроса. `Retry-After` учитывается. Redirect не выполняется.
-Результаты ready/failed теперь сохраняются: callback принимается в durable inbox,
-затем backend читает точное состояние задания через GET. Опрос того же job также
-выполняется без callback. Подтверждение ready в квитанции отправки само по себе
-не применяется как проверенная геометрия. Терминальный результат доступен в
-`session.geometry_result`; `processing_scope=geometry_only_v1` явно ограничивает
-смысл `processing_state=completed` первым кейсом, без результата BIM-инспекции.
+Durable completions/jobs/work leases survive restart. Native API startup starts the capture worker; [worker.py](../src/ai_inspector/worker.py) provides an optional bounded/manual driver. Cloudflare uses the existing bounded process/cron. Delivery and model/remote-inspector recovery are different loops; Geometry completion does not currently start an agent continuation.
 
-## Настройки и границы
+Offline is not cancel. Abort invalidates Inspector's work leases and preserves data, but cannot revoke issued upload URLs or terminate an already dispatched external job. A stale worker cannot publish after lease replacement/cancellation. A later rescan creates a linked session; it does not mutate the sealed source/job.
 
-Адрес генератора оставлен пустым по запросу пользователя. Для подключения потребуются
-`INSPECTOR_CAPTURE_BUCKET`, AWS-доступ к версиям объектов,
-`INSPECTOR_GEOMETRY_BASE_URL`, доступный генератору `INSPECTOR_PUBLIC_BASE_URL` и два
-разных service-токена. Полный список находится в `.env.example`.
-
-SQLite автоматически мигрирует с версии схемы 1 на 2, сохраняя имеющиеся инспекции,
-сессии и квитанции. В версии 2 добавлены completions, geometry jobs и сохраняемая
-очередь с leases и восстановлением после сбоя worker.
-
-Версия схемы 3 дополнительно сохраняет готовность папки Supabase. При включённой
-Supabase-конфигурации новая сессия получает папку с её ID; назначение становится
-видимым телефону после подтверждения создания marker-файла. Существующие сессии
-при миграции остаются доступными. Настройки читаются из локального `.env`; переменные
-процесса имеют приоритет.
-
-Версия схемы 4 добавляет историю событий устройства, соединения, upload requests /
-objects и inbox Geometry callbacks. WebSocket устройства работает до создания
-сессии, поддерживает snapshot/replay и доставляет session ID после готовности папки.
-
-Supabase использует отдельный реализованный формат `capture_manifest_supabase_v1`
-и completion `format=supabase_capture_v1`, без фиктивных S3 version IDs. Backend
-выдаёт signed upload plans для точных raw-ключей, проверяет набор и сохраняет
-server-owned копии принятых байтов. Ссылки G ведут к этим копиям, сохраняя исходный
-manifest/hash и логические object keys. AWS S3-сессии используют versioned контракт
-выше. Подробная актуальная инструкция: `ios-integration.md`.
-
-Удалённый тест проходит через настоящий Supabase и HTTPS/WSS tunnel. Опциональный
-тестовый Geometry Service возвращает `analysis_origin=mock`; реальная реконструкция
-требует адреса настоящего G. iPhone-разработчику передаются scoped device-токен и
-сетевой контракт, серверный Supabase secret остаётся только на backend.
+Configure Geometry base URL, Inspector public origin and distinct directional service tokens for the intended deployment. Get setting names from [.env.example](../.env.example) and current limits/mode from capabilities. Mock output has explicit analysis_origin=mock; external/unconfigured flags alone do not establish a successful reconstruction. Keep deployment/test observations in dated reports, not as timeless environment facts in this contract.
