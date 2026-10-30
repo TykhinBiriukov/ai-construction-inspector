@@ -1,288 +1,44 @@
-# AI Inspector — first capture-to-geometry case
+# AI Inspector backend
 
-Current developer handoff:
+Inspector owns chat/agent execution, capture sessions, source validation and Geometry handoff. The main agent uses Meta Model API / Muse Spark 1.3, predefined tools and registered inspector services. Geometry completion alone is not an inspection verdict. Code and this repository's guides describe implemented behavior; the [team API proposal](../docs/iphone-geometry-bim-inspector-api-v0.1.md) is a draft, not a released contract.
 
-- [Main inspector → tools and specialist inspectors](docs/agent-chat.md) — Meta Model API / Muse Spark 1.3, durable chat, inspector harnesses and separate A2A HTTP+JSON services
-- [Cloudflare agent deployment handoff](docs/cloudflare-agent-handoff.md) — completed preparation and remaining account-owner steps
+## Start locally
 
-- [Cloudflare + Supabase deployment](docs/cloudflare-deployment.md) — permanent HTTPS, no Mac required
-
-- [iPhone API and connection guide](docs/ios-integration.md)
-- [Operator / web application guide](docs/web-integration.md)
-- [Single-ZIP capture format and upload examples](docs/zip-capture.md)
-- `scripts/start-remote-test.ps1 -MockGeometry`: external HTTPS/WSS test environment
-- `.venv/bin/python scripts/host_mac.py start`: macOS background Inspector + temporary HTTPS (use `status` / `stop` to manage it)
-- `.local/ios-connection.json`: private phone URL/device credentials
-- `.local/web-connection.json`: private operator connection settings
-
-The complete implemented first case is: device WebSocket connection -> server
-session/folder creation -> device acknowledgement and capture -> signed Supabase
-uploads -> source snapshot -> Geometry job -> saved final Geometry response.
-`POST /v1/capture-sessions` can start it without requiring a reference BIM upload.
-`../../local-checks/inspector/scripts/simulate_iphone.py` exercises the full network path with synthetic data.
-Add `--zip` to upload the entire capture as one ZIP. Individual-photo uploads
-remain available. ZIP captures are verified and normalized to the same Geometry
-source interface before processing.
-
-This backend receives an opaque BIM file and an inspection prompt, stores an
-inspection, creates a capture session, and lets the assigned iPhone retrieve and
-acknowledge its session ID. After capture, it receives a Supabase snapshot reference
-or versioned S3 manifest, verifies the source, and queues a durable Geometry job.
-SQLite persists local development state. With `INSPECTOR_DATABASE_URL`, PostgreSQL
-persists state, retry receipts, completions and the delivery queue. Reference BIM
-bytes use the local adapter by default or private Supabase Storage when
-`INSPECTOR_BIM_STORAGE=supabase`.
-The backend consumes Geometry callbacks and polls exact job state as a recovery
-path. A verified terminal response completes the geometry-only case; the separate
-inspection-analysis result stays null. Mock results are explicitly labelled.
-
-The generator address is intentionally empty by default. With no capture bucket,
-received completions wait for storage configuration. With storage configured but
-no generator address, verified sources remain queued for dispatch.
-
-## Run locally
-
-Python 3.12 or later is required. From this `ai_inspector` directory in PowerShell:
+Python 3.12+ is required. From this directory in PowerShell, create the environment if missing:
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[test]"
-
+.\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe -m uvicorn ai_inspector.main:app --host 127.0.0.1 --port 8000
 ```
 
-Before the first startup, create a local `.env` from `.env.example` if it does not
-already exist, and set distinct random `INSPECTOR_OPERATOR_TOKEN` and
-`INSPECTOR_DEVICE_TOKEN` values. This workspace's local `.env` has already been
-configured. The file is ignored by Git and is never returned by the API.
+Create an ignored `.env` from [.env.example](.env.example) if needed. Set distinct random operator/device tokens; preserve existing credentials and data on restart. Settings load from the working directory's `.env`, with process environment taking precedence. The example lists configuration names, not working credentials. A fresh clone is not preconfigured.
 
-Open [interactive API documentation](http://127.0.0.1:8000/docs) and use its
-**Authorize** button with the appropriate token. `.env.example` lists all settings;
-the local `.env` is loaded automatically from the working directory, and process
-environment variables override it. Keep the same tokens across
-backend restarts and configure the device token in the iPhone app. There are no
-built-in credentials. This first increment has one configured project and device,
-with distinct operator/device bearer identities rather than an identity provider.
+Open `/` for the operational console or `/ui/demo.html` for the document/chat workspace. HTTP request schemas are generated at `/docs` and `/openapi.json`; [`api.py`](src/ai_inspector/api.py) and its Pydantic models are authoritative for fields and limits. Check `/v1/capabilities` for the running instance's limits/configuration; configuration is not a successful service call.
 
-For a foreground iPhone on the same LAN, bind Uvicorn with `--host 0.0.0.0` and use
-the computer's LAN address as the app's `inspector_base_url`. Local HTTP is for
-development; the contract's deployed transport is HTTPS/WSS.
+## Integration guides
 
-## HTTP flow
+| Concern | Guide |
+|---|---|
+| Agent roles, registration, A2A and recovery | [Agent runtime](docs/agent-chat.md) |
+| Operator UI, chat/files, intake and capture creation | [Web integration](docs/web-integration.md) |
+| Device authentication, assignment, capture/upload and reconnect | [iPhone integration](docs/ios-integration.md) |
+| Single-ZIP capture layout | [ZIP format](docs/zip-capture.md) |
+| Accepted sources and Geometry job/status/result | [Geometry handoff](docs/capture-to-geometry.md) |
+| Cloud architecture, migrations, secrets and CI/manual deployment | [Cloud deployment](docs/cloudflare-deployment.md) |
+| Independent photo/drawing analysis | [Minion service](../drawing_photo_service/README.md) |
+| Viewer dependency build and licenses | [Viewer](viewer/README.md) |
 
-For the smaller capture-only case, use the operator's JSON
-`POST /v1/capture-sessions` with `schema_version`, UUID `request_id` and `device_id`.
-The app opens `/v1/devices/{device_id}/events/ws` first and receives the assigned
-session. The optional BIM-input flow below remains available.
+## Persistence and optional hosting
 
-1. As **operator**, `POST /v1/inspections` using multipart form data:
-   `schema_version=0.1`, a UUID `request_id`, `project_id`, `room_id`, `prompt`,
-   and file field `bim_model`. Optional `model_is_synthetic` defaults to false.
-2. As **operator**, `POST /v1/inspections/{inspection_id}/capture-sessions`:
+Native development defaults to SQLite and local immutable BIM blobs under `INSPECTOR_DATA_DIR`; preserve the database and models together. `INSPECTOR_DATABASE_URL` selects PostgreSQL; `INSPECTOR_BIM_STORAGE=supabase` selects private remote blobs. Do not reuse an old SQLite snapshot as a live writer after switching to cloud persistence.
 
-   ```json
-   {
-     "schema_version": "0.1",
-     "request_id": "36e484a6-c309-4c39-b64d-fdb54a9db175",
-     "device_id": "iphone-1",
-     "room_id": "room-204",
-     "capture_origin": "device",
-     "input_mode": "live_capture",
-     "parent_session_id": null
-   }
-   ```
+[compose.yaml](compose.yaml) and [Dockerfile](Dockerfile) provide a native single-process deployment: from this directory run `docker compose up -d --build`, supply `.env`, keep the `inspector-data` volume, and terminate public HTTPS at a reverse proxy. SQLite mode needs its persistent volume and one writer deployment. Back up SQLite through its backup API with the models directory; copying a live database without its WAL is unsafe.
 
-   When the three Supabase settings are configured, creation also materializes
-   `projects/{project_id}/sessions/{session_id}/` in the configured bucket with a
-   small `.session.json` marker. The response's `storage` includes `provider`,
-   `project_url`, `bucket`, `key_prefix`, and `folder_status=ready`; it contains no
-   secret key. A failed storage request returns a retryable 503 but retains the
-   session ID. Retry the same request ID to finish the same folder. Assignments
-   remain hidden from the device until the folder is ready.
+The optional [Mac hosting helper](scripts/host_mac.py) supports `start/status/restart/stop`; [start-remote-test.ps1](scripts/start-remote-test.ps1) is a temporary tunnel workflow. Use these only when a temporary test host is intended. Read any current private connection files from that host; the repository does not establish that a process or tunnel is running.
 
-3. As **device**, `GET /v1/devices/iphone-1/capture-assignments`. The response's
-   `assignments` array contains the generated `session_id` and pinned context.
-   Follow non-null `next_cursor` using `?after=...`. Start a new traversal to find
-   later assignments; deduplicate locally by `session_id` and persist the ID
-   before acknowledgement.
-4. As **device**, `POST /v1/sessions/{session_id}/acknowledgements`:
+## Verification
 
-   ```json
-   {
-     "schema_version": "0.1",
-     "operation_id": "d7ea3c44-0501-4ae5-ae54-03f36f7903bd"
-   }
-   ```
+The optional companion workspace keeps the full Codex regression suite, fixtures and reports outside this checkout at `local-checks/inspector/`; its `run-tests.ps1` imports this backend. If present, run it from the companion root. A plain clone may not contain these files. Tracked teammate tests in this repository are only a subset; do not describe their discovery command or historical counts as a full current suite. Verification data and new assistant tests stay outside Git, per [AGENTS](../AGENTS.md).
 
-   The receipt contains `session_id`, `operation_id`, and `acknowledged_at`.
-   Receiving the session leaves `capture_state=assigned` and
-   `processing_state=idle`. The operator can confirm receipt through
-   `GET /v1/sessions/{session_id}` and its `device_acknowledged_at` field.
-5. When capture actually starts, as **device**, call
-   `POST /v1/sessions/{session_id}/capture-start`:
-
-   ```json
-   {
-     "schema_version": "0.1",
-     "operation_id": "05c75182-ad6a-44b0-b823-90bdb5b3c1d7",
-     "device": {
-       "name": "iPhone",
-       "os_version": "your-os-version",
-       "app_version": "0.1.0"
-     }
-   }
-   ```
-
-   This advances capture state to `capturing`. A separate receipt acknowledgement
-   is optional; capture-start can be sent directly.
-
-6. After uploading all capture objects and the final manifest, as **device**,
-   call `POST /v1/sessions/{session_id}/complete`. Send `schema_version`, a persistent
-   UUID `completion_id`, and `capture_ref` containing `storage_id`, exact
-   `manifest_key`, `manifest_byte_length`, and `manifest_sha256`. S3 additionally
-   requires `manifest_version_id`; Supabase uses `format=supabase_capture_v1` with
-   no version ID. This is a logical reference, not an expiring download URL.
-   The backend returns `202` after saving it, then verifies the exact manifest and
-   file versions in a background worker. `GET session` exposes pending, rejected,
-   or accepted completion status and the received reference.
-7. A valid source seals capture and atomically creates one persistent geometry job
-   and delivery operation. The worker sends
-   `PUT {INSPECTOR_GEOMETRY_BASE_URL}/internal/v1/jobs/{job_id}` with a stable
-   authenticated Inspector source URL. Retries preserve the same job, operation
-   key, source versions, and command bytes. An empty generator URL keeps the job
-   queued. The operator can bring forward a pending retry through
-   `POST /v1/sessions/{session_id}/geometry-jobs/dispatch`; delivery is also automatic.
-
-New operations return `201`; successful retries with the same IDs and content
-return `200`. Retain IDs and request bodies on retry. Conflicting ID reuse returns
-`409`. Session creation pins project/model/policy from the persisted inspection.
-
-Operators can also retrieve inspection metadata with
-`GET /v1/inspections/{inspection_id}` and original BIM bytes with
-`GET /v1/inspections/{inspection_id}/bim-model`. These are operator-only endpoints.
-
-## Exercise the handoff
-
-In another terminal from the same directory, the client reads the same `.env`:
-
-```powershell
-.\.venv\Scripts\python.exe -B ../../local-checks/inspector/scripts/smoke_test.py --bim "C:\path\room.ifc" --prompt "Inspect the doorway dimensions."
-```
-
-The script acts as the phone over HTTP: it uploads intake, creates a session,
-retrieves the assignment, acknowledges it, and checks retry behavior. It leaves
-capture in `assigned`; it does not operate an actual iPhone camera.
-
-```powershell
-..\..\local-checks\inspector\run-tests.ps1
-```
-
-The optional local verification suite covers persistence across app restart, concurrent session
-creation, transactional rollback, pagination, replay/conflicts, project/device
-access, closed-session rules, bounded BIM intake, exact S3 versions/checksums,
-incomplete capture rejection, generator delivery/timeouts, and background recovery.
-
-## Configure capture completion and generator delivery
-
-For versioned AWS S3, set `INSPECTOR_CAPTURE_BUCKET` and
-`INSPECTOR_CAPTURE_REGION`; AWS access uses boto3's normal credential chain. AWS
-capture upload-plan issuance is not implemented. For the active Supabase path,
-the device uses the implemented `POST /v1/sessions/{id}/upload-plans` endpoint;
-details and example requests are in the iPhone guide.
-
-When its API address is available, set `INSPECTOR_GEOMETRY_BASE_URL`,
-`INSPECTOR_PUBLIC_BASE_URL` (the Inspector address reachable by the generator), and
-distinct `INSPECTOR_GEOMETRY_API_TOKEN` / `INSPECTOR_GEOMETRY_SERVICE_TOKEN` values.
-Restart the backend with the same data directory. Existing pending operations
-resume; no new capture or session is needed. See `.env.example` for configurable
-limits, profile version, and retry timing. Enable RGB-only dispatch explicitly only
-after confirming generator support with `INSPECTOR_GEOMETRY_ACCEPTS_RGB_ONLY=true`.
-
-The worker starts with Uvicorn. For maintenance, the same queue can be advanced
-with `python -m ai_inspector.worker --once`; work leases prevent competing workers
-from applying duplicate results. Transient errors back off and remain pending.
-Permanent source errors return capture to `capturing` and require a new
-completion ID/manifest. A generator error never reopens a sealed capture.
-
-See [capture-to-generator requests and states](docs/capture-to-geometry.md) for the
-full payloads and current integration boundary.
-
-## Supabase session folders
-
-Set `SUPABASE_URL`, `SUPABASE_STORAGE_BUCKET`, and `SUPABASE_SECRET_KEY` together in
-the local `.env` or server environment. The key is used only by the backend, via
-Supabase's `apikey` header. It is not sent to the phone, recorded in session
-metadata, or included in `.env.example`. The adapter uses HTTPS with no redirects
-and never overwrites an existing marker. Bucket creation is outside this endpoint;
-the configured bucket must already exist.
-
-Supabase stores objects under prefixes, so the marker makes an otherwise empty
-session folder visible. Its contents are the session/inspection/project IDs and
-creation timestamp. Provisioning happens outside the database write lock, after
-the ID and retry receipt commit; an interrupted request can finish the same
-folder after restart. A ready folder is never recreated during successful replay.
-
-Supabase's S3 API does not support S3 object versioning. The implemented adapter
-uses `capture_manifest_supabase_v1` without S3 versions, verifies exact hashes and
-lengths, and pins copies under `accepted/{completion_id}/...` before accepting the
-source. Phone grants target only raw observation/manifest paths and never allow
-overwrite. Generator download links point to the server-owned accepted copies;
-later raw uploads cannot change accepted input. The original manifest bytes and
-logical file keys stay unchanged, while private pin keys are held in the accepted
-inventory. The existing versioned AWS S3 path remains supported.
-
-## Current boundary
-
-The BIM file is **stored, not parsed or normalized**. Its status is
-`stored_unvalidated`; `upload-sha256:...` is an immutable intake version, not a
-normalized geometry package. `room_id` is caller-supplied context and is checked
-against the inspection, not extracted from the BIM. The prompt is stored as user
-input and included in new assignments as `capture_task` with
-`source=operator_request`. It is not converted into remote camera commands or
-verified measurements.
-
-The main inspector (OrchestratorAgent) accepts text through `/v1/chats` and uses
-Meta Model API / Muse Spark 1.3 with predefined session/device tools and optional
-registered specialist inspectors with their own tool loops, history and state.
-No specialists are registered by default; see
-[registration, configuration and recovery](docs/agent-chat.md).
-Remote BIM integration, measured coverage and rendering belong to later increments.
-Source access is available only to the configured Geometry
-identity and only for accepted source copies/versions. The first case completes
-with `geometry_result` and `processing_scope=geometry_only_v1`, without creating an
-inspection verdict. The actual iPhone app still needs to wire these network calls;
-this checkout includes a Swift transport reference and remote connection files.
-
-See [the first-increment contract additions](docs/first-increment-contract.md).
-
-Codex verification tests, diagnostic scripts and their temporary data live
-outside this checkout in the workspace's local-checks/inspector/ directory.
-These optional local files are not part of the distributed backend or its
-runtime. Run the local suite with ../../local-checks/inspector/run-tests.ps1.
-
-## Shared Web / Backend backlog
-
-Open **Backlog** in the operator sidebar. Every feature has independent Web and
-Backend statuses (`planned`, `in_progress`, `done`, `not_needed`), implementation
-notes for each side, a shared API/contract field, and a self-reported editor name.
-Use the filters to find unfinished work on either side; archive obsolete entries.
-This is a manually maintained handoff board, not automatic GitHub/commit tracking.
-Mark a side done only when its implementation is available, and record the API
-or commit and remaining integration work. Geometry ZIP support is separate from
-a connected Geometry service.
-
-Records are private project-scoped Supabase metadata, accessible with the existing
-operator token; device tokens cannot read or write the board. Apply
-`scripts/sql/002_backlog.sql` as database owner before deploying this feature.
-The restricted runtime can SELECT/INSERT/UPDATE these records, not change schema.
-Local SQLite creates the matching table on startup.
-
-API: `GET /v1/operator/backlog` returns `{items: [...]}`.
-`POST /v1/operator/backlog/{UUID}` creates with `revision: 0` or updates with the
-last read revision. Required fields: `title`, `updated_by`; optional fields:
-`description`, `contract`, `web_status`, `backend_status`, `web_notes`,
-`backend_notes`, `archived`. This is a full-record save, not a partial patch.
-Responses include `item_id`, incremented `revision`, `created_at`, `updated_at`.
-An exact retry returns the already-saved version. A stale edit returns 409;
-the UI retains the draft until the operator chooses to load the latest record.
-Names are self-reported because this workspace uses a shared operator credential.
+Live model access, a real phone, external Geometry and deployed database permissions require their own integration checks. Durable sessions, typed schemas and passing local fixtures do not establish those results.

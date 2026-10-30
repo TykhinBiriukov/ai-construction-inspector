@@ -1,552 +1,146 @@
 # Main inspector → tools and specialist inspectors
 
-Chat/tool runtime implemented 28 October 2026; orchestrator, inspector registration
-and individual inspector harnesses added 30 October 2026. The selected provider is **Meta Model
-API**, model **`muse-spark-1.3`**, as confirmed by the project owner. This supersedes
-the earlier Llama selection. Model availability and account access require a real
-authorized request; local fixtures do not establish either.
-
-The operator console at `/` includes **Ask Inspector**. Enter a room identifier
-as capture context and send a message. A general question can finish without
-capture. For capture the model selects `session_create`, which uses the existing
-session/storage/device-event workflow. The phone receives the original task in
-`session.capture_task = {text, source: "operator_request"}`. It initiates its own
-authenticated connection and acknowledges the session; the agent cannot open
-the camera remotely. The actual iPhone UI must display this new optional field.
-That application change is not included or verified in this checkout.
+The main agent is `OrchestratorAgent` (`ChatAgent` remains a compatibility alias). It talks to the user, selects predefined tools or a registered inspector, and explains accepted results. The shared Meta Model API adapter uses `muse-spark-1.3`; configured credentials do not establish live account access. Native HTTP schemas are generated at `/docs` and `/openapi.json`; wire/model definitions live in the linked code below.
 
 ## Main inspector and specialist registration
 
-`OrchestratorAgent` is the main inspector. It owns the user conversation, clarifies
-requests, chooses direct tools or a registered specialist, and presents results.
-`InspectorService.agent` uses this role. The former Python name `ChatAgent` remains
-an alias; existing chat endpoints, message IDs, session behavior and saved history
-are preserved. Historical runs without role metadata are returned as `agent_role:
-"chat"`; new runs have `agent_role: "orchestrator"`.
+No specialist is registered by default. The orchestrator's direct tools handle session creation/status, device presence and configured drawing/photo comparison; `delegate_inspection` is offered only with registered profiles. A general question need not create capture. `session_create` requires an explicit capture request, reuses an open session, and creates a linked rescan after sealing/cancellation only when requested. Optional capture_task is operator context, not a remote camera command. Device acknowledgement, capture and accepted source remain distinct facts.
 
-This increment provides the harness and connection mechanism. **No specialist is registered
-by default.** With an empty registry the model receives the direct session/device
-and drawing/photo tools, plus an empty `registered_inspectors` catalog. The drawing/photo
-adapter requires its separate service configuration. It must explain unavailable inspections
-or request clarification, rather than claim that another inspector ran.
-
-Register trusted, versioned profiles in the application's server composition:
+[InspectorProfile/InspectorRegistry](../src/ai_inspector/inspectors.py) define trusted local profiles; application composition can pass them to `InspectorService(settings, inspectors=(...))`. For example:
 
 ```python
 from ai_inspector.inspectors import InspectorProfile
 from ai_inspector.service import InspectorService
 
-service = InspectorService(settings, inspectors=(
-    InspectorProfile(
-        inspector_id="window_inspector",
-        version="1",
-        description="Review supplied evidence for window installation questions.",
-        instructions="Review only the supplied window evidence. State limitations and missing evidence.",
-        allowed_tools=("session_get", "device_status"),
-        max_steps=4,
-    ),
-))
+profile = InspectorProfile(
+    inspector_id="evidence_example", version="1",
+    description="Review the supplied evidence and state what is missing.",
+    instructions="Use only supplied evidence. Never invent measurements.",
+    allowed_tools=("session_get", "device_status"), max_steps=6,
+)
+service = InspectorService(settings, inspectors=(profile,))
 ```
 
-This is a registration example, not a shipped or validated window inspection
-capability. Native applications can pass this service to `create_app(settings,
-service=service)`; Cloudflare composition can pass profiles to its existing
-`InspectorService` construction. Registration is application code, not a web/model
-API, environment prompt loader or provider selection. Inspector IDs are unique
-lowercase identifiers; `orchestrator` is reserved. Increase the profile version
-when changing its responsibility, instructions, allowed tools or budget. Profiles
-are revalidated at registration, including copies constructed by application code.
+This is registration syntax, not a shipped inspection capability. IDs are unique; `orchestrator` is reserved. Bump the profile version when changing instructions, responsibility, tools or budget. Models cannot register profiles or supply endpoints. Local profiles can be injected into native create_app or Cloudflare service composition.
 
-When profiles are registered, the main model also receives
-`delegate_inspection({inspector_id, task})`. The allowed IDs and descriptions come
-from the server registry; backend validation rejects unknown IDs, blank/oversize
-tasks and extra arguments. The orchestrator selects by responsibility and supplies
-a self-contained task, including relevant prior discussion when needed.
+Each inspector has its own instructions, tools, bounded loop, history and state through [AgentHarness](../src/ai_inspector/agent_runtime.py). The current specialist allowlist contains read-only session_get/device_status, independently enabled per profile (default none). session_create, nested delegation and arbitrary code/HTTP/SQL are not specialist tools. Budgets count successful model turns; uncertain provider calls can repeat and billing is not exactly once.
 
-Each registered inspector has its own harness: instructions, allowed tool set,
-bounded model/tool loop, conversation history and execution state. The shared
-`AgentHarness` engine is used by both the orchestrator and inspector runs; each
-instance advances its own state. A specialist can request a permitted tool, read
-its result, request another tool and then return a report. The main inspector waits
-for that run and continues its own loop; the two step counters are independent.
+Local children persist in parent agent_runs JSON under the parent lease. Pending model messages/tool definitions and concrete tool commands/operation IDs are fixed before IO; completed reports are reused. Local memory includes up to six completed task/report pairs for the same chat and exact profile from the last ten parent runs. Reports are historical evidence; read current facts through tools. Missing/changed saved profiles hold unfinished work until restored. Existing legacy delegations remain readable/resumable through the compatibility path.
 
-The implemented inspector tool allowlist is `session_get` and `device_status`,
-both read-only and scoped by backend chat/project/device state. A profile opts into
-either, both or neither through `allowed_tools` (default empty). Tool names and
-arguments are checked before planning, and permissions are checked again before
-execution. `max_steps` defaults to 6 and must be between 1 and 32; it bounds
-successful model turns, including the final report. Tool errors can be supplied
-back to the inspector; a temporary error leaves its exact pending command resumable.
-New domain tools require actual backend schemas/handlers and verification.
-`session_create`, nested delegation and arbitrary code/HTTP/SQL are not inspector
-tools. The main inspector retains capture ownership; Geometry still uses the same
-existing validated-source workflow.
-
-An inspector receives its own role prompt, the original message's frozen file
-excerpts/selection/preview, the delegated task and a small session projection.
-Each run retains its full own message/tool history. New tasks also receive up to
-six completed task/report pairs from the same inspector and exact profile within
-the last ten parent chat runs, including earlier delegations in the current run.
-This memory survives restart and is isolated by chat and profile configuration.
-Source child run IDs are retained as `history_run_ids`. Failed/incomplete reports,
-other inspectors' histories and other chats are not automatically included.
-Prior reports are historical context; current session/device facts require tools.
-The inspector does not receive full orchestrator history, other role instructions
-or storage credentials. A report remains advisory evidence, not verified dimensions,
-validated BIM or construction compliance.
-
-The parent persists the inspector's profile and initial state before starting it.
-Child state includes `messages`, bounded prior `history`, `steps`, `pending_model`,
-`pending_tool`, tool results, activity events, status and report. Before each model
-request, both harness roles freeze the exact messages and tool definitions in
-`pending_model`. Before executing a tool, they persist its concrete command and
-server-generated operation ID. Child checkpoints live in the existing parent JSON
-record in `agent_runs`, under the same lease and project scope; no SQL migration
-or second dispatch queue is required. Timeout/restart reuses child/operation IDs,
-model request bodies, completed tool results and unfinished commands.
-Uncertain provider responses may require another model request: there is no claim
-of exactly-once provider execution or billing. A completed child report is reused
-without another specialist call, including after a crash before the parent consumes
-it. An unfinished delegation waits with retryable `inspector_unavailable` if its
-saved profile is missing or changed; restore the exact saved profile to resume.
-Stale owners cannot save child model/tool results or advance the parent. Old
-completed single-response delegations remain replayable; old unfinished records
-gain loop state without changing their saved initial messages and empty tool set.
-
-The local profile path above remains supported. Remote inspectors use the A2A
-service path below: they own their checkpoints and worker independently of the
-orchestrator. Both paths keep the selected Meta/Muse Spark adapter.
-
-Runs expose additive `delegations` summaries (identity, task, status, report, safe
-error, timestamps, allowed tools, own step limit/count, history source IDs, pending
-tool name, tool results and activity events). Internal prompts and raw model
-messages/history are excluded. The
-existing `tool_results`/activity trail records `delegate_inspection`, then the main
-inspector receives the report and continues its bounded turn. `agent_max_steps`
-limits successful orchestrator model turns; each selected inspector has its own
-`max_steps` loop budget. A failed inspector run becomes a tool error for the main
-inspector; a retryable inspector error keeps the parent resumable.
+Remote profiles below own independent task stores and leases; they do not run under the parent's checkpoint. Both paths share the harness implementation and selected model adapter.
 
 ## Remote inspector services — A2A HTTP+JSON polling
 
-Implemented 30 October 2026. The wire profile is pinned to **A2A 1.0**, with the
-required application extension `urn:ai-inspector:delegation:v1`. It supports
-nonblocking task admission, status polling, listing and cancellation. SSE,
-webhooks, gRPC and JSON-RPC are not enabled. The Agent Card advertises these
-limits; this is an inspection delegation profile, not an unrestricted chat API.
-Reference: [A2A 1.0 specification](https://a2a-protocol.org/v1.0.0/specification/)
-and [canonical protocol definitions](https://github.com/a2aproject/A2A/blob/v1.0.0/specification/a2a.proto).
-
-The orchestrator uses the same `delegate_inspection` tool. For a remote registry
-entry it persists the exact outbound body before HTTP, then invokes the fixed
-service address. It stores a remote task/context link and accepted report, without
-executing or copying the remote harness's private checkpoint. The service owns its
-model loop, tool commands/results, history, retries and task worker.
+The implemented profile is **A2A 1.0** with required extension `urn:ai-inspector:delegation:v1`: nonblocking admission, polling, listing and task cancellation. Streaming/SSE, webhooks, gRPC/JSON-RPC and interactive messages to an existing task are not enabled. References: [pinned A2A specification](https://a2a-protocol.org/v1.0.0/specification/), [protocol definitions](https://github.com/a2aproject/A2A/blob/v1.0.0/specification/a2a.proto), and implemented [wire validation/client](../src/ai_inspector/a2a_protocol.py).
 
 ### Register a deployed inspector with the orchestrator
 
-Set `INSPECTOR_REMOTE_AGENTS_JSON` on the orchestrator; the default is `[]`.
-Example connection configuration (the example does not implement window analysis):
+Set `INSPECTOR_REMOTE_AGENTS_JSON` (default `[]`) on the orchestrator:
 
 ```json
 [
   {
-    "inspector_id": "window_inspector",
+    "inspector_id": "evidence_example",
     "version": "1",
-    "description": "Review supplied window installation evidence.",
-    "base_url": "https://window-inspector.example",
-    "token_env": "WINDOW_INSPECTOR_TOKEN",
-    "tool_token_env": "WINDOW_INSPECTOR_TOOL_TOKEN",
+    "description": "Review supplied evidence and missing information.",
+    "base_url": "https://inspector-service.example",
+    "token_env": "EVIDENCE_TASK_TOKEN",
+    "tool_token_env": "EVIDENCE_TOOL_TOKEN",
     "allowed_tools": ["session_get", "device_status"]
   }
 ]
 ```
 
-The two named credentials are separate server Secrets, never values inside this
-JSON. Native configuration reads them from the process environment or ignored server
-`.env` (process values win); Cloudflare reads
-them from Worker bindings. They must differ from operator/device/model/storage
-credentials and from each other, including credentials of other inspector registrations.
-Credential references must also be distinct. `allowed_tools` is the backend grant; the remote
-profile must independently permit a tool before requesting it. With no backend
-tools, omit `tool_token_env` and use `allowed_tools: []`.
+References name server Secrets; they are not credential values. Native Settings resolves them from the process/ignored backend .env (process wins); Cloudflare resolves Worker bindings. Task and backend-tool credentials must differ from each other, operator/device/model/storage credentials and credentials of other registrations. With no backend tools, omit tool_token_env and grant an empty allowed_tools list.
 
-Only server configuration selects endpoints. HTTPS is required except for local
-loopback HTTP. Redirects are not followed, response size is bounded to 2 MiB and
-provider/HTTP error bodies are never copied into reports. The model sees inspector
-IDs/descriptions, not service addresses or credentials. Version/address changes
-hold unfinished work until the saved registration is restored; Secret rotation
-under the same configured reference is supported.
+Only server configuration chooses URLs. HTTPS is required except loopback HTTP; redirects are refused and IO bodies are bounded. Models receive IDs/descriptions, not URLs or keys. Endpoint/profile changes hold unfinished work; restoring the saved registration resumes it. Secret rotation under the same reference is supported.
 
 ### Run an inspector as a separate service
 
-The deployable ASGI factory is `ai_inspector.a2a_service:create_app_from_env`.
-Set these variables on the inspector process:
+The native ASGI factory is `ai_inspector.a2a_service:create_app_from_env`. Configure its process environment:
 
-| Setting | Meaning |
+| Setting | Purpose |
 |---|---|
-| `INSPECTOR_AGENT_PROFILE_JSON` | InspectorProfile: ID, version, description, instructions, allowed_tools and max_steps |
-| `INSPECTOR_AGENT_CALLERS_JSON` | Secret JSON array of `{client_id, project_id, token}`; use the value of the orchestrator's task credential |
-| `INSPECTOR_AGENT_PUBLIC_URL` | This service's configured HTTPS base URL; loopback HTTP is allowed for local checks |
-| `INSPECTOR_AGENT_DATA_DIR` | Persistent directory containing this service's `tasks.sqlite3` |
-| `INSPECTOR_META_BASE_URL`, `INSPECTOR_META_MODEL`, `INSPECTOR_META_API_KEY`, `INSPECTOR_META_TIMEOUT_S` | Model adapter settings; the key remains a server Secret |
-| `INSPECTOR_AGENT_BACKEND_URL` | Existing Inspector backend URL, required when backend tools are enabled |
-| `INSPECTOR_AGENT_BACKEND_TOKEN` | Secret matching the orchestrator's separate tool credential, required with backend tools |
+| INSPECTOR_AGENT_PROFILE_JSON | InspectorProfile: ID/version, responsibility/instructions, allowed tools and max_steps |
+| INSPECTOR_AGENT_CALLERS_JSON | Secret array of client_id, project_id and token; caller token matches the orchestrator's task credential |
+| INSPECTOR_AGENT_PUBLIC_URL | Service's HTTPS base URL; loopback HTTP for local use |
+| INSPECTOR_AGENT_DATA_DIR | Persistent directory for tasks.sqlite3 |
+| INSPECTOR_META_BASE_URL / MODEL / API_KEY / TIMEOUT_S | Same named model settings as the orchestrator; each full name begins INSPECTOR_META_ |
+| INSPECTOR_AGENT_BACKEND_URL / BACKEND_TOKEN | Backend URL and separate tool Secret, required when backend tools are enabled |
 
-For example, the profile JSON can be:
+The profile JSON has the same fields as the local example. Callers are project-bound; store the actual caller JSON/key in deployment Secrets. This factory reads process environment, not the backend's .env automatically, and does not expose operator routes.
 
-```json
-{
-  "inspector_id": "window_inspector",
-  "version": "1",
-  "description": "Review supplied window installation evidence.",
-  "instructions": "Review only supplied evidence; state limitations and missing evidence. Never invent measurements.",
-  "allowed_tools": ["session_get", "device_status"],
-  "max_steps": 6
-}
-```
-
-Configure callers using the real service credential in the deployment's Secret
-storage. A caller is bound to one project. Do not put actual caller JSON, API keys
-or tool credentials in source control. The factory reads process environment and
-does not automatically load the backend's `.env` or expose its operator routes.
-
-From the backend directory, a local service can run as:
+From ai_inspector, after installing the backend and setting the environment:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m uvicorn ai_inspector.a2a_service:create_app_from_env --factory --host 127.0.0.1 --port 8100
 ```
 
-Deploy this native ASGI process behind an HTTPS ingress with a persistent volume.
-The first inspector task store is native SQLite with atomic admission/leases;
-run one inspector deployment per persistent SQLite volume. A standalone inspector must not use an
-ephemeral Cloudflare filesystem for task persistence. A PostgreSQL task-store
-adapter for horizontally deployed inspector services is a further increment.
-The orchestrator's existing SQLite/PostgreSQL/Workers persistence is unchanged;
-no new shared SQL migration is needed for remote delegation.
+Deploy behind HTTPS with a persistent SQLite volume, one inspector deployment per volume. An ephemeral Cloudflare filesystem is not an inspector task store. A standalone PostgreSQL task-store adapter is not implemented. The orchestrator's existing SQLite/PostgreSQL/Workers storage is unchanged; remote registration needs no new shared migration.
 
 ### Wire contract and recovery
 
-The inspector exposes `GET /.well-known/agent-card.json` publicly. All task routes
-require the dedicated caller bearer, `A2A-Version: 1.0`, and
-`A2A-Extensions: urn:ai-inspector:delegation:v1`:
+The public Agent Card is `GET /.well-known/agent-card.json`. Task routes require the dedicated caller bearer plus `A2A-Version: 1.0` and `A2A-Extensions: urn:ai-inspector:delegation:v1`:
 
-- `POST /message:send` accepts `{message, configuration, metadata}` and returns
-  HTTP 200 with `{task: ...}`. `message` has a UUID `messageId`, `role: ROLE_USER`
-  and one text part. `configuration.returnImmediately` must be `true`.
-- `metadata.inspector` pins schema version, inspector ID/version, operation ID,
-  project/chat/parent/delegation IDs, a small server context and frozen user
-  reference content. Only supplied text and inline PNG/JPEG/WebP previews are
-  accepted; the service does not fetch caller-supplied image URLs.
-- `GET /tasks/{id}` reads status/artifacts and optional bounded public message
-  history (`historyLength=0` excludes it). This never advances the model.
-- `GET /tasks` lists caller-scoped tasks with `pageSize`, `pageToken` and optional
-  `contextId`. `POST /tasks/{id}:cancel` cancels this agent task and fences its
-  worker; it does not abort capture or cancel a Geometry job.
+- `POST /message:send` accepts the validated SendRequest and returns HTTP 200 with a task. messageId equals the domain operation UUID, role is ROLE_USER, the message has one text part and returnImmediately must be true.
+- metadata.inspector binds schema/profile version, operation/project/chat/parent/delegation IDs, the small server context and frozen reference. Reference images must be inline PNG/JPEG/WebP previews; arbitrary remote image URLs are not fetched.
+- `GET /tasks/{id}` reads status/artifacts and optional bounded public history; it never advances a model. `GET /tasks` provides caller-scoped pagination/context filtering.
+- `POST /tasks/{id}:cancel` invalidates that inspector task's lease. It neither aborts capture nor cancels a Geometry job.
 
-The domain operation ID is also the message ID. Admission commits before returning;
-duplicate caller/operation/body returns the same task, while changed content is a
-409 conflict. The service generates task IDs and a caller/project/chat/profile
-context ID. New tasks receive up to six completed task/report pairs from their
-last 50 context tasks; full private message/tool history remains in the task store.
-New-task admission is supported; interactive messages to an existing `taskId`
-and blocking/streaming execution are outside this polling profile.
+Admission persists before responding: exact caller/operation/body replay returns the same server-generated task; changed content conflicts. Context is scoped to caller/project/chat/profile. Service memory uses up to six completed pairs from the last 50 context tasks; full private checkpoint/history stays in its store.
 
-Both services retain their own leases. A model/tool request is saved before IO;
-crash recovery retains its IDs and exact request. Transient service/model errors
-back off, with a limit of 12 transient inspector execution failures. Missing model
-configuration or a changed saved profile waits for restoration without consuming
-that retry budget. Uncertain model requests may repeat; provider execution/billing
-is not claimed to be exactly once. Cancellation invalidates the task lease so a
-late model/tool result cannot publish a report.
+Model/tool commands checkpoint before IO. Independent leases fence stale or cancelled owners. Transient errors back off with a bounded retry budget; missing configuration/changed profile waits for restoration. A completed report is a single text Artifact. The orchestrator verifies task/context identity, delegation bindings and frozen-request SHA-256, including source fingerprint when available, before accepting it. Raw HTTP/provider errors and secrets are excluded.
 
-Completed reports use one text Artifact. The orchestrator checks task/context
-identity, all delegation binding IDs and the frozen request SHA-256 before accepting
-it. Captured source identity is fingerprinted when available. It does not accept
-a result for another task, project, session context or changed input.
+Native lifespan starts a remote-task poller; Cloudflare process advances remote and capture work, driven by the frontend cron. Unfinished remote runs expose auto_resume=true. Poll intervals depend on the actual driver/trigger; this is not a general indexed agent queue or an automatic Geometry continuation. Local legacy requests and minion follow-up use the distinct paths below.
 
-Native backend lifespan starts a remote-task poller in addition to the existing
-capture worker. A delegated chat run reports `auto_resume: true` while unfinished;
-it resumes without a browser or resubmission. Only remote workflows gain this
-driver; ordinary legacy runs keep their existing explicit resume flow. Cloudflare
-`process()` now advances capture and remote agent work; the existing frontend
-minute cron can drive it after deployment. Actual timing depends on that trigger,
-not just a registry's `poll_interval_s`. No cron/account/deployment was changed by
-this increment. The poller uses existing run JSON/lease fields and project-scoped
-SQL; an indexed general agent queue remains a scaling increment.
-
-The backend's `POST /v1/inspector-tools/{inspector_id}/{tool_name}` is a dedicated
-service boundary. The separate tool credential is bound to the registered inspector,
-project and still-active saved delegation. Operator/device credentials do not work
-there. Device/session/operation identities come from that persisted grant, not
-model arguments; the two implemented tools are read-only status projections.
-
-Local checks cover two independent apps/databases, a real loopback TCP run with
-both background workers, lost admission replies, restart, duplicate admission,
-scopes, frozen input/result identity and cancellation fencing. Workers Fetch GET
-and model transport are checked separately. These checks do not establish public
-service deployment, live Meta access, inspection accuracy or live Hyperdrive access.
+`POST /v1/inspector-tools/{inspector_id}/{tool_name}` is the scoped backend gateway. Its separate service Secret is bound to the registered inspector and still-active saved delegation. Operator/device credentials are not accepted. Both remote profile permission and backend grant must allow the requested read tool; IDs/scopes come from saved state, not model arguments.
 
 ## Server configuration
 
-```dotenv
-INSPECTOR_META_BASE_URL=https://api.meta.ai/v1
-INSPECTOR_META_MODEL=muse-spark-1.3
-INSPECTOR_META_API_KEY=
-INSPECTOR_META_TIMEOUT_S=30
-INSPECTOR_AGENT_MAX_STEPS=6
-```
+Use Settings/[.env.example](../.env.example) and [model_client.py](../src/ai_inspector/model_client.py) for current defaults/validation. Core names are INSPECTOR_META_BASE_URL, INSPECTOR_META_MODEL, INSPECTOR_META_API_KEY, INSPECTOR_META_TIMEOUT_S and INSPECTOR_AGENT_MAX_STEPS. The key is server-only. Restart native processes after changing configuration; Worker configuration follows [deployment](cloudflare-deployment.md).
 
-Set the real key only in the ignored server `.env` or process environment. Restart
-the backend after configuration changes. Never include the key in the web bundle,
-phone settings, chat or logs. `agent_model_configured` in `/v1/capabilities` means
-settings are present, not that a live request succeeded. No runtime mock model is
-substituted when credentials are missing.
-
-The adapter calls `POST /chat/completions`, returns tool results with the matching
-`tool_call_id`, and limits each response to one function call. Protocol sources
-checked on 28 October: [Meta Chat Completions](https://dev.meta.ai/docs/protocols/chat-completions),
-[Meta tool calling](https://dev.meta.ai/docs/tool-calling).
-
-For Cloudflare, the entry reads the five settings above from Worker bindings;
-the SQL adapter targets private chat tables. The chat migration is applied to
-the configured Supabase project, and model transport passed real local
-Workers/WASM checks with synthetic responses. Publication, the restricted
-runtime connection and real Meta access remain unverified. The account owner
-can finish using [the deployment handoff](cloudflare-agent-handoff.md) and
-[the cloud status](cloudflare-deployment.md#agent-integration-local-preparation).
+The adapter calls chat completions, validates one function call per response and binds tool results to its tool_call_id. Backend operation IDs are separate and persisted before effects. Missing model credentials produce resumable model_not_configured, never a substitute mock. agent_model_configured in capabilities means settings exist, not that a live request succeeded. Provider errors, signed storage URLs and full private session records do not enter model context.
 
 ## Web API
 
-All endpoints require the existing **operator** bearer identity and project
-scope. Phones cannot read chats or invoke the model. IDs below are UUIDs.
+Operator/project-scoped chat creation, message submission and paginated history are defined in OpenAPI and [agent.py](../src/ai_inspector/agent.py). Phones cannot read chats or invoke the model. A new chat pins device/project and caller room context; the room is not a validated IFC room. Use a new chat for a different capture context.
 
-1. `POST /v1/chats` with `{schema_version: "0.1", request_id, room_id}`.
-   Inspector generates `chat_id` and pins the configured device/project and
-   caller-selected room. This is not a validated IFC room. Use a new chat for
-   different capture context.
-2. `POST /v1/chats/{chat_id}/messages` with
-   `{schema_version: "0.1", request_id, text}`. Text is nonblank, at most 8000
-   characters. Optional `file_ids` selects up to 8 files from this chat workspace; see below. Uploading/selecting IFC does not attach it as the session reference BIM or parse its geometry.
-3. `GET /v1/chats/{chat_id}?limit=30&before=...` returns the session link,
-   saved user/assistant runs and nullable `next_before`. Runs within a page are
-   chronological; `before` retrieves older runs. Polling does not call Meta.
-   The console restores its current chat after reauthentication/reload using a
-   local chat ID; tokens and message text are not stored in localStorage.
-
-Create/message requests return **201** on first submission and **200** on replay.
-Changed content under an existing request ID returns **409**. A successful HTTP
-response confirms persistence; inspect `status`, `reply`, `error`, `session_id`
-to determine what happened. Assignment does not mean the phone is online, has
-acknowledged, or has started capture.
+Optional file_ids and document_selection refer only to available files in that chat. Their exact request body, including preview, belongs to retry identity. Server-generated chat/run IDs and existing completed/failed message replay are preserved. ChatAgent remains a Python alias; new runs expose role orchestrator while legacy runs without role metadata retain chat.
 
 ## Execution, retry and recovery
 
-Direct tools are `session_create`, `session_get`, and `device_status`. Each takes `{}`;
-device, project, room, operation IDs, endpoints and credentials come from server
-state. Unknown names or invalid arguments fail before executing the command.
-Only a small session status projection is sent to Meta; signed storage links,
-artifact URLs and provider error bodies are excluded.
-`delegate_inspection` is additionally available only when server profiles are registered,
-as described above; it takes a registered inspector ID and a task.
+Run states are pending → running → completed, retryable or failed. General local/legacy recovery resubmits the **same saved message ID and entire body**, including selected files/preview. A new message is rejected with chat_busy while the earlier run is unfinished. Completed/failed requests replay without another model call. Browser timeout/reload is not cancellation.
 
-Each message has a durable run: `pending` → `running` → `completed`, `retryable`
-or `failed`. History, planned commands, tool results and the reply are saved.
-`retryable` includes missing settings, timeouts and temporary service errors.
-Resubmit the **same message ID and text** to resume it. Completed/failed runs
-replay without another model call. A chat with an unfinished run rejects a new
-message with `chat_busy`. A browser timeout does not cancel the run or session.
+Commands, operation IDs, frozen model requests and tool results are durable before side effects. One leased owner advances a run; stale owners cannot publish. Process death permits reclaim after lease expiry. Completed child reports and successful tool operations are reused; uncertain network/model execution can require an identical retry.
 
-One leased owner advances a run. Concurrent retries return the current run.
-After process death, retry can reclaim it once the lease expires (model timeout
-plus 60 seconds from the last checkpoint). Concrete commands and runtime
-operation IDs are saved before execution. Uncertain session creation retries use
-the existing backend receipt and same session ID. Stale owners cannot publish
-model output after replacement. General legacy run recovery uses resubmitting the
-saved message; registered remote workflows also have the automatic poller described
-above. Capture/Geometry workers remain independent.
-
-`session_create` reuses the current assigned/capturing/submitted session. After
-sealing or cancellation, an explicitly requested capture creates a linked
-session using the same inspection and original task. Use a new chat for new
-task context. The agent does not cancel sessions or add a Geometry dispatch
-pipeline. The existing worker starts Geometry only after validating and pinning
-complete sources.
-
-## Verification boundary
-
-Local regression checks live outside the checkout in `local-checks/inspector/`,
-including model HTTP fixtures, simulated device channels, crash/retry/lease races,
-schema validation and API scopes. Browser preview uses a labelled local fixture.
-These do not verify live Meta access, a physical iPhone or external Geometry.
-The Supabase chat schema/grants were verified separately; deployed Worker access
-to those tables still needs verification. Business messages from the phone, BIM tools, automatic model
-turns on Geometry completion and validated specialist inspection capabilities are
-further increments. Local delegation fixtures cover two illustrative roles; neither
-is enabled in the product registry or evidence of live inspection accuracy.
-
-## Demo workspace and visual responses
-
-`/ui/demo.html` is the user-facing workspace; Control room remains the operational
-console. The demo uses the same operator credential and existing chat API. It shows
-files/capture references and tasks linked by session_id to the current chat (its
-current session plus the loaded run history), device status, service
-configuration and persisted tool results. It does not expose hidden model reasoning
-or claim a configured service is running. The conversation snapshot is calculated from these linked sessions, not invented
-by the model. Older chat runs outside the loaded history page are not included.
-Demo navigation hides the operational Control room and Backlog menu. Attach files
-beside the message input; select context or manage Trash in Files. Capture references
-are not a full Storage browser. The conversation selector restores prior workspaces. New chat is required to change room context.
-
-Runs now include additive `display_reply` and `artifacts` fields. `reply` remains
-unchanged for older clients. The assistant may emit a fenced `inspector-ui` JSON
-block with `{ "artifacts": [...] }`. The server validates and extracts up to six
-items; malformed blocks remain ordinary text. Supported types:
-
-- `metric`: `title`, `value` (string or finite number), optional `unit`, `source`.
-- `bar_chart`: `title`, `labels`, nonnegative finite `values`, optional `unit`,
-  `source`; equal-length arrays, up to 20 bars.
-- `table`: `title`, `columns`, `rows`, `source`; up to 8 columns and 30 rows,
-  matching row widths, string/finite-number/null cells.
-
-The demo renders typed DOM components; it never executes model HTML, JavaScript,
-SVG, or embedded URLs. Source text is a model attribution, not independent proof:
-visuals are labelled AI summaries and must be checked against original evidence.
-No new model tools or measured geometry capability are added by this format.
-
-The demo stores its chat pointer separately from Control room. An unfinished
-request's ID and body are retained in sessionStorage for retry in the same tab;
-refresh loads server history. Polling shows completed tool results, persisted activity
-events and the nullable `active_tool` name while a run is active. Planned command
-arguments and internal model messages remain private.
+Remote A2A workflows also continue through the poller without the browser. Drawing/photo tasks use a separate later-message result tool. The existing capture worker alone owns source validation → Geometry dispatch/reconciliation; no agent tool creates a second initial job. A completed Geometry result does not automatically start a new model turn.
 
 ## Files, work plans and observations
 
-Apply `scripts/sql/003_workspace.sql` with the DB owner before deploying. Runtime
-access is SELECT/INSERT/UPDATE to three private workspace tables, scoped through
-the authenticated chat; device credentials cannot access these APIs. Native SQLite
-creates the same tables. No model tool can change plan or observation records.
+Workspace needs 003_workspace.sql for PostgreSQL; native SQLite initializes its equivalent schema. APIs are operator/chat-scoped. Schemas and numeric limits come from [workspace.py](../src/ai_inspector/workspace.py), [document_selection.py](../src/ai_inspector/document_selection.py) and OpenAPI.
 
-- `GET /v1/chats` lists the latest 100 project conversations.
-- `GET /v1/chats/{id}/workspace`: files, plan items, observations and deterministic
-  progress counts. Files include uploads, saved Inspector replies/tool results as
-  JSON, linked capture/Geometry summaries, and reference BIM. Outputs are not
-  independently measured evidence. Up to 200 recent runs supply output listings.
-- `POST .../files`: multipart `file_id` UUID + `file`; deployment limit 8 MiB.
-  The same ID/content is retryable. Private immutable blobs reuse the project's
-  content-addressed Storage store; filenames never become filesystem paths.
-- `GET .../files/{file_id}/download`; `POST .../files/{file_id}/delete` or `/restore`.
-  Delete moves the chat reference to Trash, not permanent blob deletion; history,
-  recorded evidence and already-snapshotted model requests remain. Restoring a
-  derived file does not mutate its underlying capture, BIM or agent run.
-- Message `file_ids` are validated in this chat and frozen with the request.
-  UTF-8 TXT/MD/CSV/JSON/IFC/XML/LOG text gets a bounded excerpt (16k stored, 10k sent
-  per file); truncated excerpts are marked. PDFs/images/other opaque formats are
-  metadata-only, not claimed as visually analysed. Files and notes are untrusted
-  reference data. No markup is executed. An uploaded IFC is not a validated model.
-- `POST .../plan/{item_id}`: title, location, reference, deleted, revision (0 for
-  creation). Revision protects concurrent edits; archival excludes an item from
-  the denominator. Each chat supports at most 200 planned items.
-- `POST .../plan-import`: request_id UUID + selected file_id; CSV header `title`
-  with optional `location,reference`, or a JSON array of equivalent objects.
-  Bounded at 256 KB and 200 items; all rows validate before atomic import.
-  Exact request-ID replay does not duplicate items. Imports create no observations.
-- `POST .../observations/{observation_id}`: item_id, status (`confirmed`,
-  `needs_review`, `not_done`), note, author, timezone-aware observed_at, file_ids.
-  Stores evidence name/origin snapshots and operator provenance. IDs are retryable;
-  future timestamps are rejected. Direct human observation can be recorded without
-  a file; an AI output alone cannot confirm work. Names are self-reported under the
-  shared operator credential, not per-person authenticated attestations.
-- `POST .../observations/{id}/withdraw`: retains the record while withdrawing its
-  effect. Latest observed_at (then record time/ID) wins among active observations.
+Uploads are private immutable content-addressed blobs. Same file ID with changed bytes/metadata conflicts. Trash removes the current chat reference, not persisted blobs/history or earlier frozen model input; restore does not rewrite the original record. Derived reply/tool/capture files are context, not independent evidence. Files in Trash cannot be newly selected.
 
-Progress counts active planned items by their latest nonwithdrawn observation.
-No observation means `no_data`, never `not_done`. Percentage is confirmed item
-count / active item count with equal weights, not physical/financial progress or
-certification. Plan and observation summaries are included as a bounded snapshot
-in each new model request; the model may explain them or render widgets but cannot
-mark items complete. Files in Trash cannot be newly selected, while old evidence
-snapshots remain attributable. Concurrent edits return 409 without overwriting.
+Text formats yield bounded marked excerpts; opaque PDF/images are metadata-only without a sent preview or a real minion report. Opening a file alone sends no model input. A selected region sends a bounded crop; selected IFC elements send source-bound STEP identities and browser reference properties/view. One crop is not a whole document. IFC rendering and caller room IDs do not validate model geometry, units, room membership, alignment or measurements. Files, notes and previews remain untrusted data.
 
-### Project document workspace and selections
+Plan imports validate all rows before atomic request-ID replay. Plan edits require current revision. Observations preserve evidence snapshots and operator provenance; authors are self-reported under a shared credential. An AI output alone cannot confirm work; withdrawal retains history. Progress uses the latest active observation per planned item: no observation is no_data, never not_done. Equal-weight confirmed-item percentages are not physical/financial progress or certification. Models can explain the snapshot but cannot mutate plans or observations.
 
-The demo centers an IFC/PDF/image viewer with a resizable Files rail and Inspector
-conversation panel. Panel widths and UI text scale are local browser preferences.
-`Dialogue:` selects chat scope. Activity shows actual agent/tool events; backend
-service configuration and conversation snapshot are omitted from this user view.
-Work-plan data is retained but its controls remain hidden in the demo.
+## Demo workspace and visual responses
 
-Opening a file does not send it to the model. Selecting a drawing region or IFC
-element attaches a visible context chip to the next message. One drawing region or up to 20 IFC elements per
-message; use Multi-select or Shift-click to add/remove elements, clear with ×. PDF/image selection contains normalized `[x,y,width,height]`
-(top-left origin, current page), file ID, and a bounded JPEG preview. IFC selection
-contains STEP express_id, GlobalId, basic properties and the highlighted model view.
-The server binds the IFC STEP identity to the stored source and rejects mismatches.
-Preview/properties are browser-provided reference data, not trusted measurements.
-Image previews go to the existing Meta model only when the user sends the message.
-No external viewer service receives files. Imported files remain private in Storage.
+The demo uses the existing operator API and separates its chat pointer from Control room. Pending request ID/body is retained in sessionStorage for same-tab retry; history stays on the server. New chats use an internal unspecified room placeholder. Linked session/history projections do not represent all Storage contents. Viewer formats/build/licenses are in [viewer README](../viewer/README.md).
 
-`POST /v1/chats/{chat_id}/messages` accepts optional `document_selection`:
-`file_id`, `kind` (`region` or `ifc`), `label`, optional `page`, `bbox`, `express_id`,
-`global_id`, `properties`, optional `elements` (up to 20 IFC identity/property records), `image_data` (JPEG data URL, <=350000 characters).
-The file must also be in `file_ids` and available to this chat/operator. Selection
-and preview freeze with the durable request for exact retries; public run history
-contains reference metadata but not the image payload. No DB migration is required.
-Unselected PDF/image files still supply metadata only. A crop is not the whole page.
-One model-rendered view is not a measurement, a scan, or a compliance determination.
+Public runs expose safe delegation summaries, active_tool and bounded activity_events for actual model/tool attempts, including attempt links, timestamps and measured duration. Unknown historical/interrupted durations are not invented. These are operational events, not internal model reasoning or progress guarantees.
 
-Viewer sources: `ai_inspector/viewer/`. Build with `npm ci --ignore-scripts && npm run build`
-from that directory; dependencies are pinned by package-lock.json. GitHub Actions
-builds automatically for viewer changes. Generated assets are same-origin in
-`web/vendor/`; the Python runtime excludes vendor assets. CSP permits same-origin
-workers and WASM compilation only; it does not allow arbitrary JS eval or remote CDNs.
-Supported: IFC displayable geometry, PDF pages, PNG/JPEG/WebP. Native DWG/RVT are not
-supported; export to PDF/IFC. IFC rendering is capped at 1.5 million vertices. Existing
-8 MiB upload limits apply. The browser may reject more complex or malformed models.
+An assistant may emit a validated inspector-ui JSON block for metric/bar_chart/table artifacts. [artifacts.py](../src/ai_inspector/artifacts.py) defines shapes/limits; reply remains unchanged for older clients, while display_reply/artifacts are additive. Render typed DOM only, never model HTML/JS/SVG or executable URLs. Attribution text is not independent evidence and no widget adds a measurement capability.
 
-The demo shows Capture Devices as an always-open list (currently the single
-configured device); multi-device backend registration is not implemented by this UI.
-No last-seen or connection counters are displayed. The Room input is removed from
-the composer; new chats use internal room_id `unspecified`, not a claimed real room.
-File context chips can be removed independently of deleting the stored file. Clearing
-a document selection also unchecks its file for the next message. Upload success
-does not produce a persistent banner.
+## Drawing/photo minion
 
-Activity is a compact current-action button opening a modal timeline of loaded chat
-runs and completed tools, without raw JSON. Public runs expose `active_tool` as only
-the pending validated tool name, or null. The UI polls at its existing interval; short
-tool calls may only appear in completed history. No invented progress or internal
-reasoning is shown. Reduced-motion preferences disable decorative animations.
+Set INSPECTOR_DRAWING_PHOTO_BASE_URL and a distinct INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN in runtime Secrets. The [adapter](../src/ai_inspector/drawing_photo.py) calls the [independent minion HTTP API](../../drawing_photo_service/README.md); this is separate from A2A registration.
 
-Activity events are persisted with each run (`activity_events`, up to 64 entries).
-Each model/tool attempt has event_id, operation_id, attempt/retry_of, status,
-started_at, finished_at and measured duration_ms. Tool results bind by event_id.
-Retryable failures become waiting; a resumed orphaned running event becomes
-interrupted with unknown duration. These are operational events, not model reasoning.
-The demo shows the latest four steps beside the document and full history in a modal.
-Only fresh running events animate actual tool links and the run's selected document
-context. Polling is every five seconds; quick calls may first appear completed.
-Historical calls without timestamps have no invented duration. Result links open
-available selected files/regions/elements or capture/device context.
+The comparison tool accepts one explicitly selected drawing and photo, and caller-specified page for a PDF. It sends the full selected sources, not just a viewer crop; no arbitrary URLs, IFC/3D or automatic search across drawings. Source roles/hash/page and the current user question are pinned before submission. Typed argument/file/question/size limits are defined in the adapter. Retries preserve the operation UUID and exact POST body.
 
-## Drawing/photo minion (30 October 2026)
+The adapter requests async admission. Running is not a verdict: a later user request can select drawing_photo_result for a task bound to the same chat (within the latest 200 runs). This is not autonomous background polling. Timeout/busy leaves the same Inspector request retryable; cold starts may require its exact retry. Findings retain report/evidence/provenance/audit and initial source bindings. Technical failure and inconclusive visual findings remain distinct; neither is certified approval. Minion database/model credentials remain private to that service.
 
-Configure `INSPECTOR_DRAWING_PHOTO_BASE_URL` and a distinct
-`INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN` in runtime Secrets. Predefined tools:
-`drawing_photo_compare` (selected drawing_file_id, photo_file_id and explicit
-drawing_page for PDF), and `drawing_photo_result` (bound task_id).
-The question is the original user message, limited to 4000 characters.
-Only files selected in that message may be sent; no arbitrary URLs, IFC or 3D.
-The whole selected source is sent, not only a viewer selection crop. PNG/JPEG and
-PDF drawings are supported, at most 6MB per file. A saved command pins hashes,
-roles and page before HTTP submission. Retries reuse the same UUID/body.
+## Verification boundary
 
-POST uses `Prefer: respond-async`; running is not a verdict. Polling is a separate
-tool on a later user message, not an autonomous background loop. Result access is
-restricted to tasks submitted in this chat's latest 200 runs. Tool output includes
-report, original-image boxes, provenance, audit and initial source bindings.
-Findings are evidence to review, not a certified inspection. Technical failure is
-distinct from an inconclusive visual finding. A timeout or busy service leaves the
-same Inspector message retryable. Cold starts may require retrying that message;
-the HTTP timeout is 20 seconds per I/O phase. Minion retains data in its own scoped
-Supabase schema and uses its own Meta key; Inspector receives neither credential.
+Local fixtures cover model/tool validation, scopes, retries/restart, separate HTTP services/stores and cancellation fencing. They do not establish deployed connectivity, live Meta access, a real phone, inspection accuracy or a configured external Geometry service. Capture_task display in the actual phone, business messages, BIM measurements and automatic Geometry continuation require separate implementation/integration acceptance.
