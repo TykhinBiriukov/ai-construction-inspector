@@ -56,6 +56,33 @@ class MetaClient:
         self.api_key, self.model = api_key, model
         self.last_diagnostic = {}
 
+    def probe(self):
+        """Fixed text-only operational probe; never includes user documents or model reasoning."""
+        if not self.api_key:
+            return {"ok": False, "error": "model_not_configured"}
+        try:
+            with httpx.Client(timeout=30, follow_redirects=False) as client:
+                with client.stream("POST", "https://api.meta.ai/v1/chat/completions",
+                        headers={"Authorization": "Bearer " + self.api_key},
+                        json={"model": self.model, "messages": [{"role": "user", "content": "Reply OK. Integration health check."}],
+                              "max_completion_tokens": 100}) as response:
+                    raw=bytearray()
+                    for chunk in response.iter_bytes():
+                        raw.extend(chunk)
+                        if len(raw)>16000:
+                            return {"ok": False, "http_status": response.status_code, "error": "oversized_response"}
+                    result={"ok": response.status_code==200, "http_status": response.status_code}
+                    if response.status_code!=200:
+                        try:
+                            error=json.loads(raw).get("error", {})
+                            # This request contains only fixed diagnostic text. Key redaction is mandatory.
+                            result["provider_message"]=str(error.get("message", "")).replace(self.api_key,"[redacted]")[:500]
+                        except (ValueError, AttributeError):
+                            result["error"]="non_json_response"
+                    return result
+        except httpx.HTTPError:
+            return {"ok": False, "error": "network_error"}
+
     def complete(self, messages: list, timeout: float = 60, *, final_only: bool = False) -> dict:
         self.last_diagnostic = {}
         if not self.api_key:

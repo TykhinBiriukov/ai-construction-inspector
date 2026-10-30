@@ -130,6 +130,11 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
                 "storage": store.kind, "retention": "durable" if dsn else os.environ.get("MINION_RETENTION", "local"),
                 "configured": bool(token)}
 
+    @app.post("/v1/provider-check", dependencies=[Depends(auth)])
+    def provider_check():
+        # Fixed small diagnostic request, no user files, no configurable destination.
+        return client.probe()
+
     @app.post("/v1/tasks", dependencies=[Depends(auth)])
     def create(request: TaskRequest, prefer: str | None = Header(default=None)):
         serialized = request.model_dump_json()
