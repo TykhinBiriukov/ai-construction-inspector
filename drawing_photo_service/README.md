@@ -5,14 +5,6 @@ with Inspector, Localization, BIM or 3D; no file discovery or remote asset fetch
 Meta performs visual analysis; Python validates the report and renders evidence.
 Validation is not proof that a visual claim is true.
 
-Optional temporary routing recovery: `MINION_META_CONNECT_IP` can select a verified
-public IP of `api.meta.ai` when a DNS-selected Meta edge returns an empty model
-catalog. Host and TLS SNI/certificate verification remain `api.meta.ai`; TLS is
-never disabled. Default is normal DNS. This is an operational workaround, not a
-permanent endpoint: clear the setting after Meta routing recovers, and recheck
-`/v1/provider-check` if the address changes. Never use an unverified third-party IP.
-The diagnostic reports the override, actual peer and model catalog separately.
-
 ## Run locally
 
 Python 3.12. From the repository root, install `drawing_photo_service/requirements.lock`

@@ -1,6 +1,5 @@
 """Bounded Meta tool loop. Tool output is evidence, not executable instruction."""
 import hashlib
-import ipaddress
 import json
 import os
 import socket
@@ -58,32 +57,17 @@ class MetaClient:
     def __init__(self, api_key: str, model: str = "muse-spark-1.3"):
         self.api_key, self.model = api_key, model
         self.last_diagnostic = {}
-        self.connect_ip = os.environ.get("MINION_META_CONNECT_IP", "").strip()
-        if self.connect_ip:
-            address = ipaddress.ip_address(self.connect_ip)
-            if not address.is_global:
-                raise ValueError("MINION_META_CONNECT_IP must be a public Meta API address")
-
-    def _stream(self, client, method, path, **kwargs):
-        # Optional operational DNS override. Always verify api.meta.ai's certificate
-        # and use its Host/SNI; no alternate provider, proxy or disabled TLS.
-        host = self.connect_ip or "api.meta.ai"
-        if ":" in host:
-            host = "[" + host + "]"
-        return client.stream(method, "https://" + host + "/v1/" + path,
-            headers={"Authorization": "Bearer " + self.api_key, "Host": "api.meta.ai"},
-            extensions={"sni_hostname": "api.meta.ai"}, **kwargs)
 
     def probe(self):
         """Fixed inputs only: catalog + one short inference, with safe transport metadata."""
         if not self.api_key:
             return {"ok": False, "error": "model_not_configured"}
+        headers={"Authorization": "Bearer " + self.api_key}
         body={"model": self.model, "messages": [{"role": "user", "content": "Reply OK. Integration health check."}],
               "max_completion_tokens": 100}
         result={"model": self.model, "key_fingerprint": hashlib.sha256(self.api_key.encode()).hexdigest()[:16],
                 "request_fingerprint": hashlib.sha256(json.dumps(body,sort_keys=True).encode()).hexdigest(),
                 "httpx_version": httpx.__version__}
-        result["connect_ip_override"] = self.connect_ip or None
         result["proxy_environment_present"] = [name for name in
             ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy") if os.environ.get(name)]
         try:
@@ -99,7 +83,7 @@ class MetaClient:
             return json.loads(raw)
         try:
             with httpx.Client(timeout=30, follow_redirects=False) as client:
-                with self._stream(client, "GET", "models") as response:
+                with client.stream("GET", "https://api.meta.ai/v1/models", headers=headers) as response:
                     result["catalog_http_status"]=response.status_code
                     result["catalog_http_version"] = response.http_version
                     stream = response.extensions.get("network_stream")
@@ -109,7 +93,7 @@ class MetaClient:
                     value=read(response)
                     if response.status_code==200:
                         result["catalog_models"]=[str(m.get("id", ""))[:100] for m in value.get("data", [])[:100]]
-                with self._stream(client, "POST", "chat/completions", json=body) as response:
+                with client.stream("POST", "https://api.meta.ai/v1/chat/completions", headers=headers, json=body) as response:
                     value=read(response)
                     result.update(ok=response.status_code==200, http_status=response.status_code)
                     result["request_id"]=response.headers.get("x-request-id", "")[:200]
@@ -119,7 +103,7 @@ class MetaClient:
                         # Fixed non-private request; never include the bearer key or model reasoning.
                         result["provider_message"]=str(error.get("message", "")).replace(self.api_key,"[redacted]")[:500]
                 if not result["ok"]:
-                    with self._stream(client, "POST", "responses",
+                    with client.stream("POST", "https://api.meta.ai/v1/responses", headers=headers,
                             json={"model": self.model, "input": "Reply OK. Integration health check.", "max_output_tokens": 100}) as alternative:
                         value=read(alternative)
                         result["responses_http_status"]=alternative.status_code
@@ -138,7 +122,8 @@ class MetaClient:
         deadline = time.monotonic() + timeout
         try:
             with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-                with self._stream(client, "POST", "chat/completions",
+                with client.stream("POST", "https://api.meta.ai/v1/chat/completions",
+                                   headers={"Authorization": f"Bearer {self.api_key}"},
                                    json={"model": self.model, "messages": messages, "tools": [] if final_only else TOOLS,
                                          "tool_choice": "auto", "parallel_tool_calls": False,
                                          "max_completion_tokens": MAX_COMPLETION_TOKENS, "stream": False,
