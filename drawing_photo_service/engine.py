@@ -88,7 +88,16 @@ class MetaClient:
                         result["provider_code"]=str(error.get("code", ""))[:100]
                         # Fixed non-private request; never include the bearer key or model reasoning.
                         result["provider_message"]=str(error.get("message", "")).replace(self.api_key,"[redacted]")[:500]
-                    return result
+                if not result["ok"]:
+                    with client.stream("POST", "https://api.meta.ai/v1/responses", headers=headers,
+                            json={"model": self.model, "input": "Reply OK. Integration health check.", "max_output_tokens": 100}) as alternative:
+                        value=read(alternative)
+                        result["responses_http_status"]=alternative.status_code
+                        result["responses_request_id"]=alternative.headers.get("x-request-id", "")[:200]
+                        if alternative.status_code!=200:
+                            error=value.get("error", {})
+                            result["responses_error"]=str(error.get("code", ""))[:100]
+                return result
         except (httpx.HTTPError, ValueError, AttributeError, TypeError):
             return result | {"ok": False, "error": "diagnostic_request_failed"}
 
