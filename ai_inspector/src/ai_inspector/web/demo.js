@@ -35,7 +35,9 @@
     return el;
   }
   function notify(text='') { $('notice').textContent=text; $('notice').hidden=!text; }
+  const chatPendingKey = id => `inspector-pending:${overview?.project_id}:${id}`;
   function remember() {
+    if(chat?.chat_id)write(sessionStorage,chatPendingKey(chat.chat_id),pending?JSON.stringify(pending):null);
     write(localStorage,pointerKey,chat?.chat_id ? JSON.stringify({chat_id:chat.chat_id, project_id:overview?.project_id}) : null);
     write(sessionStorage,pendingKey,pending || create ? JSON.stringify({pending,create,chat_id:chat?.chat_id,project_id:overview?.project_id}) : null);
   }
@@ -54,10 +56,9 @@
   }
   function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
-    const unfinished=chat?.runs?.find(r=>!['completed','failed'].includes(r.status));
-    $('chat-picker').disabled=sending||workspaceBusy||!!pending;
+    $('chat-picker').disabled=sending||workspaceBusy;
     $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
-    $('new-chat').disabled= !token || sending || workspaceBusy || !!pending || !!unfinished;
+    $('new-chat').disabled= !token || sending || workspaceBusy;
     $('attach-file').disabled=!token||sending||workspaceBusy||!!pending; $('add-plan-item').disabled=!token||workspaceBusy; $('import-plan').disabled=!chat||workspaceBusy;
     $('room').readOnly=!!chat || !!create || sending;
     if(chat?.room_id) $('room').value=chat.room_id;
@@ -466,18 +467,21 @@
     for(const item of chatChoices||[]){const option=node('option','',`${item.room_id} · ${timestamp(item.created_at)}`);option.value=item.chat_id;$('chat-picker').append(option);}
     $('chat-picker').value=chat?.chat_id||'';
   }
-  $('chat-picker').addEventListener('change',async()=>{
-    if(sending||workspaceBusy||pending)return;
-    const id=$('chat-picker').value;
+  async function switchConversation(id){
+    if(sending||workspaceBusy)return;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
-    chat=id?{chat_id:id}:null;create=null;workState=null;chosenFiles.clear();selectionScope=null;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
-    $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderRails();renderConversation();await refresh();
-  });
+    remember(); // Keep the exact frozen payload in the old chat, including document selection.
+    epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
+    if(id){try{pending=JSON.parse(read(sessionStorage,chatPendingKey(id))||'null');}catch{}}
+    workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];showTrash=false;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
+    $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();
+  }
+  $('chat-picker').addEventListener('change',()=>switchConversation($('chat-picker').value));
   $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await refresh(); event.submitter.disabled=false;});
   $('lock').addEventListener('click',lock);
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
-  $('new-chat').addEventListener('click',()=>{if(sending||workspaceBusy||pending) return; workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];importRequest=null;showTrash=false; chat=null;create=null; selected=null; scopedSessions=[]; scopedInspections=[]; $('selection').hidden=true; historySignature='';resetDocument();remember();$('message').value='';renderChatPicker();renderRails();renderConversation();notify();});
+  $('new-chat').addEventListener('click',()=>switchConversation(''));
   for(const button of $('suggestions').querySelectorAll('button')) button.addEventListener('click',()=>{$('message').value=button.dataset.prompt;$('message').focus();});
   $('message').addEventListener('keydown',event=>{
     if(event.key!=='Enter'||event.isComposing||event.keyCode===229)return;
