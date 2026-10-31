@@ -176,7 +176,7 @@
     }
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
-  const comparisonPhaseLabels={drawing_checklist:'Reading the drawing',photo_inspection:'Checking the photo',review:'Reviewing the findings'};
+  const comparisonPhaseLabels={drawing_checklist:'Reading the drawing',checklist_reuse:'Using saved checklist',photo_inspection:'Checking the photo',review:'Reviewing the findings'};
   const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Specialist inspection'};
   let activitySync=0,activitySignature='',activityExpanded=new Map();
   function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
@@ -188,6 +188,8 @@
     else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||'Working on your request':'Preparing response'):'Waiting for server update';
     else if(sending)text='Sending request';
     else if(last&&!['completed','failed'].includes(last.status))text='Waiting for server';
+    const phase=Object.entries(last?.comparison_progress?.phases||{}).find(([name,status])=>comparisonPhaseLabels[name]&&status==='running');
+    if(last?.auto_resume&&phase)text=comparisonPhaseLabels[phase[0]];
     $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',active);
     $('activity-graph').classList.toggle('live',active);$('activity-feed').classList.toggle('live',active);
     const contextual=live&&last?.document_selection?.file_id===documentOpenId;

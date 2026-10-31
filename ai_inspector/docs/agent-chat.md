@@ -183,3 +183,18 @@ it. New tool plans pin this value; recovery never reads a changed setting to rew
 an existing request. Old frozen plans omit the field and retain legacy semantics.
 Staged minion phase events are exposed as reading the drawing, checking the photo,
 and reviewing findings. Only observed phases are shown; no fabricated progress.
+Successful authenticated GET /v1/chats/{chat_id} requests also wake the existing
+Cloudflare work poller in the background. Persisted due times and leases still gate
+execution; the browser's five-second refresh therefore observes due comparison polls
+without waiting for the minute cron. Cron remains the continuation fallback with no
+browser. The current observed running phase is also the activity heading.
+
+For staged comparisons, new photos on the same drawing/page automatically reuse the
+latest available saved checklist in this chat. The chosen source task is frozen into the
+pending command before I/O; retries cannot switch checklists. `checklist_task_id` can
+explicitly choose a compatible task in the same chat. `new_checklist=true` is reserved
+for a user-requested scope/revision change; a replacement image alone must not set it.
+Different drawing identity starts a new checklist. Older tasks without a saved snapshot
+remain readable but cannot supply a reusable checklist. Categories and stable requirement
+IDs belong to the snapshot; summaries must not merge geometry and material/product
+verdicts. UI progress labels reuse as Using saved checklist.

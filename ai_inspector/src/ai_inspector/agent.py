@@ -110,6 +110,10 @@ visual roles. If the service requests role confirmation, explain that conflict t
 never silently swap sources or treat a needs_input response as a failed inspection.
 This tool sends the full selected files, not only a viewer crop. It cannot compare IFC/3D.
 Use drawing_photo_result for a task already bound to this chat. Never invent a task ID.
+For replacement photos on the same drawing retain the saved checklist. Do not request
+new_checklist unless the user explicitly changes requirements or asks for a new revision.
+Report each checklist category separately: a geometry match does not imply material or
+product verification. Do not merge independent category verdicts in your summary.
 Use comparison_tasks in the current server context for IDs and last observed states;
 the user need not copy or remember internal IDs. A status/report request reads the
 existing task even when no files are selected. Do not start a new analysis to answer
@@ -583,9 +587,12 @@ class OrchestratorAgent:
                 if (result.get('provenance') or {}).get('workflow') == 'staged':
                     phases = {}
                     for event in result.get('audit') or []:
-                        if event.get('phase') in ('drawing_checklist', 'photo_inspection', 'review'):
+                        if event.get('phase') in ('drawing_checklist', 'checklist_reuse', 'photo_inspection', 'review'):
                             if event.get('event') in ('phase_started', 'phase_completed'):
                                 phases[event['phase']] = 'completed' if event['event'] == 'phase_completed' else 'running'
+                    current_phase = result.get('phase')
+                    if result.get('status') == 'running' and current_phase in ('drawing_checklist', 'checklist_reuse', 'photo_inspection', 'review'):
+                        phases.setdefault(current_phase, 'running')
                     run['comparison_progress'] = {'operation_id': plan['operation_id'], 'phases': phases}
                 if result.get('status') == 'running':
                     raise APIError(503, 'comparison_pending',
