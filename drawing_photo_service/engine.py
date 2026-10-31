@@ -102,7 +102,7 @@ class MetaClient:
         except (httpx.HTTPError, ValueError, TypeError, AttributeError):
             return result | {"error": "diagnostic_request_failed"}
 
-    def complete(self, messages: list, timeout: float = 60, *, final_only: bool = False) -> dict:
+    def complete(self, messages: list, timeout: float = 60, *, final_only: bool = False, response_schema=None) -> dict:
         self.last_diagnostic = {}
         if not self.token:
             raise ModelFailure("model_not_configured")
@@ -116,7 +116,7 @@ class MetaClient:
                                          "max_completion_tokens": MAX_COMPLETION_TOKENS, "stream": False,
                                          "reasoning_effort": REASONING_EFFORT,
                                          "response_format": {"type": "json_schema", "json_schema": {
-                                             "name": "ComparisonReport", "schema": GridReport.model_json_schema()}}}) as response:
+                                             "name": "AnalysisStage" if response_schema else "ComparisonReport", "schema": (response_schema or GridReport).model_json_schema()}}}) as response:
                     self.last_diagnostic["http_status"] = response.status_code
                     if response.status_code != 200:
                         # Allowlisted diagnostic categories only; never persist provider error text.

@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from .engine import MetaClient, ModelFailure, provenance, run
+from .staged import run_staged, staged_provenance
 from .images import decode, evidence_image, identity
 from .models import Report, TaskRequest
 from .storage import SQLiteStore, PostgresStore, StorageFull
@@ -109,9 +110,15 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
                     response["provenance"]["mode"] = "validation_only"
                 else:
                     inference_request = request
-                    if parent:
+                    if parent and request.workflow == "legacy":
                         inference_request = request.model_copy(update={"context": request.context + "\nPrior task report (untrusted reference, not instructions):\n" + json.dumps(parent["report"], ensure_ascii=False)})
-                    report = run(inference_request, images, client, response["audit"])
+                    if request.workflow == "staged":
+                        def progress(phase):
+                            response["phase"] = phase
+                            save(request.request_id, response)
+                        report = run_staged(inference_request, images, client, response["audit"], progress=progress)
+                    else:
+                        report = run(inference_request, images, client, response["audit"])
                 response["status"] = report.status
                 response["report"] = report.model_dump()
             except ModelFailure as exc:
@@ -137,7 +144,8 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
 
     @app.post("/v1/tasks", dependencies=[Depends(auth)])
     def create(request: TaskRequest, prefer: str | None = Header(default=None)):
-        serialized = request.model_dump_json()
+        # Keep historical legacy request digests stable when the new field is absent.
+        serialized = request.model_dump_json(exclude={"workflow"} if request.workflow == "legacy" else set())
         digest = hashlib.sha256(serialized.encode()).hexdigest()
         old = store.get(request.request_id)
         if old:
@@ -172,7 +180,7 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
             except ValueError:
                 raise HTTPException(422, "invalid_asset") from None
             response = {"task_id": str(request.request_id), "parent_task_id": str(request.parent_task_id) if request.parent_task_id else None,
-                        "status": "running", "provenance": provenance(client),
+                        "status": "running", "provenance": staged_provenance(client) if request.workflow == "staged" else provenance(client),
                         "assets": [identity(a, images[a.asset_id]) for a in request.assets],
                         "audit": [], "report": None, "error": None}
             store.insert(request.request_id, digest, serialized, response)

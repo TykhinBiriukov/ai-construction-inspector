@@ -17,8 +17,8 @@ Observability is disabled; no automatic retries. Deploy with Wrangler using
 Free quotas and Render sleep/cold-start limits still apply. To return to direct
 Meta, restore its key on Render and remove both proxy settings.
 
-Standalone v0.3.0 service for supplied photographs and 2D drawings. No integration
-with Inspector, Localization, BIM or 3D; no file discovery or remote asset fetching.
+Standalone service for photographs and 2D drawings supplied by Inspector or another
+caller. No Localization, BIM or 3D processing; no file discovery or remote asset fetching.
 Meta performs visual analysis; Python validates the report and renders evidence.
 Validation is not proof that a visual claim is true.
 
@@ -75,6 +75,40 @@ task, a complete updated asset set and the answer in `context`. The prior report
 is supplied as untrusted context; the original result remains available. This is
 an explicit new analysis, not an autonomous search or a conversation with users.
 
+## Selectable analysis workflows
+
+`workflow` in `POST /v1/tasks` is `legacy` (default) or `staged`.
+Use a NEW request ID when changing workflows. Omitted/explicit legacy preserves
+historical request digests and replay compatibility. Existing production callers
+remain on legacy until they explicitly select staged; there is no silent fallback
+between workflows after a model error.
+
+- `legacy`: existing joint drawing/photo analysis and same-history evidence review.
+- `staged`: drawing-only checklist → photo plus frozen checklist → fresh review of
+  both original sources and prior outputs. Each phase has a separate system prompt
+  and message history on the same configured model. This is not independent-model
+  verification. Crop tools are restricted to the phase's visible asset roles.
+
+The checklist contains atomic criteria, drawing claims with grid references and
+limitations. Phase 2 must retain every criterion and the exact drawing claims;
+the final reviewer may correct claims and add missing criteria, but cannot silently
+drop the original checklist. Role/bounds/coverage/schema validation is enforced by
+code. Insufficient visibility or uncertain correspondence requires inconclusive.
+A drawing that cannot support a checklist returns a clarification before photo
+analysis. Reviewer input contains originals and all generated named views, not
+just selected evidence crops. No previous assistant conversation is transferred.
+Caller `context` remains scope, not evidence; automatic parent-report injection
+is limited to legacy. For staged follow-up include the clarified task/scope again.
+
+Both modes retain the shared 240-second / 9-call maximum; staged allows at most
+3 calls per phase (including crop requests and at most one schema repair).
+Final attempts disallow tools. There is no unbounded critique/revision loop.
+Staged responses persist `phase`: `drawing_checklist`, `photo_inspection`, or
+`review`; only `status` determines completion. Audit/provenance records phase
+boundaries, checklist, photo draft, final evidence, durations and prompt version.
+These are diagnostic artifacts; a product UI should show functional phase names,
+not raw audit payloads. Schema-valid output is not evidence of visual accuracy.
+
 ## Result and evidence
 
 Task statuses: `running`, `completed`, `needs_input`, `failed`.
@@ -101,7 +135,7 @@ provider internal reasoning are not exposed in task responses. Originals remain 
 
 ## Tools and limits
 
-All supplied images/pages enter the first model request as previews. The model uses `crop_region` to magnify a rectangle of grid cells in a named view.
+In legacy mode all supplied images/pages enter the first model request as previews. In staged mode each phase receives only its scoped image views. The model uses `crop_region` to magnify a rectangle of grid cells in a named view.
 All views have columns A-J and rows 1-10. A new crop gets its own view ID.
 Model evidence references use view ID + inclusive top-left/bottom-right cells;
 the server resolves exact integer crop bounds to original normalized coordinates.

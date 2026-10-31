@@ -28,6 +28,7 @@ class TaskRequest(StrictModel):
     context: Annotated[str, Field(max_length=8000)] = ""
     assets: Annotated[list[Asset], Field(min_length=1, max_length=8)]
     parent_task_id: UUID | None = None
+    workflow: Literal["legacy", "staged"] = "legacy"
 
     @model_validator(mode="after")
     def check_assets(self):
