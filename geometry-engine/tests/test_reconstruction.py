@@ -10,9 +10,9 @@ import unittest
 import numpy as np
 from PIL import Image
 
-from geometry_engine.mesh import read_mesh
-from geometry_engine.raw_capture import load_raw_capture, load_rgbd
-from geometry_engine.reconstruction import (
+from geometry_engine.common.mesh import read_mesh
+from geometry_engine.capture.raw_capture import load_raw_capture, load_rgbd
+from geometry_engine.reconstruction.service import (
     ReconstructionService, ReconstructionSettings, _depth_comparison, _surface,
 )
 
@@ -111,7 +111,7 @@ class ReprojectionTests(CaptureFixture):
                 ReconstructionSettings(**values)
 
 
-@unittest.skipUnless(importlib.util.find_spec("open3d") is not None, "Install requirements-reconstruction.txt")
+@unittest.skipUnless(importlib.util.find_spec("open3d") is not None, "Install the reconstruction extra from pyproject.toml")
 class RealTSDFTests(CaptureFixture):
     def service(self, **settings):
         return ReconstructionService(ReconstructionSettings(voxel_size_m=.04, sdf_trunc_m=.12,
@@ -121,6 +121,22 @@ class RealTSDFTests(CaptureFixture):
         self.assertFalse((self.session / "reconstruction").exists())
         self.assertFalse((self.session / "reconstruction.lock").exists())
         self.assertEqual(list(self.session.glob(".reconstruction-*")), [])
+
+    def test_raw_poses_bypass_existing_refinement_and_preserve_cameras(self):
+        frames = self.capture()
+        stage = self.session / 'pose_refinement'
+        stage.mkdir()
+        # Deliberately unusable refinement must not be read in the only supported raw mode.
+        marker = stage / 'report.json'
+        marker.write_text('invalid refinement')
+        report = self.service().reconstruct(self.session)
+        cameras = json.loads((self.session / 'reconstruction/cameras.json').read_text())['frames']
+        self.assertEqual(report['pose_source'], 'raw_arkit')
+        self.assertNotIn('pose_refinement_sha256', report)
+        for source, saved in zip(frames, cameras):
+            np.testing.assert_allclose(saved['T_world_from_camera_cv'], source.T_world_from_camera_cv)
+        self.assertEqual(marker.read_text(), 'invalid refinement')
+
 
     def test_real_tsdf_preserves_meter_scale_arkit_axes_colors_and_inputs(self):
         self.capture()

@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from geometry_engine.mask_fusion import FusionSettings, fuse_observations, region_relation
+from geometry_engine.segmentation.mask_fusion import FusionSettings, fuse_observations, region_relation
 
 
 class MaskFusionTests(unittest.TestCase):
@@ -38,6 +38,7 @@ class MaskFusionTests(unittest.TestCase):
         self.assertTrue(np.all(result["face_class_id"] == -1))
         self.assertTrue(np.all(result["face_view_count"] == 1))
         self.assertEqual(result["objects"], [])
+        self.assertTrue(np.all(result["face_candidate_class_id"] == 0))
 
     def test_class_conflict_is_unknown_instead_of_arbitrary_tiebreak(self):
         rows = [self.observation(f"{label}{frame}", frame, range(12), label, 1.)
@@ -45,6 +46,7 @@ class MaskFusionTests(unittest.TestCase):
         result = self.fuse(rows)
         self.assertTrue(np.all(result["face_class_id"] == -1))
         self.assertEqual(result["class_conflict_count"], 12)
+        self.assertTrue(np.all(result["face_candidate_class_id"] == -1))
 
     def test_class_votes_cap_overlapping_masks_per_frame(self):
         rows = [self.observation(f"door-{frame}-{i}", frame, range(12), "door", .7)

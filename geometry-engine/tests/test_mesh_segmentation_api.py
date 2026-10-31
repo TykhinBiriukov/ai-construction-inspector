@@ -1,4 +1,4 @@
-"""HTTP and CLI contracts for local mesh labeling; no external API requests."""
+"""CLI contracts for local mesh labeling; no external API requests."""
 
 from contextlib import redirect_stdout
 from io import StringIO
@@ -8,33 +8,21 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from fastapi.testclient import TestClient
 
-from geometry_engine_api.app import create_app
-from geometry_engine_api.dependencies import get_mesh_segmentation_service, get_settings
-from geometry_engine_api.services.archive import Settings
-import run_mesh_segmentation
+from scripts import run_mesh_segmentation
 
 
 ENGINE = Path(__file__).resolve().parents[1]
 
 
-class MeshSegmentationApiTests(unittest.TestCase):
+class MeshSegmentationCliTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(dir=ENGINE)
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.settings = Settings(data_dir=self.root)
         self.report = {"processed_frames": 3, "labeled_faces": 120, "total_faces": 200, "candidate_objects": 2}
         self.service = Mock()
         self.service.segment.return_value = self.report
-        self.app = create_app()
-        self.app.dependency_overrides[get_settings] = lambda: self.settings
-        self.app.dependency_overrides[get_mesh_segmentation_service] = lambda: self.service
-
-    def post(self, body):
-        with TestClient(self.app) as client:
-            return client.post("/sessions/segment-mesh", json=body)
 
     def test_cli_uses_saved_projection_and_custom_fusion_without_model_key(self):
         session = self.root / "test"

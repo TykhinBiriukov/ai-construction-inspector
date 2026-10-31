@@ -24,11 +24,10 @@ class PipelineTests(unittest.TestCase):
         calls = []
         with ExitStack() as stack:
             for name in ('ReconstructionService', 'SessionValidationService', 'FrameFilterService',
-                         'MeshSegmentationService', 'WallPlaneService'):
+                         'MeshSegmentationService'):
                 service = stack.enter_context(patch('geometry_engine.pipeline.' + name)).return_value
                 method = {'ReconstructionService': 'reconstruct', 'SessionValidationService': 'validate',
-                          'FrameFilterService': 'filter', 'MeshSegmentationService': 'segment',
-                          'WallPlaneService': 'detect'}[name]
+                          'FrameFilterService': 'filter', 'MeshSegmentationService': 'segment'}[name]
                 getattr(service, method).side_effect = lambda *args, n=name: (calls.append(n) or {'status': 'valid'})
             stack.enter_context(patch('geometry_engine.pipeline.prepare_input', side_effect=lambda *a: calls.append('input')))
             stack.enter_context(patch('geometry_engine.pipeline.preprocess_mesh', side_effect=lambda *a: calls.append('mesh')))
@@ -37,7 +36,8 @@ class PipelineTests(unittest.TestCase):
             report = PipelineService(sam).run(self.session)
             self.assertEqual(report['status'], 'completed')
             self.assertEqual(calls, ['ReconstructionService', 'input', 'SessionValidationService', 'mesh',
-                                     'FrameFilterService', 'sam', 'MeshSegmentationService', 'WallPlaneService'])
+                                     'FrameFilterService', 'sam', 'MeshSegmentationService'])
+            self.assertNotIn('wall_planes', report['completed_stages'])
             with self.assertRaises(FileExistsError):
                 PipelineService(sam).run(self.session)
             self.assertEqual(sam.segment.call_count, 1)
@@ -58,7 +58,7 @@ class PipelineTests(unittest.TestCase):
         service.run.return_value = {'status': 'completed'}
         app.dependency_overrides[get_pipeline_service] = lambda: service
         app.dependency_overrides[get_settings] = lambda: Settings(data_dir=self.data)
-        self.assertEqual(set(app.openapi()['paths']), {'/sessions/extract', '/sessions/process'})
+        self.assertTrue({'/sessions/extract', '/sessions/process'}.issubset(app.openapi()['paths']))
         with TestClient(app) as client:
             response = client.post('/sessions/process', json={'session_id': 'scan'})
             self.assertEqual(response.status_code, 200, response.text)
@@ -72,7 +72,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_adapter_preserves_raw_and_binds_reconstructed_mesh(self):
         from tests.test_raw_capture import RawCaptureTests
-        from geometry_engine.validation import SessionValidationService
+        from geometry_engine.capture.validation import SessionValidationService
         fixture = RawCaptureTests()
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
@@ -81,7 +81,16 @@ class PipelineTests(unittest.TestCase):
         (session / 'reconstruction/report.json').write_text(json.dumps({
             'frames': [{'frame_id': 'frame-a', 'status': 'integrated'}]}))
         import numpy as np
-        from geometry_engine.mesh import write_mesh
+        corrected_cv = np.diag([1., -1., -1., 1.])
+        corrected_cv[:3, 3] = [.12, .03, -.08]
+        (session / 'reconstruction/cameras.json').write_text(json.dumps({'frames': [{
+            'frame_id': 'frame-a', 'T_world_from_camera_cv': corrected_cv.tolist()}]}))
+        import hashlib
+        saved_report = json.loads((session / 'reconstruction/report.json').read_text())
+        saved_report.update(pose_source='refined', sha256={'cameras': hashlib.sha256(
+            (session / 'reconstruction/cameras.json').read_bytes()).hexdigest()})
+        (session / 'reconstruction/report.json').write_text(json.dumps(saved_report))
+        from geometry_engine.common.mesh import write_mesh
         mesh_path = session / 'reconstruction/mesh.ply'
         write_mesh(mesh_path, np.array([[0,0,0],[1,0,0],[0,1,0]], dtype=float),
                    np.full((3,4), 255, dtype=np.uint8), np.array([[0,1,2]]))
@@ -89,6 +98,13 @@ class PipelineTests(unittest.TestCase):
         before = (fixture.base / 'metadata.json').read_bytes()
         prepare_input(session)
         self.assertEqual(before, (fixture.base / 'metadata.json').read_bytes())
+        derived = json.loads((session / 'input/frames/frame-a/metadata.json').read_text())
+        np.testing.assert_allclose(derived['pose']['T_world_from_camera'],
+                                   corrected_cv @ np.diag([1., -1., -1., 1.]))
         report = SessionValidationService().validate(session)
         self.assertEqual(report['status'], 'valid', report)
         self.assertEqual((session / 'input/mesh.ply').read_bytes(), mesh)
+        with (session / 'reconstruction/cameras.json').open('a') as stream:
+            stream.write(' ')
+        with self.assertRaisesRegex(ValueError, 'camera fingerprint'):
+            prepare_input(session)

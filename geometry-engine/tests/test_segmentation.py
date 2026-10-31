@@ -11,8 +11,8 @@ import unittest
 import numpy as np
 from PIL import Image
 
-from geometry_engine.sam_backend import Detection
-from geometry_engine.segmentation import SegmentationService, SegmentationSettings
+from geometry_engine.segmentation.sam_backend import Detection
+from geometry_engine.segmentation.service import SegmentationService, SegmentationSettings
 
 
 ENGINE = Path(__file__).resolve().parents[1]
@@ -84,6 +84,36 @@ class SegmentationTests(unittest.TestCase):
         mask[5:15, 8:20] = True
         return mask
 
+    def test_gravity_rotation_and_inverse_mask_preserve_native_pixels(self):
+        # ARKit camera rolled 90 degrees: world up points left in stored pixels.
+        path = self.original / "frames/000001/metadata.json"
+        metadata = json.loads(path.read_text())
+        metadata["pose"]["T_world_from_camera"] = [[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        self.write_json(path, metadata)
+        self.write_json(self.original / "capture.json", {"coordinate_system": "arkit"})
+        native_mask = self.mask()
+        backend = FixtureBackend([Detection("window frame", .9, np.rot90(native_mask, 3))])
+        SegmentationService(backend).segment(self.session)
+        np.testing.assert_array_equal(backend.calls[0][0], np.rot90(self.pixels, 3))
+        frame = self.result()["frames"][0]
+        self.assertEqual(frame["model_rotation_ccw_degrees"], 270)
+        detection = frame["detections"][0]
+        self.assertEqual(detection["label"], "window")
+        self.assertEqual(detection["prompt"], "window frame")
+        with Image.open(self.session / "segmentation" / detection["mask"]) as image:
+            np.testing.assert_array_equal(np.asarray(image) > 0, native_mask)
+
+    def test_gravity_handles_all_rolls_and_ambiguous_vertical_view(self):
+        from geometry_engine.segmentation.service import upright_quarter_turns
+        for degrees, expected in [(0, 0), (90, 1), (180, 2), (270, 3)]:
+            angle = np.deg2rad(degrees)
+            pose = np.eye(4)
+            pose[:2, :2] = [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+            metadata = {"pose": {"T_world_from_camera": pose.tolist()}}
+            self.assertEqual(upright_quarter_turns(metadata, "arkit"), expected)
+        pose = [[1, 0, 0, 0], [0, 0, 1, 0], [0, -1, 0, 0], [0, 0, 0, 1]]
+        self.assertEqual(upright_quarter_turns({"pose": {"T_world_from_camera": pose}}, "arkit"), 0)
+
     def result(self, directory="segmentation"):
         return json.loads((self.session / directory / "detections.json").read_text(encoding="utf-8"))
 
@@ -100,7 +130,7 @@ class SegmentationTests(unittest.TestCase):
         self.assertEqual(report["status"], "completed")
         self.assertEqual(len(backend.calls), 1)
         np.testing.assert_array_equal(backend.calls[0][0], self.pixels)
-        self.assertEqual(backend.calls[0][1], ("wall", "window", "door"))
+        self.assertEqual(backend.calls[0][1], SegmentationSettings().prompts)
         manifest = self.result()
         self.assertEqual(manifest["source_path_base"], "session_directory")
         self.assertEqual(manifest["artifact_path_base"], "segmentation_directory")

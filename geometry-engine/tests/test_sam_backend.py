@@ -9,7 +9,7 @@ import httpx
 import numpy as np
 from PIL import Image
 
-from geometry_engine.sam_backend import Sam3Backend, Sam3UnavailableError
+from geometry_engine.segmentation.sam_backend import Sam3Backend, Sam3UnavailableError
 
 
 # Official codec's encoding of [[1, 0], [0, 1]], generated once as a fixture.

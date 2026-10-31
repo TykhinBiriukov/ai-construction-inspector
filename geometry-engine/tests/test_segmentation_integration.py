@@ -1,4 +1,4 @@
-"""API -> service -> hosted protocol -> real decoder -> PNG, without networking."""
+"""Service -> hosted protocol -> real decoder -> PNG, without networking."""
 
 import json
 from pathlib import Path
@@ -7,18 +7,14 @@ import unittest
 
 import httpx
 import numpy as np
-from fastapi.testclient import TestClient
 from PIL import Image
 
-from geometry_engine.sam_backend import Sam3Backend
-from geometry_engine.segmentation import SegmentationService, SegmentationSettings
-from geometry_engine_api.app import create_app
-from geometry_engine_api.dependencies import get_segmentation_service, get_settings
-from geometry_engine_api.services.archive import Settings
+from geometry_engine.segmentation.sam_backend import Sam3Backend
+from geometry_engine.segmentation.service import SegmentationService, SegmentationSettings
 
 
 class SegmentationIntegrationTest(unittest.TestCase):
-    def test_api_publishes_original_pixel_masks_from_meta_wire_response(self):
+    def test_service_publishes_original_pixel_masks_from_meta_wire_response(self):
         engine = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(dir=engine) as temporary:
             root = Path(temporary)
@@ -45,13 +41,8 @@ class SegmentationIntegrationTest(unittest.TestCase):
             backend = Sam3Backend("test-only", transport=httpx.MockTransport(lambda request:
                 httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})))
             service = SegmentationService(backend, SegmentationSettings(prompts=("window",), min_mask_pixels=1))
-            app = create_app()
-            app.dependency_overrides[get_settings] = lambda: Settings(data_dir=root)
-            app.dependency_overrides[get_segmentation_service] = lambda: service
-            with TestClient(app) as client:
-                response = client.post("/sessions/segment", json={"session_id": "scan-01"})
-            self.assertEqual(response.status_code, 201, response.text)
-            self.assertEqual(response.json()["segmentation"]["detection_count"], 1)
+            report = service.segment(session)
+            self.assertEqual(report["detection_count"], 1)
             output = session / "segmentation"
             results = json.loads((output / "detections.json").read_text(encoding="utf-8"))
             detection = results["frames"][0]["detections"][0]

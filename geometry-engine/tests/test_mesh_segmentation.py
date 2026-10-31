@@ -12,9 +12,9 @@ import numpy as np
 from PIL import Image
 
 import test_mask_projection as projection_fixtures
-from geometry_engine.mask_fusion import FusionSettings
-from geometry_engine.mesh import read_mesh
-from geometry_engine.mesh_segmentation import MeshSegmentationService
+from geometry_engine.segmentation.mask_fusion import FusionSettings
+from geometry_engine.common.mesh import read_mesh
+from geometry_engine.segmentation.mesh_segmentation import MeshSegmentationService
 
 
 class MeshSegmentationTests(unittest.TestCase):
@@ -102,12 +102,18 @@ class MeshSegmentationTests(unittest.TestCase):
         np.testing.assert_array_equal(labels["face_class_id"], -1)
         np.testing.assert_array_equal(labels["face_instance_id"], -1)
 
+        self.assertGreater(report["provisional_only_faces"], 0)
+        self.assertTrue(np.any(labels["face_candidate_class_id"] >= 0))
+        candidate_viewer = self.session / "mesh_segmentation/candidates/viewer.html"
+        self.assertTrue(candidate_viewer.is_file())
+        self.assertIn("Preliminary labels", candidate_viewer.read_text(encoding="utf-8"))
+
     def test_cached_projection_is_reused_without_rendering(self):
         self.service.segment(self.session)
         cached = {path: path.read_bytes() for path in (self.session / "mask_projection").rglob("*") if path.is_file()}
         # Fusion is independently rerunnable, including with changed vote settings.
         second_service = MeshSegmentationService(self.fixture.settings, replace(self.fusion, min_views=1))
-        with patch("geometry_engine.mask_projection.render_visibility", side_effect=AssertionError("Unexpected rerender")):
+        with patch("geometry_engine.segmentation.mask_projection.render_visibility", side_effect=AssertionError("Unexpected rerender")):
             report = second_service.segment(self.session, self.session / "mesh-second")
         self.assertTrue(report["projection_reused"])
         self.assertEqual(report["labeled_faces"], 2)
@@ -115,7 +121,7 @@ class MeshSegmentationTests(unittest.TestCase):
 
     def test_existing_final_stage_is_not_overwritten(self):
         self.service.segment(self.session)
-        with patch("geometry_engine.mask_projection.render_visibility", side_effect=AssertionError("Unexpected rerender")):
+        with patch("geometry_engine.segmentation.mask_projection.render_visibility", side_effect=AssertionError("Unexpected rerender")):
             with self.assertRaises(FileExistsError):
                 self.service.segment(self.session)
 

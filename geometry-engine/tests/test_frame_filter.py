@@ -10,8 +10,8 @@ import numpy as np
 from PIL import Image, ImageFilter
 from scipy.spatial.transform import Rotation
 
-from geometry_engine.frame_filter import FrameFilterService, FrameFilterSettings, camera_motion, image_quality
-from run_geometry import run_session
+from geometry_engine.segmentation.frame_filter import FrameFilterService, FrameFilterSettings, camera_motion, image_quality
+from scripts.run_geometry import run_session
 
 
 class FrameFilterTests(unittest.TestCase):
@@ -150,7 +150,7 @@ class FrameFilterTests(unittest.TestCase):
 
     def test_frames_only_does_not_reprocess_mesh(self):
         self.frame("000001")
-        with patch('run_geometry.preprocess_mesh') as preprocess,patch('run_geometry.SessionValidationService') as validator:
+        with patch('scripts.run_geometry.preprocess_mesh') as preprocess,patch('scripts.run_geometry.SessionValidationService') as validator:
             result=run_session(self.session,frames_only=True)
         preprocess.assert_not_called()
         validator.assert_not_called()

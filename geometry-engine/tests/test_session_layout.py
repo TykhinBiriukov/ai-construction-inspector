@@ -4,19 +4,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from geometry_engine.session_layout import (original_directory, processed_session,
+from geometry_engine.capture.session_layout import (original_directory, processed_session,
     raw_original_directory, session_reference)
-from geometry_engine.validation import session_file
-from geometry_engine.mask_projection import MaskProjectionService
-from geometry_engine.mesh_segmentation import MeshSegmentationService
+from geometry_engine.capture.validation import session_file
+from geometry_engine.segmentation.mask_projection import MaskProjectionService
+from geometry_engine.segmentation.mesh_segmentation import MeshSegmentationService
 from test_mask_projection import MaskProjectionTests
 
 
 class SplitLayoutTests(unittest.TestCase):
     def test_raw_input_reconstruction_and_validation_write_only_processed(self):
         from test_reconstruction import CaptureFixture
-        from geometry_engine.reconstruction import ReconstructionService, ReconstructionSettings
-        from geometry_engine.validation import SessionValidationService
+        from geometry_engine.reconstruction.service import ReconstructionService, ReconstructionSettings
+        from geometry_engine.capture.validation import SessionValidationService
         fixture=CaptureFixture();fixture.setUp();self.addCleanup(fixture.doCleanups)
         fixture.capture()
         raw=fixture.session/'raw'/'scan';raw.mkdir(parents=True)

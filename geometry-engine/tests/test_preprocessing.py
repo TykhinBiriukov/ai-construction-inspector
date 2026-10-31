@@ -11,7 +11,7 @@ import unittest
 import numpy as np
 
 from geometry_engine import preprocess_mesh
-from geometry_engine.mesh import read_mesh, write_mesh
+from geometry_engine.common.mesh import read_mesh, write_mesh
 
 
 ENGINE = Path(__file__).resolve().parents[1]
@@ -48,7 +48,7 @@ class PreprocessingIntegrationTests(unittest.TestCase):
     def test_library_and_cli_do_not_import_dataset_or_plotting_libraries(self):
         result = subprocess.run(
             [sys.executable, "-c", (
-                "import sys; import geometry_engine; import geometry_engine.cli; "
+                "import sys; import geometry_engine; import geometry_engine.reconstruction.preprocessing; "
                 "assert not any(n.split('.')[0] in {'PIL','matplotlib','tools'} for n in sys.modules)"
             )], cwd=ENGINE, capture_output=True, text=True,
         )

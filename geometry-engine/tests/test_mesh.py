@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 
 ENGINE = Path(__file__).resolve().parents[1]
-from geometry_engine import mesh as alignment
+from geometry_engine.common import mesh as alignment
 
 
 class MeshCleanupTests(unittest.TestCase):

@@ -6,19 +6,56 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 from PIL import Image
 
-from geometry_engine.mask_projection import MaskProjectionService, ProjectionSettings
-from geometry_engine.mesh import write_mesh
-from geometry_engine.preprocessing import preprocess_mesh
+from geometry_engine.segmentation.mask_projection import MaskProjectionService, ProjectionSettings
+from geometry_engine.common.mesh import write_mesh
+from geometry_engine.reconstruction.preprocessing import preprocess_mesh
 
 
 ENGINE = Path(__file__).resolve().parents[1]
 
 
 class MaskProjectionTests(unittest.TestCase):
+    def test_rejected_projection_camera_cannot_label_even_matching_depth(self):
+        stage=self.session/'projection_alignment';stage.mkdir()
+        for name in ('report.json','cameras.json'):
+            self.write_json(stage/name,{})
+        with patch('geometry_engine.segmentation.projection_alignment.load_projection_cameras',return_value={
+                '000001':{'status':'rejected'}}):
+            _,data,arrays=self.run_projection(alignment_dir=stage)
+        self.assertEqual(len(arrays['face_ids']),0)
+        self.assertIn('camera_alignment_unconfirmed',data['observations'][0]['rejection_reasons'])
+        self.assertEqual(data['frames'][0]['camera_status'],'rejected')
+
+    def test_projection_camera_changes_visibility_not_mesh_or_metadata(self):
+        stage=self.session/'projection_alignment';stage.mkdir()
+        for name in ('report.json','cameras.json'):
+            self.write_json(stage/name,{})
+        mesh=self.session/'mesh_preprocessing/mesh.ply';meta=self.frame_dir/'metadata.json'
+        originals=[p.read_bytes() for p in (mesh,meta)]
+        # Camera moves away from surface: observed depth 2m no longer agrees with 3m rendering.
+        transform=np.eye(4);transform[2,3]=-1
+        with patch('geometry_engine.segmentation.projection_alignment.load_projection_cameras',return_value={
+                '000001':{'status':'accepted_refined','T_world_from_camera_cv':transform.tolist()}}):
+            _,data,arrays=self.run_projection(alignment_dir=stage)
+        self.assertEqual(len(arrays['face_ids']),0)
+        self.assertEqual(data['frames'][0]['T_world_from_camera_cv'],transform.tolist())
+        self.assertEqual(originals,[p.read_bytes() for p in (mesh,meta)])
+
+    def test_strict_agreement_rejects_small_door_scrap_but_keeps_missing_glass(self):
+        settings=replace(self.settings,min_comparable_depth_agreement=.6)
+        depth=np.full((12,16),2500,dtype=np.uint16);depth[:1,:]=2000
+        self.save_depth(depth)
+        _,bad,_=self.run_projection(output='conflicting',settings=settings)
+        self.assertIn('depth_inconsistent_with_mesh',bad['observations'][0]['rejection_reasons'])
+        depth[1:,:]=0;self.save_depth(depth)
+        _,partial,_=self.run_projection(output='missing',settings=replace(settings,min_face_fraction=.01))
+        self.assertNotIn('depth_inconsistent_with_mesh',partial['observations'][0]['rejection_reasons'])
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(dir=ENGINE)
         self.addCleanup(temporary.cleanup)
@@ -111,6 +148,83 @@ class MaskProjectionTests(unittest.TestCase):
         self.assertEqual(data["observations"][0]["supported_pixels"], 0)
         self.assertEqual(len(arrays["face_ids"]), 0)
 
+    def test_partial_depth_kept_without_whole_mask_fraction_gate(self):
+        depth = np.zeros((12, 16), dtype=np.uint16)
+        depth[:2, :] = 2000
+        self.save_depth(depth)
+        # Low per-face threshold isolates the whole-observation gate here.
+        settings = replace(self.settings, min_face_fraction=.01)
+        _, data, arrays = self.run_projection(settings=settings)
+        self.assertLess(data["observations"][0]["support_fraction"], .2)
+        self.assertGreater(len(arrays["face_ids"]), 0)
+        _, _, strict = self.run_projection(output="strict", settings=replace(settings, min_observation_support=.2))
+        self.assertEqual(len(strict["face_ids"]), 0)
+
+    def test_conflicting_door_mask_does_not_label_small_accidental_remnant(self):
+        # A wrong camera/mesh alignment leaves a few depth coincidences near
+        # a doorway's lower edge. Those pixels must not become a new door.
+        depth = np.full((12, 16), 1700, dtype=np.uint16)
+        depth[-1, :8] = 2000
+        self.save_depth(depth)
+        self.manifest["frames"][0]["detections"][0]["label"] = "door"
+        self.write_json(self.segmentation / "detections.json", self.manifest)
+        settings = replace(self.settings, min_face_fraction=.01)
+        report, data, arrays = self.run_projection(settings=settings)
+        row = data["observations"][0]
+        self.assertGreater(row["candidate_face_count"], 0)
+        self.assertEqual(row["supported_pixels"], 8)
+        self.assertEqual(row["comparable_depth_pixels"], 192)
+        self.assertAlmostEqual(row["comparable_depth_agreement"], 8/192)
+        self.assertEqual(row["rejection_reasons"], ["depth_inconsistent_with_mesh"])
+        self.assertEqual(row["status"], "unconfirmed")
+        self.assertEqual(report["depth_inconsistent_observations"], 1)
+        self.assertEqual(len(arrays["face_ids"]), 0)
+        # The explicit switch exists for diagnostics; the default is guarded.
+        _, _, unguarded = self.run_projection(output="unguarded", settings=replace(
+            settings, min_comparable_depth_agreement=0))
+        self.assertGreater(len(unguarded["face_ids"]), 0)
+
+    def test_window_with_sparse_but_consistent_depth_keeps_frame_evidence(self):
+        # Same small support fraction as the bad door, but glass has no depth
+        # instead of contradictory measurements. Retain actual frame surfaces.
+        depth = np.zeros((12, 16), dtype=np.uint16)
+        depth[-1, :8] = 2000
+        self.save_depth(depth)
+        self.manifest["frames"][0]["detections"][0]["label"] = "window"
+        self.write_json(self.segmentation / "detections.json", self.manifest)
+        _, data, arrays = self.run_projection(settings=replace(self.settings, min_face_fraction=.01))
+        row = data["observations"][0]
+        self.assertEqual(row["supported_pixels"], 8)
+        self.assertEqual(row["comparable_depth_pixels"], 8)
+        self.assertEqual(row["comparable_depth_agreement"], 1.)
+        self.assertEqual(row["invalid_depth_pixels"], 184)
+        self.assertEqual(row["depth_mismatch_pixels"], 0)
+        self.assertEqual(row["quality"], "partial_depth_support")
+        self.assertEqual(row["rejection_reasons"], [])
+        self.assertGreater(len(arrays["face_ids"]), 0)
+
+    def test_rejection_counters_separate_missing_confidence_and_conflicting_depth(self):
+        depth = np.full((12, 16), 2000, dtype=np.uint16)
+        depth[:, :4] = 0
+        depth[:, 8:12] = 1500
+        self.save_depth(depth)
+        confidence = np.full((12, 16), 2, dtype=np.uint8)
+        confidence[:, :8] = 0  # Invalid depth takes priority over confidence.
+        Image.fromarray(confidence).save(self.frame_dir / "confidence.png")
+        _, data, _ = self.run_projection(settings=replace(self.settings, min_face_fraction=.01))
+        row = data["observations"][0]
+        for name in ("invalid_depth_pixels", "low_confidence_pixels", "depth_mismatch_pixels", "supported_pixels"):
+            self.assertEqual(row[name], 48, name)
+        self.assertEqual(row["comparable_depth_pixels"], 96)
+        self.assertEqual(row["depth_rejected_pixels"], 144)
+        self.assertEqual(sum(row[name] for name in ("no_mesh_pixels", "invalid_depth_pixels",
+                         "low_confidence_pixels", "depth_mismatch_pixels", "supported_pixels")), row["mask_pixels"])
+
+    def test_comparable_agreement_setting_rejects_invalid_values(self):
+        for value in (-.01, 1.01, float("nan")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                replace(self.settings, min_comparable_depth_agreement=value)
+
     def test_missing_depth_retains_unconfirmed_observation_without_faces(self):
         self.metadata["depth"] = self.metadata["confidence"] = None
         self.save_metadata()
@@ -181,15 +295,17 @@ class MaskProjectionTests(unittest.TestCase):
 
     def test_binary_phone_depth_in_meters_matches_png_depth(self):
         _, _, reference = self.run_projection(output="projection-png")
-        np.full((12, 16), 2., dtype="<f4").tofile(self.frame_dir / "depth.bin")
-        np.full((12, 16), 2, dtype="u1").tofile(self.frame_dir / "confidence.bin")
-        self.metadata["depth"] = {"path": "depth.bin", "width": 16, "height": 12,
-                                  "dtype": "float32", "unit": "meter", "byte_order": "little"}
-        self.metadata["confidence"] = {"path": "confidence.bin", "width": 16, "height": 12, "dtype": "uint8"}
-        self.save_metadata()
-        _, _, binary = self.run_projection(output="projection-binary")
-        np.testing.assert_array_equal(binary["face_ids"], reference["face_ids"])
-        np.testing.assert_allclose(binary["face_weights"], reference["face_weights"])
+        for depth_name, confidence_name in (("depth.bin", "confidence.bin"), ("depth.f32", "confidence.u8")):
+            with self.subTest(depth=depth_name):
+                np.full((12, 16), 2., dtype="<f4").tofile(self.frame_dir / depth_name)
+                np.full((12, 16), 2, dtype="u1").tofile(self.frame_dir / confidence_name)
+                self.metadata["depth"] = {"path": depth_name, "width": 16, "height": 12,
+                                          "dtype": "float32", "unit": "meter", "byte_order": "little"}
+                self.metadata["confidence"] = {"path": confidence_name, "width": 16, "height": 12, "dtype": "uint8"}
+                self.save_metadata()
+                _, _, binary = self.run_projection(output="projection-"+depth_name)
+                np.testing.assert_array_equal(binary["face_ids"], reference["face_ids"])
+                np.testing.assert_allclose(binary["face_weights"], reference["face_weights"])
 
     def test_supersampling_preserves_planar_face_correspondence(self):
         _, _, low = self.run_projection(output="projection-raster1")

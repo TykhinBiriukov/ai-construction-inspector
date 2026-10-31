@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from geometry_engine.segmented_mesh_export import UNKNOWN_COLOR, export_segmented_mesh
+from geometry_engine.visualization.segmented_mesh_export import UNKNOWN_COLOR, export_segmented_mesh
 
 
 ENGINE = Path(__file__).resolve().parents[1]

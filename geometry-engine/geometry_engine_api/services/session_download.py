@@ -20,7 +20,18 @@ class SessionDownloadService:
     def __init__(self, settings, client, *, download_fn=download_archive):
         self.settings, self.client, self.download = settings, client, download_fn
 
-    def extract(self, project_id, session_id):
+    def extract(self, project_id, session_id, *, manifest_path=None):
+        explicit_manifest = manifest_path
+        prefix = f"projects/{project_id}/sessions/{session_id}"
+        if explicit_manifest is not None:
+            identifier = r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
+            match = re.fullmatch(
+                rf"(standalone/{identifier}/{identifier}/({identifier}))/manifests/([a-f0-9]{{64}})/capture-manifest\.json",
+                explicit_manifest,
+            )
+            if not match or match[2] != session_id or project_id not in (None, "standalone"):
+                raise ArchiveServiceError("invalid_request", "Invalid standalone manifest_path or session identity")
+            prefix, project_id = match[1], "standalone"
         for name, value in (("project_id", project_id), ("session_id", session_id)):
             if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", value):
                 raise ArchiveServiceError("invalid_request", f"Invalid {name}")
@@ -29,7 +40,6 @@ class SessionDownloadService:
         if destination.exists():
             raise ArchiveServiceError("session_exists", "Session folder already exists")
         root.mkdir(parents=True, exist_ok=True)
-        prefix = f"projects/{project_id}/sessions/{session_id}"
         bucket = self.client.storage.from_(self.settings.storage_bucket)
         started = time.monotonic()
         try:
@@ -47,21 +57,27 @@ class SessionDownloadService:
                     self.download(signed["signedURL"], path, replace(self.settings,
                                   max_download_bytes=limit, download_deadline_s=remaining))
 
-                fetch(prefix+"/.session.json", original/".session.json", 65536)
-                descriptor = json.loads((original/".session.json").read_text(encoding="utf-8"))
-                if descriptor.get("project_id") != project_id or descriptor.get("session_id") != session_id:
-                    raise ValueError("Session identity differs from request")
-                manifests = bucket.list(prefix+"/manifests", {"limit": 2, "sortBy": {"column": "name", "order": "asc"}})
-                if len(manifests) != 1 or not manifests[0].get("id"):
-                    raise ValueError("Expected exactly one session manifest")
-                name = manifests[0]["name"]
-                if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\.json", name):
-                    raise ValueError("Invalid manifest filename")
+                if explicit_manifest is not None:
+                    name = explicit_manifest.removeprefix(prefix+"/manifests/")
+                else:
+                    fetch(prefix+"/.session.json", original/".session.json", 65536)
+                    descriptor = json.loads((original/".session.json").read_text(encoding="utf-8"))
+                    if descriptor.get("project_id") != project_id or descriptor.get("session_id") != session_id:
+                        raise ValueError("Session identity differs from request")
+                    manifests = bucket.list(prefix+"/manifests", {"limit": 2, "sortBy": {"column": "name", "order": "asc"}})
+                    if len(manifests) != 1 or not manifests[0].get("id"):
+                        raise ValueError("Expected exactly one session manifest")
+                    name = manifests[0]["name"]
+                    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\.json", name):
+                        raise ValueError("Invalid manifest filename")
                 manifest_path = original/"manifests"/name
                 fetch(prefix+"/manifests/"+name, manifest_path, min(4*1024**2, self.settings.max_download_bytes))
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 if manifest.get("project_id") != project_id or manifest.get("session_id") != session_id:
                     raise ValueError("Manifest identity differs from request")
+                standalone = explicit_manifest is not None
+                if standalone and manifest.get("format") != "standalone_capture_v1":
+                    raise ArchiveServiceError("invalid_request", "Unsupported manifest format; expected standalone_capture_v1")
                 if manifest.get("format") == "geometry_capture_parts_v1":
                     report = self._extract_parts(manifest, prefix, staged, fetch)
                     report.update(status="completed", project_id=project_id, session_id=session_id,
@@ -76,12 +92,13 @@ class SessionDownloadService:
                             raise ArchiveServiceError("session_exists", "Session folder already exists") from None
                         raise
                     return ExtractionResult(session_id, destination)
-                if manifest.get("format") != "capture_manifest_supabase_v1":
+                if not standalone and manifest.get("format") != "capture_manifest_supabase_v1":
                     raise ArchiveServiceError("invalid_request", "Unsupported manifest format; expected capture_manifest_supabase_v1 or geometry_capture_parts_v1")
                 observations = manifest.get("observations")
                 if not isinstance(observations, list) or not observations or manifest.get("observation_count") != len(observations):
                     raise ValueError("Invalid observation count")
-                jobs, seen, total = [], set(), (original/".session.json").stat().st_size+manifest_path.stat().st_size
+                metadata_files = [path for path in original.rglob("*") if path.is_file()]
+                jobs, seen, total = [], set(), sum(path.stat().st_size for path in metadata_files)
                 for observation in observations:
                     identity = observation.get("observation_id")
                     if not isinstance(identity, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", identity):
@@ -98,13 +115,14 @@ class SessionDownloadService:
                                 or not re.fullmatch(r"[a-fA-F0-9]{64}", digest)):
                             raise ValueError("Invalid manifest file description")
                         relative = f"observations/{identity}/{filename}"
-                        key = prefix+"/"+relative
+                        key = (f"{prefix}/observations/{identity}/{digest}/{filename}"
+                               if standalone else prefix+"/"+relative)
                         if item.get("object_key") != key or relative.casefold() in seen:
                             raise ValueError("Duplicate file or object outside the requested session")
                         seen.add(relative.casefold())
                         jobs.append((key, original/relative, size, digest.lower()))
                         total += size
-                if len(jobs)+2 > self.settings.max_members or total > self.settings.max_download_bytes:
+                if len(jobs)+len(metadata_files) > self.settings.max_members or total > self.settings.max_download_bytes:
                     raise ValueError("Session exceeds download limits")
 
                 def download_file(job):
@@ -122,7 +140,8 @@ class SessionDownloadService:
                 (staged/"download-report.json").write_text(json.dumps({
                     "status": "completed", "project_id": project_id, "session_id": session_id,
                     "manifest": "manifests/"+name, "observation_count": len(observations),
-                    "file_count": len(jobs)+2, "downloaded_bytes": total, "sha256_verified": True,
+                    "file_count": len(jobs)+len(metadata_files), "downloaded_bytes": total, "sha256_verified": True,
+                    "format": manifest["format"], "storage_prefix": prefix,
                 }, indent=2)+"\n", encoding="utf-8")
                 try:
                     staged.rename(destination)

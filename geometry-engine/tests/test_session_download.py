@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from fastapi.testclient import TestClient
 
 from geometry_engine_api.app import create_app
-from geometry_engine_api.dependencies import get_archive_service, get_validation_service
+from geometry_engine_api.dependencies import get_archive_service
 from geometry_engine_api.services.archive import ArchiveService, Settings
 
 
@@ -47,9 +47,7 @@ class SessionDownloadTests(unittest.TestCase):
 
         self.service = ArchiveService(self.settings, sdk, download_fn=download)
         app = create_app()
-        self.validator = Mock()
         app.dependency_overrides[get_archive_service] = lambda: self.service
-        app.dependency_overrides[get_validation_service] = lambda: self.validator
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
 
@@ -65,7 +63,6 @@ class SessionDownloadTests(unittest.TestCase):
         self.assertTrue((original/"manifests/manifest-001.json").is_file())
         self.assertTrue((original/".session.json").is_file())
         self.assertEqual(response.json()["validation"]["status"], "not_run")
-        self.validator.validate.assert_not_called()
         self.assertEqual(self.request().status_code, 409)
 
     def test_cross_session_paths_and_hash_mismatches_leave_no_partial_session(self):
@@ -165,3 +162,55 @@ class SessionDownloadTests(unittest.TestCase):
         response = self.request()
         self.assertEqual(response.status_code, 422)
         self.assertIn("Unsupported manifest format", response.json()["detail"])
+
+    def standalone_payload(self):
+        prefix = "standalone/demo-building/iphone-1/scan-001"
+        content = self.objects[self.asset["object_key"]]
+        self.asset["object_key"] = f"{prefix}/observations/frame-001/{self.asset['sha256']}/frame.json"
+        self.objects[self.asset["object_key"]] = content
+        self.manifest.update(format="standalone_capture_v1", project_id="standalone")
+        key = prefix + "/manifests/" + "a"*64 + "/capture-manifest.json"
+        self.objects[key] = json.dumps(self.manifest).encode()
+        return {"session_id": "scan-001", "manifest_path": key}
+
+    def test_standalone_downloads_hashed_objects_without_descriptor_or_listing(self):
+        payload = self.standalone_payload()
+        response = self.client.post("/sessions/extract", json=payload)
+        self.assertEqual(response.status_code, 201, response.text)
+        session = self.settings.data_dir / "raw/scan-001"
+        self.assertEqual((session / "original/observations/frame-001/frame.json").read_bytes(),
+                         self.objects[self.asset["object_key"]])
+        self.assertTrue((session / "original/manifests" / ("a"*64) / "capture-manifest.json").is_file())
+        self.assertFalse((session / "original/.session.json").exists())
+        self.bucket.list.assert_not_called()
+        report = json.loads((session / "download-report.json").read_text())
+        self.assertEqual(report["file_count"], 2)
+        self.assertEqual(report["format"], "standalone_capture_v1")
+        self.assertEqual(self.client.post("/sessions/extract", json=payload).status_code, 409)
+
+    def test_standalone_invalid_paths_rejected_before_storage_access(self):
+        payload = self.standalone_payload()
+        for path in (payload["manifest_path"].replace("scan-001", "other-session"),
+                     "../" + payload["manifest_path"],
+                     "https://example.com/" + payload["manifest_path"]):
+            with self.subTest(path=path):
+                response = self.client.post("/sessions/extract", json={**payload, "manifest_path": path})
+                self.assertEqual(response.status_code, 422)
+        self.bucket.create_signed_url.assert_not_called()
+
+    def test_standalone_rejects_identity_cross_session_and_corrupt_content(self):
+        payload = self.standalone_payload()
+        original_manifest = json.loads(json.dumps(self.manifest))
+        for fault in ("identity", "path", "content"):
+            with self.subTest(fault=fault):
+                manifest = json.loads(json.dumps(original_manifest))
+                if fault == "identity":
+                    manifest["session_id"] = "other-session"
+                elif fault == "path":
+                    manifest["observations"][0]["files"][0]["object_key"] = "other/private.json"
+                else:
+                    self.objects[self.asset["object_key"]] = b"corrupt"
+                self.objects[payload["manifest_path"]] = json.dumps(manifest).encode()
+                response = self.client.post("/sessions/extract", json=payload)
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertFalse((self.settings.data_dir / "raw/scan-001").exists())

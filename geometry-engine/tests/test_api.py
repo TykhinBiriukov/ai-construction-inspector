@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from supabase import ClientOptions, create_client
 
 from geometry_engine_api.app import create_app
-from geometry_engine_api.dependencies import get_archive_service, get_settings, get_validation_service
+from geometry_engine_api.dependencies import get_archive_service, get_settings
 from geometry_engine_api.services.archive import ArchiveService, ExtractionResult, Settings, download_archive
 
 
@@ -54,7 +54,6 @@ class ApiTests(unittest.TestCase):
         app = create_app()
         service = ArchiveService(settings or self.settings, sdk, download_fn=download)
         app.dependency_overrides[get_archive_service] = lambda: service
-        app.dependency_overrides[get_validation_service] = lambda: Mock(validate=lambda directory: {"status": "valid"})
         return TestClient(app)
 
     def payload(self, **changes):
@@ -83,7 +82,6 @@ class ApiTests(unittest.TestCase):
                 return ExtractionResult(session_id, Path("data") / session_id)
         app = create_app()
         app.dependency_overrides[get_archive_service] = lambda: FakeService()
-        app.dependency_overrides[get_validation_service] = lambda: Mock(validate=lambda directory: {"status": "valid"})
         with TestClient(app) as client:
             response = client.post("/sessions/extract", json=self.payload())
         self.assertEqual(response.status_code, 201)
@@ -161,7 +159,7 @@ class ApiTests(unittest.TestCase):
     def test_session_stage_endpoints_are_exposed(self):
         with self.client() as client:
             paths = client.get("/openapi.json").json()["paths"]
-        self.assertEqual(set(paths), {"/sessions/extract", "/sessions/process"})
+        self.assertEqual(set(paths), {"/sessions/extract", "/sessions/process", "/sessions/compare-bim"})
 
 
 if __name__ == "__main__":

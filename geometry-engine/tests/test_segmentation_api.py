@@ -8,11 +8,11 @@ from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
-from geometry_engine.sam_backend import Sam3UnavailableError
+from geometry_engine.segmentation.sam_backend import Sam3UnavailableError
 from geometry_engine_api.app import create_app
 from geometry_engine_api.dependencies import get_segmentation_service, get_settings
 from geometry_engine_api.services.archive import Settings
-import run_segmentation
+from scripts import run_segmentation
 
 
 ENGINE = Path(__file__).resolve().parents[1]

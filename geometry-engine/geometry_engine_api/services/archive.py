@@ -137,10 +137,12 @@ class ArchiveService:
         self.client = client
         self.download = download_fn
 
-    def extract(self, session_id: str, *, project_id: str | None = None) -> ExtractionResult:
-        if project_id is not None:
+    def extract(self, session_id: str, *, project_id: str | None = None,
+                manifest_path: str | None = None) -> ExtractionResult:
+        if project_id is not None or manifest_path is not None:
             from .session_download import SessionDownloadService
-            return SessionDownloadService(self.settings, self.client, download_fn=self.download).extract(project_id, session_id)
+            return SessionDownloadService(self.settings, self.client, download_fn=self.download).extract(
+                project_id, session_id, manifest_path=manifest_path)
         import re
         from tempfile import TemporaryDirectory
 

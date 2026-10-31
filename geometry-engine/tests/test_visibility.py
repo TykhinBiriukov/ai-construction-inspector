@@ -6,8 +6,8 @@ from unittest.mock import patch
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from geometry_engine.mesh import build_bvh, raycast
-from geometry_engine.visibility import render_visibility
+from geometry_engine.common.mesh import build_bvh, raycast
+from geometry_engine.segmentation.visibility import render_visibility
 
 
 class VisibilityTests(unittest.TestCase):
@@ -100,7 +100,7 @@ class VisibilityTests(unittest.TestCase):
     def test_small_sample_chunks_give_identical_visible_surface(self):
         vertices, faces = self.plane()
         expected = self.render(vertices, faces)
-        with patch("geometry_engine.visibility.MAX_RASTER_SAMPLES", 3):
+        with patch("geometry_engine.segmentation.visibility.MAX_RASTER_SAMPLES", 3):
             actual = self.render(vertices, faces)
         np.testing.assert_array_equal(actual[0], expected[0])
         np.testing.assert_array_equal(actual[1], expected[1])

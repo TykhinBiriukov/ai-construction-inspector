@@ -2,7 +2,13 @@
 
 ## Open3D: RGB-D surface reconstruction
 
-`geometry_engine/reconstruction.py` calls the Open3D 0.20.0 CPU
+Archived `geometry_engine/pose_refinement.py` (in `archive/legacy_pose_and_cli.zip`) uses Open3D's public rigid ICP and pose-graph
+optimization APIs before TSDF integration. Its capture adaptation, pair selection,
+quality checks and provenance handling are independent project code, based on the
+[multiway registration workflow](https://www.open3d.org/docs/release/tutorial/pipelines/multiway_registration.html)
+and [registration example](https://github.com/isl-org/Open3D/blob/main/examples/python/reconstruction_system/refine_registration.py).
+
+`geometry_engine/reconstruction/service.py` calls the Open3D 0.20.0 CPU
 `VoxelBlockGrid` TSDF integration and Marching Cubes extraction APIs. The
 application adds ARKit input adaptation, confidence filtering, conservative
 cross-view diagnostics, stage reports and exports. Open3D is an MIT-licensed
@@ -14,7 +20,7 @@ dependency; its license is included in the installed distribution.
 
 ## Open3D: RANSAC plane detection
 
-`geometry_engine/wall_plane_detection.py` adapts the three-point RANSAC
+Archived `geometry_engine/wall_plane_detection.py` (in `archive/legacy_geometry_branches.zip`) adapts the three-point RANSAC
 hypotheses, distance-based support/RMSE ranking, adaptive iteration bound and
 least-squares refinement sequence from Open3D's `PointCloud::SegmentPlane`.
 This is a NumPy adaptation, not an invocation of the Open3D package. It adds
@@ -57,14 +63,14 @@ SPDX-License-Identifier: MIT
 
 ## Open3DIS: depth agreement, region relations and cross-view grouping
 
-`geometry_engine/mask_projection.py` adapts the depth-consistency test in
+`geometry_engine/segmentation/mask_projection.py` adapts the depth-consistency test in
 `PointCloudToImageMapper.compute_mapping` to the nearest mesh triangle at each
 pixel. It uses camera-Z depth, absolute plus relative tolerances and optional
-sensor confidence. Triangle rasterization in `visibility.py` is an independent
+sensor confidence. Triangle rasterization in `geometry_engine/segmentation/visibility.py` is an independent
 NumPy implementation of a perspective-correct z-buffer; it is not copied from
 Open3DIS. No Open3DIS weights, CUDA runtime or local SAM model are required.
 
-`geometry_engine/mask_fusion.py` adapts the region intersection, union, IoU,
+`geometry_engine/segmentation/mask_fusion.py` adapts the region intersection, union, IoU,
 directional recall and overlap graph approach from Open3DIS. The implementation
 uses CPU NumPy arrays and mesh face areas instead of CUDA tensors and point
 counts. It adds per-frame vote caps, semantic conflict rejection and a constraint

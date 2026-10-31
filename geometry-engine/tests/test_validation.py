@@ -10,12 +10,12 @@ from fastapi.testclient import TestClient
 import numpy as np
 from PIL import Image
 
-from geometry_engine.mesh import write_mesh
+from geometry_engine.common.mesh import write_mesh
 from geometry_engine_api.app import create_app
 from geometry_engine_api.dependencies import get_archive_service
 from geometry_engine_api.services.archive import ExtractionResult
-from geometry_engine.validation import SessionValidationService
-from run_geometry import run_session
+from geometry_engine.capture.validation import SessionValidationService
+from scripts.run_geometry import run_session
 
 
 class SessionValidationTests(unittest.TestCase):
@@ -99,7 +99,7 @@ class SessionValidationTests(unittest.TestCase):
         self.save_json(self.root / "scene.json", dict(self.scene, mesh="../outside.ply"))
         self.assertEqual(self.service.validate(self.session)["status"], "invalid")
 
-    def test_endpoint_runs_validation_after_extraction(self):
+    def test_extraction_defers_validation_to_processing(self):
         root = self.session
         class Archive:
             def extract(self, session_id):
@@ -109,12 +109,12 @@ class SessionValidationTests(unittest.TestCase):
         with TestClient(app) as client:
             response = client.post("/sessions/extract", json={"session_id": "test"})
             self.assertEqual(response.status_code, 201, response.text)
-            self.assertEqual(response.json()["validation"]["status"], "valid")
+            self.assertEqual(response.json()["validation"]["status"], "not_run")
             (root / "original" / "mesh.ply").write_bytes(b"invalid")
             response = client.post("/sessions/extract", json={"session_id": "test"})
-            self.assertEqual(response.status_code, 422)
-            self.assertEqual(response.json()["detail"]["validation"]["status"], "invalid")
-        self.assertTrue((root / "validation" / "report.json").is_file())
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(response.json()["validation"]["status"], "not_run")
+        self.assertFalse((root / "validation" / "report.json").exists())
 
     def test_capture_contract_and_binary_depth_size(self):
         (self.root / "scene.json").unlink()
@@ -162,7 +162,7 @@ class SessionValidationTests(unittest.TestCase):
 
     def test_runner_stops_on_invalid_session(self):
         (self.root / "mesh.ply").write_bytes(b"bad")
-        with patch("run_geometry.preprocess_mesh") as preprocess:
+        with patch("scripts.run_geometry.preprocess_mesh") as preprocess:
             with self.assertRaisesRegex(ValueError, "Session validation failed"):
                 run_session(self.session)
             preprocess.assert_not_called()

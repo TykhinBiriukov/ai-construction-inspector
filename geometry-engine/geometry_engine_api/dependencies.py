@@ -8,14 +8,8 @@ import httpx
 from supabase import Client, ClientOptions, create_client
 
 from .services.archive import ArchiveService, ArchiveServiceError, Settings, validate_url
-from geometry_engine.validation import SessionValidationService
-from geometry_engine.sam_backend import Sam3Backend
-from geometry_engine.segmentation import SegmentationService
-from geometry_engine.mesh_segmentation import MeshSegmentationService
-
-
-def get_validation_service() -> SessionValidationService:
-    return SessionValidationService()
+from geometry_engine.segmentation.sam_backend import Sam3Backend
+from geometry_engine.segmentation.service import SegmentationService, SegmentationSettings
 
 
 def get_settings() -> Settings:
@@ -31,11 +25,19 @@ def get_sam_backend(settings: Annotated[Settings, Depends(get_settings)]) -> Sam
 
 
 def get_segmentation_service(backend: Annotated[Sam3Backend, Depends(get_sam_backend)]) -> SegmentationService:
-    return SegmentationService(backend)
+    return SegmentationService(backend, SegmentationSettings())
 
 
-def get_mesh_segmentation_service() -> MeshSegmentationService:
-    return MeshSegmentationService()
+def get_scan_vs_bim_service():
+    # Local geometry only: this dependency never loads model/storage credentials.
+    from geometry_engine.comparison.scan_vs_bim import ScanVsBimService
+    return ScanVsBimService()
+
+
+def get_opening_comparison_service():
+    # Existing segmentation and registration only; no hosted model calls.
+    from geometry_engine.comparison.opening_comparison import OpeningComparisonService
+    return OpeningComparisonService()
 
 
 def get_supabase_client(settings: Annotated[Settings, Depends(get_settings)]):
@@ -65,4 +67,12 @@ def get_pipeline_service(
     segmentation: Annotated[SegmentationService, Depends(get_segmentation_service)],
 ):
     from geometry_engine.pipeline import PipelineService
-    return PipelineService(segmentation)
+    return PipelineService(segmentation, boundary_factory=get_opening_boundary_factory())
+
+
+def get_opening_boundary_factory():
+    """Local semantic mesh contours; measurement never constructs a VLM backend."""
+    def create():
+        from geometry_engine.openings.mesh_boundaries import MeshBoundaryService
+        return MeshBoundaryService()
+    return create

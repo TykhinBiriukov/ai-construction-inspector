@@ -8,7 +8,7 @@ import unittest
 import numpy as np
 from PIL import Image
 
-from geometry_engine.raw_capture import load_raw_capture, load_rgbd
+from geometry_engine.capture.raw_capture import load_raw_capture, load_rgbd
 
 
 class RawCaptureTests(unittest.TestCase):
