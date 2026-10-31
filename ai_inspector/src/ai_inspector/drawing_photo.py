@@ -5,7 +5,7 @@ import json
 from pathlib import PurePosixPath
 from uuid import UUID
 import httpx
-from pydantic import Field
+from pydantic import Field, field_validator
 from .schemas import APIModel
 from .errors import APIError
 
@@ -13,7 +13,15 @@ from .errors import APIError
 class CompareArguments(APIModel):
     drawing_file_id: str = Field(min_length=1, max_length=150)
     photo_file_id: str = Field(min_length=1, max_length=150)
-    drawing_page: int | None = Field(default=None, ge=1, le=200)
+    drawing_page: int | None = Field(default=None, ge=1, le=200,
+        description='PDF drawings only: the user-confirmed 1-based page number, e.g. 2. For PNG/JPEG omit this field. Never use the string "null". Ask for the page when a PDF page is unspecified.')
+
+    @field_validator('drawing_page', mode='before')
+    @classmethod
+    def normalize_absent_page(cls, value):
+        # A known model serialization mistake; PDF page requirements still apply in planning.
+        return None if value == 'null' else value
+
     task: str | None = Field(default=None, min_length=1, max_length=4000,
         description='Self-contained user comparison request, including relevant earlier instructions and confirmed file roles. Always supply this, even after a short confirmation. Do not invent criteria.')
 
@@ -23,7 +31,7 @@ class ResultArguments(APIModel):
 
 
 DESCRIPTIONS = {
-    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. PDF drawings require the caller-specified page; ask if missing. No IFC/BIM/3D. The runtime waits for a saved report; running is not a verdict.',
+    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. For PNG/JPEG omit drawing_page: {"drawing_file_id":"<selected drawing ID>","photo_file_id":"<selected photo ID>","task":"<full user task>"}. For PDF add "drawing_page":2 only when the user selected page 2; ask if the page is missing. Do not send "drawing_page":"null". No IFC/BIM/3D. The runtime waits for a saved report; running is not a verdict.',
     'drawing_photo_result': 'Read a previously submitted drawing/photo task from comparison_tasks. No selected files are needed. Omit task_id only if there is exactly one task. The runtime handles bounded automatic waiting; do not submit a duplicate comparison.',
 }
 SCHEMAS = {'drawing_photo_compare': CompareArguments, 'drawing_photo_result': ResultArguments}

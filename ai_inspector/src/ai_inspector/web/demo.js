@@ -66,7 +66,7 @@
     $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
-    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? (chat.runs.at(-1).error?.message || 'Waiting for the service. This request continues automatically.') : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     updateActivityStatus();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
@@ -115,27 +115,23 @@
     }
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
-  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task'};
+  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Specialist inspection'};
   let activitySync=0,activitySignature='',activityExpanded=new Map();
   function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
   function updateActivityStatus(){
-    const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event);
+    const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event),active=live||!!last?.auto_resume;
     let text=last?'Response ready':'Inspector is ready';
-    if(last?.status==='retryable')text=last.auto_resume?'Waiting for analysis':'Waiting for retry';
+    if(last?.status==='retryable')text=last.auto_resume?'Analyzing your files':'Action needed';
     else if(last?.status==='failed')text='Request failed';
-    else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||event.name:'Preparing response'):'Waiting for server update';
+    else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||'Working on your request':'Preparing response'):'Waiting for server update';
     else if(sending)text='Sending request';
     else if(last&&!['completed','failed'].includes(last.status))text='Waiting for server';
-    $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',live);
-    $('activity-graph').classList.toggle('live',live);$('activity-feed').classList.toggle('live',live);
-    for(const clock of document.querySelectorAll('[data-action-start]')){
-      const running=clock.dataset.actionStatus==='running',duration=clock.dataset.duration;
-      clock.textContent=duration!==''?formatDuration(Number(duration)):running&&live&&clock.dataset.eventId===event?.event_id?formatDuration(Date.now()-Date.parse(clock.dataset.actionStart))+' elapsed':'Duration not recorded';
-    }
+    $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',active);
+    $('activity-graph').classList.toggle('live',active);$('activity-feed').classList.toggle('live',active);
     const contextual=live&&last?.document_selection?.file_id===documentOpenId;
     viewer.setActivity(last?.document_selection,!!contextual);
   }
-  function formatDuration(ms){return ms<1000?`${Math.round(ms)} ms`:`${(ms/1000).toFixed(1)} s`;}
+
   function toolSummary(tool){const r=tool.result||{};if(r.error)return r.error.message||'This action could not be completed.';
     if(tool.name==='device_status')return `${r.device_id||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
     const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
@@ -143,8 +139,19 @@
     return 'Completed';
   }
   function actionEvents(run){
-    if(run.activity_events?.length)return run.activity_events;
-    return (run.tool_results||[]).map((tool,i)=>({event_id:`legacy-${run.run_id}-${i}`,kind:'tool',name:tool.name,operation_id:tool.operation_id,status:tool.result?.error?'failed':'completed',origin:'unrecorded',summary:toolSummary(tool),duration_ms:null}));
+    const raw=run.activity_events?.length?run.activity_events:(run.tool_results||[]).map((tool,i)=>({event_id:`legacy-${run.run_id}-${i}`,kind:'tool',name:tool.name,operation_id:tool.operation_id,status:tool.result?.error?'failed':'completed',origin:'unrecorded'}));
+    const events=[],positions=new Map();
+    for(const event of raw){
+      // Planning corrections and network retries are diagnostics, not user-facing steps.
+      if(String(event.operation_id||'').startsWith('validation-'))continue;
+      if(event.kind==='tool'&&event.operation_id&&positions.has(event.operation_id)){
+        events[positions.get(event.operation_id)]={...event};continue;
+      }
+      if(event.kind==='model'&&events.at(-1)?.kind==='model'){events[events.length-1]={...event};continue;}
+      if(event.kind==='tool'&&event.operation_id)positions.set(event.operation_id,events.length);
+      events.push({...event});
+    }
+    return events;
   }
   async function openActionContext(run,fileId){
     const file=workState?.files?.find(f=>f.file_id===fileId&&!f.deleted);
@@ -158,15 +165,17 @@
     details.open=activityExpanded.get(key)??['running','waiting','failed'].includes(event.status);
     details.addEventListener('click',e=>{if(e.target.closest('summary'))activityExpanded.set(key,!details.open);});
     const summary=node('summary'),icon=node('span','action-icon',event.status==='completed'?'✓':event.status==='failed'?'!':event.status==='waiting'?'Ⅱ':'◌');
-    const label=node('span','action-label',event.kind==='model'?'Preparing response':toolLabels[event.name]||event.name);
-    const badge=node('span','action-state',({completed:'Done',running:'Running',waiting:'Waiting',failed:'Failed',interrupted:'Interrupted'})[event.status]||event.status);
+    const label=node('span','action-label',event.kind==='model'?'Preparing response':toolLabels[event.name]||'Working on your request');
+    const badge=node('span','action-state',event.status==='waiting'&&run.auto_resume?'Working':({completed:'Done',running:'Running',waiting:'Waiting',failed:'Failed',interrupted:'Interrupted'})[event.status]||event.status);
     summary.append(icon,label,badge);details.append(summary);
-    const body=node('div','action-body');const meta=node('div','action-meta');meta.append(node('code','',event.kind==='model'?'model request':event.name));
-    const clock=node('span');clock.dataset.eventId=event.event_id;clock.dataset.actionStart=event.started_at||'';clock.dataset.actionStatus=event.status;clock.dataset.duration=event.duration_ms==null?'':String(event.duration_ms);clock.textContent=event.duration_ms==null?'Duration not recorded':formatDuration(event.duration_ms);meta.append(clock);body.append(meta);
-    if(event.attempt>1)body.append(node('p','action-retry',`Retry · attempt ${event.attempt}`));
-    const result=tool?toolSummary(tool):event.summary||'Waiting for a result from the server.';body.append(node('p','',result));
+    const body=node('div','action-body');
+    const comparison=['drawing_photo_compare','drawing_photo_result'].includes(event.name);
+    const result=event.status==='failed'?'This step could not be completed. See the response for what to do next.':
+      ['running','waiting'].includes(event.status)?(comparison?'The drawing/photo specialist is working on your files.':'This step is in progress.'):
+      event.kind==='model'?'Step completed.':comparison?(tool?.result?.error?'The comparison could not be completed. See the response for details.':'Comparison results received.'):'Step completed.';
+    body.append(node('p','',result));
     const synthetic=event.origin==='synthetic'||tool?.result?.analysis_origin==='synthetic'||tool?.result?.geometry_mode==='mock';if(synthetic)body.append(node('strong','action-synthetic','Synthetic result'));
-    if(event.status==='waiting'&&run.status==='retryable')body.append(node('p','action-retry',run.auto_resume?'Continuing automatically. You can leave this page open or return later.':'Paused. Use Resume to retry the saved request.'));
+    if(event.status==='waiting'&&run.status==='retryable')body.append(node('p','action-retry',run.auto_resume?'Continuing automatically. You can leave this page open or return later.':'Select Resume to continue.'));
     const links=node('div','action-links');
     if(tool?.name==='device_status'){const link=node('button','quiet','Show device');link.onclick=()=>{$('activity-dialog').close();document.querySelector('.device-card').scrollIntoView({block:'nearest'});};links.append(link);}
     const sessionId=tool?.result?.session?.session_id;if(sessionId){const session=scopedSessions.find(s=>s.session_id===sessionId);if(session){const link=node('button','quiet','Open capture task');link.onclick=()=>{$('activity-dialog').close();showTask(session);$('selection').scrollIntoView({block:'nearest'});};links.append(link);}}
@@ -186,8 +195,8 @@
       const agent=node('span','graph-agent','Inspector');$('activity-graph').append(agent);
       const tools=[...new Set(events.filter(e=>e.kind==='tool').map(e=>e.name))];
       const branches=node('div','graph-branches');
-      for(const name of tools){const event=events.filter(e=>e.name===name).at(-1);const branch=node('div',`graph-branch${event.status==='running'?' graph-active':''}`);branch.append(node('i','graph-link'),node('span','graph-tool',name));branches.append(branch);}
-      if(!tools.length)branches.append(node('span','graph-no-tools','No tool calls'));$('activity-graph').append(branches);
+      for(const name of tools){const event=events.filter(e=>e.name===name).at(-1);const branch=node('div',`graph-branch${event.status==='running'?' graph-active':''}`);branch.append(node('i','graph-link'),node('span','graph-tool',toolLabels[name]||'Specialist task'));branches.append(branch);}
+      if(!tools.length)branches.append(node('span','graph-no-tools','Preparing your response'));$('activity-graph').append(branches);
       for(const event of events.slice(-4))$('activity-feed').append(actionCard(last,event,true));
     }
     for(const run of [...runs].reverse()){
