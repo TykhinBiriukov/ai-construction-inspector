@@ -54,7 +54,9 @@ docker compose stop db
 
 Database files persist in the named `postgres_data` volume across container recreation. `docker compose down` removes the container but keeps that volume. Adding `--volumes` would also delete database contents. Credentials initialize a new volume; editing them in `.env` does not change credentials inside an existing database.
 
-API and worker processes can run in `myenv` and connect to this local database later. This Compose setup does not create application tables or add database persistence to the existing endpoints yet.
+The API can run in `myenv` and connect to this database. If port `5432` is occupied by another project, set `POSTGRES_PORT=5433` in `.env` before starting this container. `DATABASE_URL`, when nonempty, overrides the separate connection settings; otherwise `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` are used.
+
+Run `python main.py` to apply Alembic migrations and start the local API. It fails before serving requests if migrations fail. `alembic upgrade head` or `python -m geometry_engine_api.database.migrate` can also apply them explicitly. For deployment, run migrations once as a release step, then start API replicas with `python -m uvicorn geometry_engine_api.app:app --host 0.0.0.0 --port 8000`. Importing the app does not connect to the database or run migrations. PostgreSQL advisory transaction locks serialize concurrent migration runners.
 
 Official references: [PostgreSQL image](https://hub.docker.com/_/postgres), [Compose startup](https://docs.docker.com/reference/cli/docker/compose/up/).
 
@@ -113,6 +115,65 @@ python main.py
 ```
 
 The service listens on `http://127.0.0.1:8000`. Open `http://127.0.0.1:8000/docs` for Swagger.
+
+## Inspection submission API
+
+These two endpoints are the initial durable admission layer. They do not download captures, run SAM or execute the pipeline. A future worker will consume the saved `queued` jobs. The existing `/sessions/*` endpoints remain available for manually running the processing stages.
+
+### Submit a job
+
+```http
+POST /inspections
+Content-Type: application/json
+Idempotency-Key: demo-inspection-001
+```
+
+```json
+{
+  "session_id": "FULL_SESSION_ID",
+  "capture_manifest_path": "standalone/demo-building/iphone-1/FULL_SESSION_ID/manifests/HASH/capture-manifest.json",
+  "ifc_object_key": "references/room.ifc",
+  "parameters": {
+    "tolerance_m": 0.1,
+    "include_boundary_candidates": false,
+    "interior_point_ifc_m": null
+  }
+}
+```
+
+Inputs are relative storage object keys, not download URLs or uploaded files. Supply versioned/immutable keys for reproducible input selection. File existence and content hashes will be verified during download, not by this initial request handler. The IFC hash remains null until the file is fetched and verified.
+
+The API normalizes parameters, hashes the request and inserts a job in one database transaction. A unique constraint and PostgreSQL `INSERT ... ON CONFLICT` protect against simultaneous duplicate requests. The transaction commits before returning `202 Accepted`, with the job UUID, `status: queued`, timestamps and `status_url`. The `Location` header points to the same status endpoint.
+
+The response includes these fields (along with input references and timestamps):
+
+```json
+{
+  "job_id": "d7f4eab6-2e8a-41d2-b665-247828b5bac4",
+  "session_id": "FULL_SESSION_ID",
+  "status": "queued",
+  "current_stage": null,
+  "status_url": "/inspections/d7f4eab6-2e8a-41d2-b665-247828b5bac4"
+}
+```
+
+- Same key and normalized request: return the existing job with its current state.
+- Same key and different parameters: `409 Conflict`, without modifying the original job.
+- A deliberately new run: use a new key.
+- Missing/invalid key, malformed storage path or unsupported parameters: `422`.
+- Unavailable database: `503` with a retry hint. Retry using the same key.
+
+Idempotency keys are currently globally unique for this single-tenant API. Authentication and tenant scoping are separate future integration work.
+
+### Read job state
+
+```http
+GET /inspections/JOB_UUID
+```
+
+Returns `200` with the committed job state, or `404` for an unknown UUID (`422` for a malformed UUID). Responses disable caching. No worker is implemented yet, so newly submitted jobs remain queued.
+
+The `inspection_jobs` table stores input references, request hash, idempotency key, pipeline version, normalized parameters, status, current stage, timestamps and future result/error references. Large capture files and meshes are not stored in PostgreSQL. Keys and request hashes are internal and are not included in HTTP responses.
 
 ### Download a capture
 
@@ -265,6 +326,8 @@ python -m unittest discover -s tests -q
 ```
 
 The tests use synthetic geometry and mocked remote services. They do not send capture photos to Meta or download sessions. Existing optional-dependency tests may be skipped if their dependency is unavailable. `tests/check_comparison_runtime.cjs` checks viewer JavaScript against a mock DOM/WebGL interface; it is not a browser rendering test.
+
+PostgreSQL integration tests are opt-in via `TEST_DATABASE_URL`. They create and drop a uniquely named test schema, leaving application tables unchanged. They verify actual migrations, committed persistence, normalized idempotency, conflicts and concurrent submission. Use a local development database with schema-creation privileges. Without this variable, those tests are skipped.
 
 ## Third-party code and archived experiments
 

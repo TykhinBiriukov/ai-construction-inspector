@@ -6,6 +6,7 @@ import json
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, StringConstraints
+from sqlalchemy.exc import DBAPIError, TimeoutError as DatabasePoolTimeout
 
 from .dependencies import (
     get_archive_service,
@@ -18,6 +19,8 @@ from .dependencies import (
 from .services.archive import ArchiveService, ArchiveServiceError, Settings
 from geometry_engine.pipeline import PipelineService
 from geometry_engine.segmentation.sam_backend import Sam3UnavailableError
+from .database.connection import DatabaseConfigurationError
+from .routers.inspections import router as inspections_router
 
 
 class SessionRequest(BaseModel):
@@ -64,6 +67,15 @@ class CompareBimResponse(BaseModel):
 
 def create_app():
     app = FastAPI(title="Geometry Engine API", version="0.1.0")
+    app.include_router(inspections_router)
+
+    @app.exception_handler(DatabaseConfigurationError)
+    @app.exception_handler(DBAPIError)
+    @app.exception_handler(DatabasePoolTimeout)
+    async def database_error(request: Request, error: Exception):
+        return JSONResponse(status_code=503, headers={'Retry-After': '5'}, content={
+            'detail': 'Database unavailable. Check database settings and apply migrations.'
+        })
 
     @app.exception_handler(ArchiveServiceError)
     async def service_error(request: Request, error: ArchiveServiceError):

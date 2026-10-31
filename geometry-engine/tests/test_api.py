@@ -159,7 +159,8 @@ class ApiTests(unittest.TestCase):
     def test_session_stage_endpoints_are_exposed(self):
         with self.client() as client:
             paths = client.get("/openapi.json").json()["paths"]
-        self.assertEqual(set(paths), {"/sessions/extract", "/sessions/process", "/sessions/compare-bim"})
+        self.assertEqual(set(paths), {"/sessions/extract", "/sessions/process", "/sessions/compare-bim",
+                                      "/inspections", "/inspections/{job_id}"})
 
 
 if __name__ == "__main__":
