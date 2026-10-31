@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from .engine import MetaClient, ModelFailure, provenance, run
-from .staged import run_staged, staged_provenance
+from .staged import run_staged, staged_provenance, Checklist
 from .images import decode, evidence_image, identity
 from .models import Report, TaskRequest
 from .storage import SQLiteStore, PostgresStore, StorageFull
@@ -100,7 +100,7 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
                 lock.release()
         return response
 
-    def execute(request, images, parent, response):
+    def execute(request, images, parent, response, saved_checklist=None):
         try:
             try:
                 kinds = {a.kind for a in request.assets}
@@ -116,7 +116,13 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
                         def progress(phase):
                             response["phase"] = phase
                             save(request.request_id, response)
-                        report = run_staged(inference_request, images, client, response["audit"], progress=progress)
+                        def save_checklist(snapshot):
+                            response["checklist"] = snapshot
+                            response["provenance"]["checklist_id"] = snapshot["checklist_id"]
+                            response["provenance"]["checklist_reused_from"] = str(request.checklist_task_id) if request.checklist_task_id else None
+                            save(request.request_id, response)
+                        report = run_staged(inference_request, images, client, response["audit"], progress=progress,
+                                            saved_checklist=saved_checklist, on_checklist=save_checklist)
                     else:
                         report = run(inference_request, images, client, response["audit"])
                 response["status"] = report.status
@@ -145,7 +151,10 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
     @app.post("/v1/tasks", dependencies=[Depends(auth)])
     def create(request: TaskRequest, prefer: str | None = Header(default=None)):
         # Keep historical legacy request digests stable when the new field is absent.
-        serialized = request.model_dump_json(exclude={"workflow"} if request.workflow == "legacy" else set())
+        excluded = {"workflow"} if request.workflow == "legacy" else set()
+        if request.checklist_task_id is None:
+            excluded.add("checklist_task_id")
+        serialized = request.model_dump_json(exclude=excluded)
         digest = hashlib.sha256(serialized.encode()).hexdigest()
         old = store.get(request.request_id)
         if old:
@@ -179,6 +188,29 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
                     images[asset.asset_id] = image
             except ValueError:
                 raise HTTPException(422, "invalid_asset") from None
+            saved_checklist = None
+            if request.checklist_task_id:
+                previous = json.loads(load(request.checklist_task_id)["response"])
+                saved_checklist = previous.get("checklist")
+                if previous["status"] == "running" or not saved_checklist:
+                    raise HTTPException(409, "checklist_not_ready")
+                try:
+                    Checklist.model_validate(saved_checklist["checklist"])
+                    content = {k:v for k,v in saved_checklist.items() if k != "checklist_id"}
+                    if saved_checklist.get("version") != 1 or hashlib.sha256(json.dumps(content, sort_keys=True, separators=(",", ":")).encode()).hexdigest() != saved_checklist["checklist_id"]:
+                        raise ValueError()
+                    drawing = next(a for a in request.assets if a.kind == "drawing")
+                    actual = identity(drawing, images[drawing.asset_id])
+                    if actual != saved_checklist["drawing"]:
+                        raise ValueError()
+                    for key, bounds in saved_checklist["drawing_views"].items():
+                        if key in images and key != drawing.asset_id:
+                            raise ValueError()
+                        x0,y0,x1,y1 = bounds
+                        if not all(type(v) is int for v in bounds) or not (0 <= x0 < x1 <= actual["width"] and 0 <= y0 < y1 <= actual["height"]):
+                            raise ValueError()
+                except (ValueError, KeyError, TypeError, StopIteration):
+                    raise HTTPException(409, "checklist_drawing_mismatch") from None
             response = {"task_id": str(request.request_id), "parent_task_id": str(request.parent_task_id) if request.parent_task_id else None,
                         "status": "running", "provenance": staged_provenance(client) if request.workflow == "staged" else provenance(client),
                         "assets": [identity(a, images[a.asset_id]) for a in request.assets],
@@ -186,14 +218,14 @@ def create_app(*, data_dir=None, service_token=None, model_client=None, database
             store.insert(request.request_id, digest, serialized, response)
             if prefer == "respond-async":
                 accepted = json.loads(json.dumps(response))
-                thread = threading.Thread(target=execute, args=(request, images, parent, response), daemon=True)
+                thread = threading.Thread(target=execute, args=(request, images, parent, response, saved_checklist), daemon=True)
                 thread.start()
                 transferred = True
                 return JSONResponse(status_code=202, content=accepted, headers={
                     "Location": f"/v1/tasks/{request.request_id}", "Retry-After": "2",
                     "Preference-Applied": "respond-async"})
             transferred = True
-            return execute(request, images, parent, response)
+            return execute(request, images, parent, response, saved_checklist)
         finally:
             if not transferred:
                 lock.release()

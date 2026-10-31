@@ -103,6 +103,38 @@ is limited to legacy. For staged follow-up include the clarified task/scope agai
 Both modes retain the shared 240-second / 9-call maximum; staged allows at most
 3 calls per phase (including crop requests and at most one schema repair).
 Final attempts disallow tools. There is no unbounded critique/revision loop.
+Staged v0.3 separates visible presence/geometry from product identity and hidden
+properties in the checklist. Photo/review outputs explicitly assess full requirement
+support and verification, with a list of unverified aspects. Schema validation rejects
+`match` if those fields admit unknown required properties, and rejects `mismatch`
+without a supported requirement and visible contradiction. Unknowns are preserved in
+public report limitations. This checks internal consistency, not independent visual
+truth; wrong model assessments still require evaluation.
+
+Phase-start and phase-completion audit events are saved before notifying consumers,
+so polling can display real progress while analysis is running.
+
+Each checklist item has a stable `criterion_id` and category: geometry, material,
+product, measurement, installation or performance. All downstream stages preserve the
+ID, category, label and design claim exactly. Unsupported drawing claims become
+inconclusive; review cannot silently broaden, narrow, add or replace requirements.
+Categories are component-agnostic and independent: unknown product identity does not
+invalidate a geometry match. This is a contract plus model instruction, not a guarantee
+that semantic extraction or visual interpretation is always correct.
+
+Staged tasks accept at most one drawing and one photo. The response `checklist` snapshot
+contains version, content-hash ID, scope, drawing identity, typed items and original-pixel
+bounds for drawing views. `checklist_task_id` in a new staged request reuses that snapshot
+from a non-running task; no drawing extraction model call is made. Drawing identity
+(including page and rendering dimensions) must match exactly. The snapshot and original
+scope remain unchanged; the supplied new photo is independently inspected and reviewed.
+Previous photo claims/verdicts are not included in the minion's contexts. `parent_task_id`
+retains its existing clarification meaning and cannot be combined with checklist reuse.
+Omitting checklist_task_id creates a new snapshot. Null/omitted values preserve old
+request digests. A changed drawing or deliberate scope revision requires a new checklist.
+Reuse records the functional phase `checklist_reuse` (Using saved checklist), not a fake
+new drawing-reading phase. Crop evidence retains its original coordinate mapping.
+
 Staged responses persist `phase`: `drawing_checklist`, `photo_inspection`, or
 `review`; only `status` determines completion. Audit/provenance records phase
 boundaries, checklist, photo draft, final evidence, durations and prompt version.
