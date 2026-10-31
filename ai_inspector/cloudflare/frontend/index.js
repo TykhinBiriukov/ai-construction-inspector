@@ -21,7 +21,11 @@ export default {
     }
     const inspector = env.INSPECTOR.getByName('main-device-cancel-v2');
     const response = await inspector.fetch(request);
-    if (request.method === 'POST' && response.ok && /^\/v1\/sessions\/[^/]+\/complete$/.test(url.pathname)) {
+    // Authenticated chat polling also advances due work; persisted leases prevent
+    // duplicate execution. Cron remains the fallback when the browser is closed.
+    const chatPoll = request.method === 'GET' && /^\/v1\/chats\/[^/]+$/.test(url.pathname);
+    const captureComplete = request.method === 'POST' && /^\/v1\/sessions\/[^/]+\/complete$/.test(url.pathname);
+    if (response.ok && (chatPoll || captureComplete)) {
       ctx.waitUntil(inspector.process());
     }
     return response;
