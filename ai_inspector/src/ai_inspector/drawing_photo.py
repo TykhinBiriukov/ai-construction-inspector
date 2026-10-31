@@ -114,6 +114,33 @@ class MinionClient:
     def __init__(self, settings, *, transport=None):
         self.settings,self.transport=settings,transport
 
+    def evidence(self, task_id, finding_index, kind, ref_index):
+        base, token = self.settings.drawing_photo_base_url, self.settings.drawing_photo_service_token
+        if not base or not token:
+            raise APIError(503, 'comparison_not_configured', 'Comparison evidence is unavailable')
+        path = f'/v1/tasks/{UUID(task_id)}/evidence/{finding_index}/{kind}/{ref_index}'
+        try:
+            with httpx.Client(timeout=30, follow_redirects=False, transport=self.transport) as client:
+                with client.stream('GET', base.rstrip('/') + path, headers={'Authorization': 'Bearer ' + token}) as response:
+                    if response.status_code == 404:
+                        raise APIError(404, 'evidence_not_found', 'This evidence image is no longer available')
+                    if response.status_code != 200:
+                        raise APIError(503, 'evidence_unavailable', 'Could not load the evidence image. Please try again.', retryable=True)
+                    if response.headers.get('content-type', '').split(';')[0] != 'image/jpeg':
+                        raise ValueError
+                    raw = bytearray()
+                    for chunk in response.iter_bytes():
+                        raw.extend(chunk)
+                        if len(raw) > 6_000_000:
+                            raise ValueError
+                    if not raw.startswith(b'\xff\xd8\xff'):
+                        raise ValueError
+                    return bytes(raw)
+        except httpx.HTTPError:
+            raise APIError(503, 'evidence_unavailable', 'Could not load the evidence image. Please try again.', retryable=True) from None
+        except ValueError:
+            raise APIError(502, 'invalid_evidence', 'The evidence image could not be displayed') from None
+
     def request(self, method, task_id, body=None):
         base=self.settings.drawing_photo_base_url
         token=self.settings.drawing_photo_service_token

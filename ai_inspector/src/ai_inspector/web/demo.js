@@ -94,6 +94,67 @@
     const box=node('div'); const heading=node('div','bar-label'); heading.append(node('span','',label),node('span','',`${value}${unit?' '+unit:''}`));
     const track=node('div','bar-track'); const fill=node('div','bar-fill'); fill.style.width=`${Math.max(0,Math.min(100,max>0?value/max*100:0))}%`; track.append(fill); box.append(heading,track); return box;
   }
+  let evidenceVersion=0,evidenceUrl=null,evidenceDetail=null,evidenceFull=false;
+  function clearEvidence(){
+    evidenceVersion++;if(evidenceUrl)URL.revokeObjectURL(evidenceUrl);if(evidenceDetail)URL.revokeObjectURL(evidenceDetail);
+    evidenceUrl=null;evidenceDetail=null;$('evidence-image').removeAttribute('src');$('evidence-image').hidden=true;
+    $('evidence-toggle').hidden=true;$('evidence-retry').hidden=true;
+  }
+  function showEvidenceImage(){
+    $('evidence-image').src=evidenceFull?evidenceUrl:evidenceDetail;
+    $('evidence-image').hidden=false;$('evidence-toggle').hidden=false;
+    $('evidence-toggle').textContent=evidenceFull?'Show detail':'Show full image';
+  }
+  async function openEvidence(chatId,result,findingIndex,kind,refIndex){
+    clearEvidence();const version=evidenceVersion,current=epoch;
+    const finding=result.report.findings[findingIndex],claim=kind==='photo'?finding.photo_claim:finding.design_claim;
+    const region=claim.evidence[refIndex],asset=(result.assets||[]).find(a=>a.asset_id===region.asset_id);
+    $('evidence-title').textContent=`${kind==='photo'?'Photo':'Drawing'}${asset?.page?' · page '+asset.page:''} — ${finding.criterion}`;
+    $('evidence-claim').textContent=claim.text;$('evidence-status').textContent='Loading evidence…';
+    if(!$('evidence-dialog').open)$('evidence-dialog').showModal();
+    $('evidence-retry').onclick=()=>openEvidence(chatId,result,findingIndex,kind,refIndex);
+    try{
+      const blob=await api(`/v1/chats/${encodeURIComponent(chatId)}/comparisons/${encodeURIComponent(result.task_id)}/evidence/${findingIndex}/${kind}/${refIndex}`,{blob:true});
+      if(version!==evidenceVersion||current!==epoch)return;
+      evidenceUrl=URL.createObjectURL(blob);const image=new Image();image.src=evidenceUrl;await image.decode();
+      if(version!==evidenceVersion||current!==epoch)return;
+      const [x,y,w,h]=region.bbox,padX=Math.max(.04,w*.2),padY=Math.max(.04,h*.2);
+      const left=Math.max(0,x-padX),top=Math.max(0,y-padY),right=Math.min(1,x+w+padX),bottom=Math.min(1,y+h+padY);
+      const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.ceil((right-left)*image.naturalWidth));canvas.height=Math.max(1,Math.ceil((bottom-top)*image.naturalHeight));
+      canvas.getContext('2d').drawImage(image,left*image.naturalWidth,top*image.naturalHeight,(right-left)*image.naturalWidth,(bottom-top)*image.naturalHeight,0,0,canvas.width,canvas.height);
+      const detail=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      if(version!==evidenceVersion||current!==epoch)return;
+      if(!detail)throw new Error('Could not display the evidence region.');
+      evidenceDetail=URL.createObjectURL(detail);evidenceFull=false;showEvidenceImage();
+      $('evidence-status').textContent='Highlighted area cited by the analysis. Open the full image to see its context.';
+    }catch(error){if(version===evidenceVersion&&current===epoch){$('evidence-status').textContent=error.message||'Could not load evidence.';$('evidence-retry').hidden=false;}}
+  }
+  function comparisonResults(run){
+    const results=new Map();
+    for(const tool of run.tool_results||[]){const r=tool.result;if(['drawing_photo_compare','drawing_photo_result'].includes(tool.name)&&r?.task_id&&r.report?.findings?.length)results.set(r.task_id,r);}
+    return [...results.values()];
+  }
+  function renderComparison(result,chatId){
+    const box=node('section','artifact artifact-wide comparison-evidence');box.append(node('h4','','Drawing and photo comparison'));
+    const table=node('table'),head=node('thead'),heading=node('tr');for(const name of ['Detail','Result','Evidence'])heading.append(node('th','',name));head.append(heading);table.append(head);
+    const body=node('tbody');
+    result.report.findings.forEach((finding,index)=>{
+      const requirement=result.checklist?.checklist?.items?.find(item=>item.criterion===finding.criterion);
+      const categories={geometry:'Geometry',material:'Material',product:'Product',measurement:'Measurement',installation:'Installation',performance:'Performance'};
+      const label=categories[requirement?.category]?`${categories[requirement.category]} · ${finding.criterion}`:finding.criterion;
+      const row=node('tr');row.append(node('td','',label),node('td','',({match:'Match',mismatch:'Mismatch',inconclusive:'Unclear'})[finding.verdict]||'Unclear'));
+      const links=node('td');
+      for(const [kind,key,label] of [['photo','photo_claim','Photo'],['drawing','design_claim','Drawing']]){
+        const refs=finding[key]?.evidence||[];
+        refs.forEach((region,i)=>{if(!Array.isArray(region.bbox)||region.bbox.length!==4||!region.bbox.every(Number.isFinite))return;
+          const link=node('button','quiet evidence-link',label+(refs.length>1?' '+(i+1):''));link.type='button';link.setAttribute('aria-label',`View ${label.toLowerCase()} evidence ${i+1}: ${finding.criterion}`);
+          link.onclick=()=>openEvidence(chatId,result,index,kind,i);links.append(link);
+        });
+      }
+      if(!links.childNodes.length)links.append(node('span','','Unavailable'));
+      row.append(links);body.append(row);
+    });table.append(body);box.append(table);return box;
+  }
   function renderArtifact(item) {
     if(!['metric','bar_chart','table'].includes(item.type)) return null;
     if(item.type==='table'&&String(item.source).includes('device_status')){
@@ -224,7 +285,14 @@
           const user=node('article','message user'); user.append(node('div','message-author','YOU'),messageText(run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
           const assistant=node('article','message assistant'); assistant.id='reply-'+run.run_id; assistant.append(node('div','message-author','✳ INSPECTOR'));
           assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
-          const grid=node('div','artifact-grid'); for(const item of run.artifacts||[]) { const artifact=renderArtifact(item); if(artifact) grid.append(artifact); } if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
+          const grid=node('div','artifact-grid'),comparisons=comparisonResults(run);
+          for(const item of run.artifacts||[]) {
+            const source=String(item.source||'');
+            if(comparisons.length&&item.type==='table'&&(/drawing_photo_(compare|result)/.test(source)||comparisons.some(r=>source.includes(r.task_id))))continue;
+            const artifact=renderArtifact(item);if(artifact)grid.append(artifact);
+          }
+          for(const result of comparisons)grid.append(renderComparison(result,chat.chat_id));
+          if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
         }
       } else {
         const welcome=node('div','welcome'); welcome.append(node('div','hero-icon','✳'),node('p','','Attach files or send a message.')); $('messages').replaceChildren(welcome);
@@ -426,6 +494,8 @@
   });
   $('trash-toggle').addEventListener('click',()=>{showTrash=!showTrash;renderFiles();});
   $('add-plan-item').addEventListener('click',()=>openPlan());
+  $('evidence-dialog').addEventListener('close',clearEvidence);
+  $('evidence-toggle').addEventListener('click',()=>{evidenceFull=!evidenceFull;showEvidenceImage();});
   for(const button of document.querySelectorAll('[data-close]'))button.addEventListener('click',()=>$(button.dataset.close).close());
   $('plan-form').addEventListener('submit',async event=>{
     event.preventDefault();if(workspaceBusy)return;workspaceBusy=true;event.submitter.disabled=true;

@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 import anyio
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, File, Form, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
+from . import drawing_photo
 from .workspace import WorkItem, Observation, ImportPlan
 from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
@@ -299,6 +300,16 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         if file.get('sha256'):
             return FileResponse(service.bim_store.path_for(file['sha256']), filename=file['name'], media_type='application/octet-stream')
         return Response(file['content'], media_type='application/octet-stream', headers={'Content-Disposition':'attachment; filename="inspector-result.json"'})
+
+    @app.get("/v1/chats/{chat_id}/comparisons/{task_id}/evidence/{finding_index}/{kind}/{ref_index}", tags=["workspace"])
+    def comparison_evidence(chat_id: UUID, task_id: UUID, finding_index: int, kind: Literal['drawing', 'photo'],
+                           ref_index: int, principal: Annotated[Principal, Depends(operator)]):
+        if not 0 <= finding_index < 12 or not 0 <= ref_index < 8:
+            raise APIError(404, 'evidence_not_found', 'Evidence not found')
+        drawing_photo.bound_task(service, principal, str(chat_id), str(task_id))
+        content = service.agent.minion.evidence(str(task_id), finding_index, kind, ref_index)
+        return Response(content, media_type='image/jpeg', headers={'Cache-Control': 'private, no-store',
+                        'X-Content-Type-Options': 'nosniff'})
 
     @app.post("/v1/chats/{chat_id}/files/{file_id}/delete", tags=["workspace"])
     def delete_chat_file(chat_id: UUID, file_id: str, principal: Annotated[Principal, Depends(operator)]):
