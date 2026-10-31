@@ -573,7 +573,33 @@ class OrchestratorAgent:
     def _execute(self, principal, run, plan):
         chat, session = self._context(principal, run)
         if plan["name"] in drawing_photo.SCHEMAS:
-            return drawing_photo.execute(self.service, principal, run, plan, self.minion), None
+            retry = run.get('comparison_retry')
+            if not retry or retry.get('operation_id') != plan['operation_id'] or retry.get('exhausted'):
+                retry = {'operation_id': plan['operation_id'], 'started_at': time.time(), 'attempts': 0}
+                run['comparison_retry'] = retry
+            retry['attempts'] += 1
+            try:
+                result = drawing_photo.execute(self.service, principal, run, plan, self.minion)
+                if result.get('status') == 'running':
+                    raise APIError(503, 'comparison_pending',
+                                   'Analysis is in progress. The saved task will be checked automatically.', retryable=True)
+            except APIError as error:
+                if error.body['retryable'] and error.body['code'] in ('comparison_unavailable', 'comparison_pending'):
+                    if retry['attempts'] < 40 and time.time() - retry['started_at'] < 600:
+                        run['remote_waiting'] = True
+                        run['remote_next_attempt_at'] = time.time() + 15
+                        message = ('Analysis is in progress. Waiting for the report.' if error.body['code'] == 'comparison_pending'
+                                   else 'Waiting for the analysis service. It may be starting after inactivity; this request will continue automatically.')
+                        raise APIError(503, 'comparison_waiting', message, retryable=True) from None
+                    retry['exhausted'] = True
+                    run['remote_waiting'] = False
+                    raise APIError(503, 'comparison_wait_limit',
+                                   'The analysis service is taking longer than expected. Automatic waiting has stopped; Resume will check the same saved task.', retryable=True) from None
+                run['remote_waiting'] = False
+                raise
+            run.pop('comparison_retry', None)
+            run['remote_waiting'] = False
+            return result, None
         if plan["name"] == "device_status":
             return self.service.device_events.status(principal, chat["device_id"]), None
         if plan["name"] == "session_get":

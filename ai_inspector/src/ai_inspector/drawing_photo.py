@@ -23,8 +23,8 @@ class ResultArguments(APIModel):
 
 
 DESCRIPTIONS = {
-    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. PDF drawings require the caller-specified page; ask if missing. No IFC/BIM/3D. Returns running or a saved report; running is not a verdict.',
-    'drawing_photo_result': 'Read a previously submitted drawing/photo task from comparison_tasks. No selected files are needed. Omit task_id only if there is exactly one task. Do not repeatedly poll in one turn; if still running, tell the user and check on their next request.',
+    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. PDF drawings require the caller-specified page; ask if missing. No IFC/BIM/3D. The runtime waits for a saved report; running is not a verdict.',
+    'drawing_photo_result': 'Read a previously submitted drawing/photo task from comparison_tasks. No selected files are needed. Omit task_id only if there is exactly one task. The runtime handles bounded automatic waiting; do not submit a duplicate comparison.',
 }
 SCHEMAS = {'drawing_photo_compare': CompareArguments, 'drawing_photo_result': ResultArguments}
 TOOLS = [{'type':'function','function':{'name':name,'description':DESCRIPTIONS[name],
@@ -116,6 +116,8 @@ class MinionClient:
             with httpx.Client(timeout=20,follow_redirects=False,transport=self.transport) as client:
                 with client.stream(method,base.rstrip('/')+path,headers={'Authorization':'Bearer '+token,'Prefer':'respond-async'},json=body) as response:
                     if response.status_code not in (200,202):
+                        if method == 'GET' and response.status_code == 404:
+                            raise APIError(404, 'comparison_task_not_found', 'The comparison task has not been accepted by the service')
                         retry=response.status_code in (408,429,503) or response.status_code>=500
                         code='comparison_unavailable'
                         if response.status_code==409:
@@ -153,6 +155,19 @@ def execute(service, principal, run, plan, client):
         bound_task(service,principal,run['chat_id'],plan['task_id'])
         return client.request('GET',plan['task_id'])
     comparison=plan['comparison']; assets=[]
+    # A timeout does not mean admission failed. Reconcile the immutable task ID
+    # before resending bytes, including old saved requests awaiting manual Resume.
+    recovery = run.get('comparison_retry', {})
+    previously_waited = any(e.get('operation_id') == plan['operation_id'] and e.get('status') == 'waiting'
+                            for e in run.get('activity_events', []))
+    if recovery.get('attempts', 0) > 1 or previously_waited:
+        try:
+            result = client.request('GET', comparison['task_id'])
+            result['source_bindings'] = [{k:p[k] for k in ('asset_id','file_id','sha256','page')} for p in comparison['assets']]
+            return result
+        except APIError as error:
+            if error.body['code'] != 'comparison_task_not_found':
+                raise
     for pinned in comparison['assets']:
         f=service.workspace.download(principal,run['chat_id'],pinned['file_id'])
         if f.get('sha256')!=pinned['sha256']:

@@ -65,7 +65,7 @@
     $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
-    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? 'Waiting for the specialist inspector. This request continues automatically.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? (chat.runs.at(-1).error?.message || 'Waiting for the service. This request continues automatically.') : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     updateActivityStatus();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
@@ -120,7 +120,7 @@
   function updateActivityStatus(){
     const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event);
     let text=last?'Response ready':'Inspector is ready';
-    if(last?.status==='retryable')text=last.auto_resume?'Waiting for specialist inspector':'Waiting for retry';
+    if(last?.status==='retryable')text=last.auto_resume?'Waiting for analysis':'Waiting for retry';
     else if(last?.status==='failed')text='Request failed';
     else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||event.name:'Preparing response'):'Waiting for server update';
     else if(sending)text='Sending request';
@@ -165,7 +165,7 @@
     if(event.attempt>1)body.append(node('p','action-retry',`Retry · attempt ${event.attempt}`));
     const result=tool?toolSummary(tool):event.summary||'Waiting for a result from the server.';body.append(node('p','',result));
     const synthetic=event.origin==='synthetic'||tool?.result?.analysis_origin==='synthetic'||tool?.result?.geometry_mode==='mock';if(synthetic)body.append(node('strong','action-synthetic','Synthetic result'));
-    if(event.status==='waiting')body.append(node('p','action-retry','Paused. Use Resume to retry the saved request.'));
+    if(event.status==='waiting'&&run.status==='retryable')body.append(node('p','action-retry',run.auto_resume?'Continuing automatically. You can leave this page open or return later.':'Paused. Use Resume to retry the saved request.'));
     const links=node('div','action-links');
     if(tool?.name==='device_status'){const link=node('button','quiet','Show device');link.onclick=()=>{$('activity-dialog').close();document.querySelector('.device-card').scrollIntoView({block:'nearest'});};links.append(link);}
     const sessionId=tool?.result?.session?.session_id;if(sessionId){const session=scopedSessions.find(s=>s.session_id===sessionId);if(session){const link=node('button','quiet','Open capture task');link.onclick=()=>{$('activity-dialog').close();showTask(session);$('selection').scrollIntoView({block:'nearest'});};links.append(link);}}
@@ -265,13 +265,13 @@
     const current=epoch; sending=true; notify();
     if(!pending) pending={schema_version:'0.1',request_id:uid(),text:$('message').value.trim(),file_ids:[...chosenFiles],...(documentContext?{document_selection:documentContext}:{})};
     if(!chat && !create) create={schema_version:'0.1',request_id:uid(),room_id:$('room').value.trim()};
-    remember(); controls();
+    remember(); $('message').value=''; controls();
     try {
       if(!chat) { const created=await api('/v1/chats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(create)}); if(current!==epoch) return; chat=created; create=null; remember(); }
       const result=await api(`/v1/chats/${chat.chat_id}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending)});
       if(current!==epoch) return;
       if(['completed','failed'].includes(result.status)) { pending=null; $('message').value=''; remember(); }
-      if(result.error) notify(result.error.message);
+      if(result.error&&!result.auto_resume) notify(result.error.message);
       const runs=(chat.runs||[]).filter(r=>r.run_id!==result.run_id); chat={...chat,runs:[...runs,result]}; renderConversation();
     } catch(error) {
       if(current!==epoch) return;
@@ -479,7 +479,11 @@
   $('resume').addEventListener('click',send);
   $('new-chat').addEventListener('click',()=>{if(sending||workspaceBusy||pending) return; workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];importRequest=null;showTrash=false; chat=null;create=null; selected=null; scopedSessions=[]; scopedInspections=[]; $('selection').hidden=true; historySignature='';resetDocument();remember();$('message').value='';renderChatPicker();renderRails();renderConversation();notify();});
   for(const button of $('suggestions').querySelectorAll('button')) button.addEventListener('click',()=>{$('message').value=button.dataset.prompt;$('message').focus();});
-  $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();send();}});
+  $('message').addEventListener('keydown',event=>{
+    if(event.key!=='Enter'||event.isComposing||event.keyCode===229)return;
+    if(event.metaKey||event.ctrlKey){event.preventDefault();const input=$('message');input.setRangeText('\n',input.selectionStart,input.selectionEnd,'end');input.dispatchEvent(new Event('input',{bubbles:true}));}
+    else if(!event.shiftKey&&!event.altKey){event.preventDefault();send();}
+  });
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);
   setInterval(()=>{if(token)updateActivityStatus();},1000);
   if(token) refresh();

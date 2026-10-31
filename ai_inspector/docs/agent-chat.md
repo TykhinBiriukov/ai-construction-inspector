@@ -91,7 +91,7 @@ Admission persists before responding: exact caller/operation/body replay returns
 
 Model/tool commands checkpoint before IO. Independent leases fence stale or cancelled owners. Transient errors back off with a bounded retry budget; missing configuration/changed profile waits for restoration. A completed report is a single text Artifact. The orchestrator verifies task/context identity, delegation bindings and frozen-request SHA-256, including source fingerprint when available, before accepting it. Raw HTTP/provider errors and secrets are excluded.
 
-Native lifespan starts a remote-task poller; Cloudflare process advances remote and capture work, driven by the frontend cron. Unfinished remote runs expose auto_resume=true. Poll intervals depend on the actual driver/trigger; this is not a general indexed agent queue or an automatic Geometry continuation. Local legacy requests and minion follow-up use the distinct paths below.
+Native lifespan starts a remote-task poller; Cloudflare process advances remote and capture work, driven by the frontend cron. Unfinished remote runs expose auto_resume=true. Poll intervals depend on the actual driver/trigger; this is not a general indexed agent queue or an automatic Geometry continuation. Local legacy requests use the distinct recovery path below.
 
 `POST /v1/inspector-tools/{inspector_id}/{tool_name}` is the scoped backend gateway. Its separate service Secret is bound to the registered inspector and still-active saved delegation. Operator/device credentials are not accepted. Both remote profile permission and backend grant must allow the requested read tool; IDs/scopes come from saved state, not model arguments.
 
@@ -113,7 +113,7 @@ Run states are pending → running → completed, retryable or failed. General l
 
 Commands, operation IDs, frozen model requests and tool results are durable before side effects. One leased owner advances a run; stale owners cannot publish. Process death permits reclaim after lease expiry. Completed child reports and successful tool operations are reused; uncertain network/model execution can require an identical retry.
 
-Remote A2A workflows also continue through the poller without the browser. Drawing/photo tasks use a separate later-message result tool. The existing capture worker alone owns source validation → Geometry dispatch/reconciliation; no agent tool creates a second initial job. A completed Geometry result does not automatically start a new model turn.
+Remote A2A workflows also continue through the poller without the browser. Drawing/photo tasks also continue through this durable poller; the result tool remains available for later follow-up. The existing capture worker alone owns source validation → Geometry dispatch/reconciliation; no agent tool creates a second initial job. A completed Geometry result does not automatically start a new model turn.
 
 ## Files, work plans and observations
 
@@ -139,7 +139,7 @@ Set INSPECTOR_DRAWING_PHOTO_BASE_URL and a distinct INSPECTOR_DRAWING_PHOTO_SERV
 
 The comparison tool accepts one explicitly selected drawing and photo, and caller-specified page for a PDF. It sends the full selected sources, not just a viewer crop; no arbitrary URLs, IFC/3D or automatic search across drawings. The orchestrator supplies a self-contained `task` from the user's request and relevant clarifications, rather than forwarding a bare confirmation. For compatibility with previously frozen tool calls, an omitted task falls back to that run's text. Source roles/hash/page and the task are pinned before submission. Typed argument/file/question/size limits are defined in the adapter. Retries preserve the operation UUID and exact POST body.
 
-The adapter requests async admission. Running is not a verdict: a later user request can select drawing_photo_result for a task bound to the same chat (within the latest 200 runs). This is not autonomous background polling. Timeout/busy leaves the same Inspector request retryable; cold starts may require its exact retry. Findings retain report/evidence/provenance/audit and initial source bindings. Technical failure and inconclusive visual findings remain distinct; neither is certified approval. Minion database/model credentials remain private to that service.
+The adapter requests async admission. Running is not a verdict. Admission timeouts, temporary unavailability and running tasks continue automatically through the durable poller with the same task ID. Before resubmitting bytes, recovery checks that ID; only a 404 permits another identical submission. Automatic waiting stops after 40 attempts or 10 minutes, after which Resume checks the same saved task. A timeout is not proof of a cold start. A later user request can select drawing_photo_result for a task bound to the same chat (within the latest 200 runs). Findings retain report/evidence/provenance/audit and initial source bindings. Technical failure and inconclusive visual findings remain distinct; neither is certified approval. Minion database/model credentials remain private to that service.
 
 A `needs_input` report is a clarification, not a technical failure. Explain any
 reported role conflict and ask the user; do not silently swap sources. The known
@@ -174,3 +174,5 @@ stored by this preference. Delete controls are disabled while a request is pendi
 ## Verification boundary
 
 Local fixtures cover model/tool validation, scopes, retries/restart, separate HTTP services/stores and cancellation fencing. They do not establish deployed connectivity, live Meta access, a real phone, inspection accuracy or a configured external Geometry service. Capture_task display in the actual phone, business messages, BIM measurements and automatic Geometry continuation require separate implementation/integration acceptance.
+
+The composer clears when the request is saved for submission; the frozen pending body remains available for recovery. Enter sends; Ctrl+Enter or Command+Enter inserts a newline. IME composition does not submit.
