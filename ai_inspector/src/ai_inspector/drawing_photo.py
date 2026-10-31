@@ -93,7 +93,7 @@ def plan_compare(service, principal, run, args, operation_id):
         if f['byte_length'] > 6_000_000:
             raise APIError(422,'comparison_file_too_large','Each minion input must be at most 6 MB')
         assets.append(dict(asset_id=kind,kind=kind,mime_type=mime,page=page,file_id=file_id,sha256=f['sha256']))
-    return {'task_id':operation_id,'question':question,'assets':assets}
+    return {'task_id':operation_id,'question':question,'assets':assets,'workflow':service.settings.drawing_photo_workflow}
 
 
 def bound_task(service, principal, chat_id, task_id):
@@ -144,10 +144,10 @@ class MinionClient:
             if not isinstance(value,dict) or value.get('task_id')!=task_id or value.get('status') not in ('running','completed','needs_input','failed'):
                 raise ValueError
             if value['status'] in ('completed','needs_input') and not isinstance(value.get('report'),dict):raise ValueError
-            result={k:value.get(k) for k in ('task_id','status','report','assets','provenance','audit')}
+            result={k:value.get(k) for k in ('task_id','status','report','assets','provenance','audit','phase')}
             if value['status']=='failed':
                 result['error']={'code':'comparison_failed','message':'Minion analysis failed; no inspection verdict is available','retryable':False}
-                if value.get('error') == 'invalid_report_schema':
+                if value.get('error') in ('invalid_report_schema', 'invalid_stage_output'):
                     result['error']={'code':'comparison_invalid_report',
                         'message':'The analysis service could not validate its generated report or evidence references. No verdict is available. This technical failure does not establish a problem with image quality.',
                         'retryable':False}
@@ -187,6 +187,8 @@ def execute(service, principal, run, plan, client):
         assets.append({k:pinned[k] for k in ('asset_id','kind','mime_type','page')}|{'data_base64':base64.b64encode(raw).decode()})
     body={'request_id':comparison['task_id'],'question':comparison['question'],
           'context':'Inspector-selected chat files. No measured geometry or independent alignment supplied.','assets':assets}
+    if comparison.get('workflow', 'legacy') == 'staged':
+        body['workflow'] = 'staged'
     result=client.request('POST',comparison['task_id'],body)
     result['source_bindings']=[{k:p[k] for k in ('asset_id','file_id','sha256','page')} for p in comparison['assets']]
     return result

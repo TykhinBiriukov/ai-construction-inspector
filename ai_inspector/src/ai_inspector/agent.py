@@ -188,7 +188,7 @@ class OrchestratorAgent:
     def public_run(run):
         return {key: run.get(key) for key in (
             "schema_version", "run_id", "chat_id", "request_id", "text", "status", "reply",
-            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection", "activity_events", "tool_validation_errors",
+            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection", "activity_events", "tool_validation_errors", "comparison_progress",
         )} | {"active_tool": (run.get("pending_tool") or {}).get("name"),
               "agent_role": run.get("agent_role", "chat"), "auto_resume": bool(run.get("remote_waiting")),
               "delegations": [public_delegation(item) for item in run.get("delegations", [])]} | presentation(run.get("reply"))
@@ -580,6 +580,13 @@ class OrchestratorAgent:
             retry['attempts'] += 1
             try:
                 result = drawing_photo.execute(self.service, principal, run, plan, self.minion)
+                if (result.get('provenance') or {}).get('workflow') == 'staged':
+                    phases = {}
+                    for event in result.get('audit') or []:
+                        if event.get('phase') in ('drawing_checklist', 'photo_inspection', 'review'):
+                            if event.get('event') in ('phase_started', 'phase_completed'):
+                                phases[event['phase']] = 'completed' if event['event'] == 'phase_completed' else 'running'
+                    run['comparison_progress'] = {'operation_id': plan['operation_id'], 'phases': phases}
                 if result.get('status') == 'running':
                     raise APIError(503, 'comparison_pending',
                                    'Analysis is in progress. The saved task will be checked automatically.', retryable=True)

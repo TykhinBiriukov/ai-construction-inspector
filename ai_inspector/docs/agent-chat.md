@@ -176,3 +176,10 @@ stored by this preference. Delete controls are disabled while a request is pendi
 Local fixtures cover model/tool validation, scopes, retries/restart, separate HTTP services/stores and cancellation fencing. They do not establish deployed connectivity, live Meta access, a real phone, inspection accuracy or a configured external Geometry service. Capture_task display in the actual phone, business messages, BIM measurements and automatic Geometry continuation require separate implementation/integration acceptance.
 
 The composer clears when the request is saved for submission; the frozen pending body remains available for recovery. Enter sends; Ctrl+Enter or Command+Enter inserts a newline. IME composition does not submit.
+
+Drawing/photo workflow selection is server-owned: INSPECTOR_DRAWING_PHOTO_WORKFLOW
+accepts legacy (default) or staged. Deploy a minion supporting staged before enabling
+it. New tool plans pin this value; recovery never reads a changed setting to rewrite
+an existing request. Old frozen plans omit the field and retain legacy semantics.
+Staged minion phase events are exposed as reading the drawing, checking the photo,
+and reviewing findings. Only observed phases are shown; no fabricated progress.

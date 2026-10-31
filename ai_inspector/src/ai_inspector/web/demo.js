@@ -115,6 +115,7 @@
     }
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
+  const comparisonPhaseLabels={drawing_checklist:'Reading the drawing',photo_inspection:'Checking the photo',review:'Reviewing the findings'};
   const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Specialist inspection'};
   let activitySync=0,activitySignature='',activityExpanded=new Map();
   function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
@@ -174,6 +175,11 @@
       ['running','waiting'].includes(event.status)?(comparison?'The drawing/photo specialist is working on your files.':'This step is in progress.'):
       event.kind==='model'?'Step completed.':comparison?(tool?.result?.error?'The comparison could not be completed. See the response for details.':'Comparison results received.'):'Step completed.';
     body.append(node('p','',result));
+    if(comparison&&run.comparison_progress?.operation_id===event.operation_id){
+      for(const [phase,status] of Object.entries(run.comparison_progress.phases||{})){
+        if(comparisonPhaseLabels[phase])body.append(node('p','',`${status==='completed'?'✓':'◌'} ${comparisonPhaseLabels[phase]}`));
+      }
+    }
     const synthetic=event.origin==='synthetic'||tool?.result?.analysis_origin==='synthetic'||tool?.result?.geometry_mode==='mock';if(synthetic)body.append(node('strong','action-synthetic','Synthetic result'));
     if(event.status==='waiting'&&run.status==='retryable')body.append(node('p','action-retry',run.auto_resume?'Continuing automatically. You can leave this page open or return later.':'Select Resume to continue.'));
     const links=node('div','action-links');
@@ -186,7 +192,7 @@
     body.append(links);details.append(body);return details;
   }
   function renderActivity(runs){
-    const signature=JSON.stringify(runs.map(r=>[r.run_id,r.status,r.activity_events,r.tool_results]));if(activitySignature===signature)return;activitySignature=signature;
+    const signature=JSON.stringify(runs.map(r=>[r.run_id,r.status,r.activity_events,r.tool_results,r.comparison_progress]));if(activitySignature===signature)return;activitySignature=signature;
     $('activity').replaceChildren();$('activity-feed').replaceChildren();$('activity-graph').replaceChildren();
     const last=runs.at(-1),events=last?actionEvents(last):[];
     $('activity-feed').hidden=!events.length;$('activity-graph').hidden=!events.length;
@@ -202,7 +208,7 @@
     for(const run of [...runs].reverse()){
       const group=node('section','process-run');group.append(node('h3','',run.text.slice(0,140)),node('small','process-date',timestamp(run.created_at)));
       const history=actionEvents(run);for(const event of history)group.append(actionCard(run,event));
-      if(!history.length)group.append(node('p','process-empty',run.status==='completed'?'Response delivered. Step timing was not recorded for this request.':run.error?.message||'Waiting for server events.'));
+      if(!history.length)group.append(node('p','process-empty',run.status==='completed'?'Response delivered.':run.status==='failed'?'This request could not be completed. See the response for details.':'Preparing your request.'));
       $('activity').append(group);
     }
   }
