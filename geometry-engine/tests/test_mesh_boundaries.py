@@ -47,6 +47,25 @@ class MeshContourTests(unittest.TestCase):
         self.assertAlmostEqual(obj['candidate_width_m'],1,places=5)
         self.assertFalse(obj['quality']['side_support']['top']['observed'])
 
+    def test_window_without_wall_detections_keeps_unverified_contour(self):
+        root,mesh=self.fixture();seg=root/'mesh_segmentation'
+        with np.load(seg/'labels.npz',allow_pickle=False) as data:
+            classes=np.where(data['face_class_id']==1,0,-1)
+            instances=data['face_instance_id'].copy()
+        np.savez_compressed(seg/'labels.npz',face_class_id=classes,face_instance_id=instances)
+        objects=json.loads((seg/'objects.json').read_text())
+        objects['labels']=['window']
+        (seg/'objects.json').write_text(json.dumps(objects))
+        before=mesh.read_bytes()
+        result=MeshBoundaryService().run(root);obj=result['objects'][0]
+        self.assertEqual(result['status'],'completed')
+        self.assertEqual(obj['status'],'needs_review')
+        self.assertAlmostEqual(obj['candidate_width_m'],1,places=5)
+        self.assertAlmostEqual(obj['candidate_height_m'],2,places=5)
+        self.assertEqual(obj['wall_interface_edge_count'],0)
+        self.assertTrue(all(not s['observed'] for s in obj['quality']['side_support'].values()))
+        self.assertEqual(before,mesh.read_bytes())
+
     def test_coplanar_fragments_combine_without_ifc(self):
         root,_=self.fixture(split=True);rows=MeshBoundaryService().run(root)['objects']
         self.assertEqual(len(rows),1);self.assertEqual(rows[0]['source_instance_ids'],[1,2])
@@ -81,6 +100,16 @@ class MeshContourTests(unittest.TestCase):
         measured,_=load_boundary_observations(root,root/'mesh_boundaries',np.eye(4),{},include_candidates=True)
         self.assertEqual(measured[0]['measurement_status'],'mesh_contour_candidate')
         np.testing.assert_allclose(measured[0]['_intrinsic_dimensions'],[1,2],atol=1e-5)
+
+    def test_candidate_groups_cannot_reuse_the_same_mesh_instance(self):
+        from geometry_engine.comparison.opening_comparison import load_boundary_observations
+        root,_=self.fixture(gap=True);MeshBoundaryService().run(root)
+        path=root/'mesh_boundaries/objects.json'
+        data=json.loads(path.read_text())
+        duplicate={**data['objects'][0],'object_id':'duplicate_window'}
+        data['objects'].append(duplicate);path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError,'overlapping boundary groups'):
+            load_boundary_observations(root,root/'mesh_boundaries',np.eye(4),{},include_candidates=True)
 
     def test_rotated_contour_dimensions_are_not_inflated_by_ifc_axis_projection(self):
         from geometry_engine.comparison.opening_comparison import match_instances,OpeningComparisonSettings

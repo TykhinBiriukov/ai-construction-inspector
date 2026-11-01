@@ -14,12 +14,9 @@ from geometry_engine_api.dependencies import (
 from geometry_engine_api.services.archive import Settings
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 class OpeningApiTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.session = self.root / "processed" / "session_01"

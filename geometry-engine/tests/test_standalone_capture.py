@@ -1,4 +1,5 @@
 import json
+import copy
 from pathlib import Path
 import tempfile
 import unittest
@@ -67,6 +68,27 @@ class StandaloneCaptureTests(unittest.TestCase):
         self.save()
         with self.assertRaisesRegex(ValueError, 'differs from manifest'):
             load_raw_capture(self.session)
+
+    def test_rejects_nonobject_rows_before_optional_segment_selection(self):
+        original=copy.deepcopy(self.manifest)
+        for selected in (False,True):
+            if selected:
+                (self.session/'capture_selection.json').write_text(json.dumps({'segment_id':'seg'}))
+            for field in ('segments','observations'):
+                for invalid in (None,'invalid',[],42):
+                    with self.subTest(selected=selected,field=field,invalid=invalid):
+                        self.manifest=copy.deepcopy(original)
+                        self.manifest[field]=[invalid]
+                        self.save()
+                        with self.assertRaises(ValueError):
+                            load_raw_capture(self.session)
+
+    def test_observation_count_requires_an_integer(self):
+        for invalid in (True,1.0,'1'):
+            with self.subTest(count=invalid):
+                self.manifest['observation_count']=invalid;self.save()
+                with self.assertRaisesRegex(ValueError,'observation count'):
+                    load_raw_capture(self.session)
 
     def test_rejects_rotated_pixels_and_invalid_depth_size(self):
         self.frame['source_to_stored_image'][0][0] = -1

@@ -6,7 +6,7 @@ from pathlib import Path, PureWindowsPath
 import numpy as np
 
 from geometry_engine.common.mesh import read_mesh
-from geometry_engine.capture.session_layout import original_directory, prepare_session, processed_session
+from geometry_engine.capture.session_layout import original_directory, processed_session
 
 
 def session_file(root: Path, base: Path, value) -> Path:

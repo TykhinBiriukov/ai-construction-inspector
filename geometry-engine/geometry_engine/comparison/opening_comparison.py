@@ -200,12 +200,13 @@ def load_boundary_observations(session, directory, transform, hashes, include_ca
         if category not in ('door','window') or target != {'door':'door_opening','window':'outer_frame'}[category]:
             raise ValueError('Unsupported measured boundary definition')
         members=set(row['source_instance_ids'])
-        if identity in names or (row['status']=='accepted' and consumed.intersection(members)):
-            raise ValueError('Empty or overlapping boundary groups')
-        names.add(identity)
         candidate=bool(include_candidates and row.get('candidate_corners_world_m') is not None
                        and 'implausible_rectangle' not in row.get('quality',{}).get('reasons',[]))
-        if row['status']=='accepted' or candidate:consumed.update(members)
+        measured=row['status']=='accepted' or candidate
+        if not members or identity in names or (measured and consumed.intersection(members)):
+            raise ValueError('Empty or overlapping boundary groups')
+        names.add(identity)
+        if measured:consumed.update(members)
         if row['status'] != 'accepted' and not candidate:
             rejected.append({'object_id':identity,'category':category,'status':'boundary_not_verified',
                              'source_instance_ids':sorted(members),'quality':row.get('quality',{})})

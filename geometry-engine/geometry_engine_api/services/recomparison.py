@@ -5,7 +5,6 @@ database only after comparison, viewer and all Storage artifacts are verified.
 No reconstruction, segmentation or external model is called.
 """
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 import shutil
 from uuid import UUID, uuid4
@@ -16,6 +15,7 @@ from geometry_engine import inspection
 from geometry_engine_api.database.models import InspectionJob, InspectionStage, ViewerExport
 from geometry_engine_api.schemas.inspections import InspectionParameters
 from .artifacts import ArtifactError, ArtifactRef, fingerprint, json_bytes, safe_relative, sha_file
+from .inspections import viewer_fingerprint
 
 
 def restore_saved_stages(artifacts, refs, workspace, *, local_roots=(), progress=None):
@@ -100,7 +100,7 @@ class RecomparisonService:
         viewer_ref, viewer_manifest = self.artifacts.publish(workspace, ('viewer',),
                                     prefix + f'/viewer/{export_id}/attempt_001')
         code = inspection.code_fingerprint()
-        export_fingerprint = fingerprint_for_export(result_ref, code)
+        export_fingerprint = viewer_fingerprint(result_ref.key, result_ref.sha256, inspection.VIEWER_VERSION, code)
         finished = datetime.now(timezone.utc)
         request_hash = fingerprint({**{k: source_values[k] for k in (
             'session_id', 'capture_manifest_path', 'ifc_object_key')}, 'parameters': parameters})
@@ -130,25 +130,29 @@ class RecomparisonService:
                 created_at=started, started_at=started, finished_at=finished))
         # Seed the API's disposable viewer cache from just-generated files instead
         # of downloading the same viewer back from Storage on its first GET.
-        cached = self.data / 'viewer_cache' / str(export_id) / viewer_ref.sha256
-        cached.mkdir(parents=True, exist_ok=False)
-        for entry in viewer_manifest['files']:
-            relative = safe_relative(entry['path'])
-            source = workspace / relative
-            if sha_file(source) != entry['sha256']:
-                raise ArtifactError('Generated viewer changed before local cache publication')
-            target = cached / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
-        (cached / '.stage-manifest.json').write_bytes(json_bytes(viewer_manifest))
+        try:
+            seed_viewer_cache(self.data, export_id, viewer_ref, viewer_manifest, workspace)
+        except (OSError, ArtifactError):
+            # Storage and DB publication are already complete. A disposable cache
+            # failure must not hide that successful result or invite a new run.
+            emit('Viewer completed; local cache unavailable. The API will restore it from Storage.')
         return {'job_id': str(job_id), 'source_job_id': str(source_job_id), 'export_id': str(export_id),
                 'viewer_url': f'/inspections/{job_id}/viewer/assets/{export_id}/viewer.html',
                 'summary': comparison['report']['summary'], 'workspace': str(workspace)}
 
 
-def fingerprint_for_export(source_ref, code):
-    """Match the normal viewer endpoint's idempotency fingerprint exactly."""
-    import hashlib
-    canonical = json.dumps({'manifest': source_ref.key, 'sha256': source_ref.sha256,
-        'viewer_version': inspection.VIEWER_VERSION, 'implementation': code}, sort_keys=True)
-    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+def seed_viewer_cache(data_dir, export_id, viewer_ref, viewer_manifest, workspace):
+    """Publish the completion marker only after every local copy is verified."""
+    cached = Path(data_dir) / 'viewer_cache' / str(export_id) / viewer_ref.sha256
+    cached.mkdir(parents=True, exist_ok=False)
+    for entry in viewer_manifest['files']:
+        relative = safe_relative(entry['path'])
+        source = workspace / relative
+        if source.stat().st_size != entry['size'] or sha_file(source) != entry['sha256']:
+            raise ArtifactError('Generated viewer changed before local cache publication')
+        target = cached / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        if target.stat().st_size != entry['size'] or sha_file(target) != entry['sha256']:
+            raise ArtifactError('Generated viewer cache copy failed its integrity check')
+    (cached / '.stage-manifest.json').write_bytes(json_bytes(viewer_manifest))

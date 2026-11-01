@@ -16,9 +16,6 @@ from geometry_engine.common.mesh import write_mesh
 from geometry_engine.reconstruction.preprocessing import preprocess_mesh
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 class MaskProjectionTests(unittest.TestCase):
     def test_rejected_projection_camera_cannot_label_even_matching_depth(self):
         stage=self.session/'projection_alignment';stage.mkdir()
@@ -57,7 +54,7 @@ class MaskProjectionTests(unittest.TestCase):
         self.assertNotIn('depth_inconsistent_with_mesh',partial['observations'][0]['rejection_reasons'])
 
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.session = Path(temporary.name)
         self.original = self.session / "original"

@@ -14,8 +14,6 @@ from geometry_engine.comparison.opening_comparison import (
     measure_observation, match_instances, extract_instances,
 )
 
-ENGINE = Path(__file__).resolve().parents[1]
-
 
 def reference(guid='door-a', category='door', origin=(0,0,0)):
     return {'guid':guid, 'category':category, 'name':guid, 'geometry_status':'loaded',
@@ -35,7 +33,7 @@ def observation(identity, vertices, category='door'):
 
 class OpeningComparisonTests(unittest.TestCase):
     def setUp(self):
-        temporary=tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary=tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root=Path(temporary.name)
         self.settings=OpeningComparisonSettings()

@@ -70,16 +70,13 @@ class AutomaticOpeningIntegrationTests(unittest.TestCase):
             self.compare_boundaries(ifc,folder)
 
 
-
-
-
 class BoundaryReferenceTests(unittest.TestCase):
     def test_door_uses_structural_opening_in_own_axes_not_leaf(self):
         import tempfile
         from test_opening_reference import make_door_reference
         from geometry_engine.comparison.opening_reference import load_boundary_references
         import ifcopenshell
-        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'door.ifc'
             _,guid,_=make_door_reference(path,millimeters=True)
             model=ifcopenshell.open(str(path))
@@ -104,7 +101,7 @@ class AutomaticPipelineTests(unittest.TestCase):
         from contextlib import ExitStack
         from unittest.mock import Mock
         from geometry_engine.pipeline import PipelineService
-        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             directory=Path(tmp);(directory/'original').mkdir()
             sam=Mock(); boundary=Mock(); boundary.run.return_value={'status':'completed'}
             factory=Mock(return_value=boundary)

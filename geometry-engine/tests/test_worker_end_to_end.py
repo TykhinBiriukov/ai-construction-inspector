@@ -16,7 +16,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 import numpy as np
 from PIL import Image
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from geometry_engine import inspection
@@ -26,7 +26,7 @@ from geometry_engine.segmentation.service import SegmentationService
 from geometry_engine_api.app import create_app
 from geometry_engine_api.database.connection import get_database_session
 from geometry_engine_api.database.migrate import upgrade_database
-from geometry_engine_api.database.models import InspectionJob, ViewerExport
+from geometry_engine_api.database.models import InspectionJob
 from geometry_engine_api.routers.viewers import get_viewer_files
 from geometry_engine_api.schemas.inspections import InspectionRequest
 from geometry_engine_api.services.artifacts import ArtifactStore

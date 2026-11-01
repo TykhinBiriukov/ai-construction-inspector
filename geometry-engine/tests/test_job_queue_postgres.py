@@ -11,17 +11,17 @@ import re
 import threading
 from tempfile import TemporaryDirectory
 import unittest
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, delete, func, select, text, update
+from sqlalchemy import create_engine, delete, func, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from geometry_engine_api.app import create_app
 from geometry_engine_api.database.connection import get_database_session
 from geometry_engine_api.database.migrate import upgrade_database
-from geometry_engine_api.database.models import InspectionJob, InspectionStage, ViewerExport
+from geometry_engine_api.database.models import InspectionJob, ViewerExport
 from geometry_engine_api.schemas.inspections import InspectionRequest
 from geometry_engine_api.services.inspections import InspectionService
 from geometry_engine_api.services.job_queue import AttemptsExhausted, JobQueue, LeaseLost

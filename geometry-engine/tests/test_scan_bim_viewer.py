@@ -13,7 +13,7 @@ from geometry_engine.visualization.scan_bim_viewer import export_scan_bim_viewer
 
 class ScanBimViewerTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1])
+        temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.output = Path(temp.name)/'viewer.html'
         self.vertices = np.array([[10., 3., 1.], [12., 3., 1.], [12., 3., 4.], [10., 3., 4.]])

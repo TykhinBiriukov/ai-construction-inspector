@@ -90,7 +90,7 @@ class CountingBackend:
 
 class SegmentationCacheTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1])
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.repository, self.storage = MemoryIndex(), MemoryStorage()

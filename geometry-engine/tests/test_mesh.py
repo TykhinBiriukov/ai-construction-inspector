@@ -6,7 +6,6 @@ import unittest
 
 import numpy as np
 
-ENGINE = Path(__file__).resolve().parents[1]
 from geometry_engine.common import mesh as alignment
 
 
@@ -45,7 +44,7 @@ class MeshCleanupTests(unittest.TestCase):
             alignment.prepare_mesh(np.zeros((3,3)),np.zeros((3,4),dtype=np.uint8),np.array([[0,1,2]]))
 
     def test_ply_roundtrip_preserves_triangles_and_colors(self):
-        with tempfile.TemporaryDirectory(dir=ENGINE) as directory:
+        with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/"mesh.ply"
             vertices=np.array([[0.,0,0],[1.,0,0],[0.,1,0]])
             colors=np.array([[10,20,30,255],[40,50,60,128],[70,80,90,0]],dtype=np.uint8)
@@ -57,7 +56,7 @@ class MeshCleanupTests(unittest.TestCase):
             np.testing.assert_array_equal(actual_faces,faces)
 
     def test_double_precision_coordinates_are_not_rounded(self):
-        with tempfile.TemporaryDirectory(dir=ENGINE) as directory:
+        with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/"mesh.ply"
             vertices=np.array([[.123456789123,0,0],[1.,0,0],[0.,1,0]])
             alignment.write_mesh(path,vertices,np.full((3,4),255,dtype=np.uint8),np.array([[0,1,2]]))
@@ -122,7 +121,6 @@ class TriangleBVHTests(unittest.TestCase):
         np.testing.assert_array_equal(np.sort(self.bvh["face_order"]),[0,1])
 
 
-
 def calibration(transform=None):
     return {
         "pose": {"T_world_from_camera": (np.eye(4) if transform is None else transform).tolist()},
@@ -168,8 +166,6 @@ class MeshRenderingTests(unittest.TestCase):
         behind[:, 2] = -2.
         rendered = alignment.render_mesh_depth(behind, self.faces, calibration())
         self.assertTrue(np.all(np.isinf(rendered)))
-
-
 
 
 if __name__ == "__main__":

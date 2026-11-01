@@ -3,13 +3,13 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, FiniteFloat
 
 
 class DimensionComparison(BaseModel):
-    ifc: float | None
-    scan: float | None
-    difference: float | None = Field(description='Scan dimension minus IFC dimension, in metres.')
+    ifc: FiniteFloat | None
+    scan: FiniteFloat | None
+    difference: FiniteFloat | None = Field(description='Scan dimension minus IFC dimension, in metres.')
 
 
 class ObjectDimensions(BaseModel):
@@ -18,9 +18,9 @@ class ObjectDimensions(BaseModel):
 
 
 class ObjectDisplacement(BaseModel):
-    along_wall: float | None = Field(description='Signed shift along the IFC opening horizontal axis, in metres.')
-    vertical: float | None = Field(description='Signed vertical shift in metres; positive is upward.')
-    normal_to_wall: float | None = Field(description='Signed shift along the IFC opening normal axis, in metres.')
+    along_wall: FiniteFloat | None = Field(description='Signed shift along the IFC opening horizontal axis, in metres.')
+    vertical: FiniteFloat | None = Field(description='Signed vertical shift in metres; positive is upward.')
+    normal_to_wall: FiniteFloat | None = Field(description='Signed shift along the IFC opening normal axis, in metres.')
 
 
 class ObjectQuality(BaseModel):
@@ -41,7 +41,8 @@ class ComparedObject(BaseModel):
     type: Literal['door', 'window']
     scan_object_id: str | None
     ifc_guid: str | None
-    match_status: Literal['matched', 'ambiguous', 'scan_object_not_matched', 'ifc_object_not_observed']
+    match_status: Literal['matched', 'ambiguous', 'scan_object_not_matched', 'ifc_object_not_observed',
+                          'ifc_reference_unavailable']
     dimensions: ObjectDimensions
     displacement: ObjectDisplacement
     quality: ObjectQuality
@@ -52,9 +53,9 @@ class SurfaceComparison(BaseModel):
     ifc_guid: str
     type: str
     status: str
-    compared_area_m2: float | None
-    p95_absolute_deviation: float | None
-    area_fraction_outside_tolerance: float | None
+    compared_area_m2: FiniteFloat | None
+    p95_absolute_deviation: FiniteFloat | None
+    area_fraction_outside_tolerance: FiniteFloat | None
     whole_element_verified: bool
 
 
@@ -71,7 +72,7 @@ class InspectionResultResponse(BaseModel):
     session_id: str
     units: Literal['meter']
     difference_convention: Literal['scan_minus_ifc']
-    tolerance: float
+    tolerance: FiniteFloat
     links_expires_at: datetime
     summary: dict[str, int]
     objects: list[ComparedObject]

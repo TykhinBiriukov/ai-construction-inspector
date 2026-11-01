@@ -219,11 +219,16 @@ def _load_standalone(root, manifests, selected_segment=None):
     if not isinstance(session_id, str) or not session_id:
         raise ValueError("Missing standalone session_id")
     if (not isinstance(observations, list) or not observations
-            or m.get("observation_count") != len(observations)):
+            or type(m.get("observation_count")) is not int
+            or m["observation_count"] != len(observations)):
         raise ValueError("Invalid standalone observation count")
+    if any(not isinstance(observation, dict) for observation in observations):
+        raise ValueError("Standalone observations must be JSON objects")
     # Different ARKit segments may have unrelated origins. Do not silently fuse them.
     if not isinstance(segments, list):
         raise ValueError("Missing coordinate segments")
+    if any(not isinstance(segment, dict) for segment in segments):
+        raise ValueError("Coordinate segments must be JSON objects")
     if selected_segment is not None:
         segments = [segment for segment in segments if segment.get('segment_id') == selected_segment]
         observations = [observation for observation in observations if observation.get('segment_id') == selected_segment]
@@ -232,7 +237,8 @@ def _load_standalone(root, manifests, selected_segment=None):
     if len(segments) != 1:
         raise ValueError("Standalone reconstruction requires one coordinate segment; align multiple segments first")
     segment = segments[0]
-    if (not segment.get("segment_id") or segment.get("coordinate_convention") != "arkit_world_camera_v1"
+    if (not isinstance(segment.get("segment_id"), str) or not segment["segment_id"]
+            or segment.get("coordinate_convention") != "arkit_world_camera_v1"
             or segment.get("matrix_layout") != "rows_column_vectors" or segment.get("units") != "m"):
         raise ValueError("Unsupported standalone coordinate convention")
     frames, seen_ids, seen_times = [], set(), set()
@@ -262,11 +268,13 @@ def load_rgbd(frame: RawFrame, min_confidence=1, min_depth_m=.15, max_depth_m=5)
     if not np.isfinite([min_depth_m, max_depth_m]).all() or not 0 <= min_depth_m < max_depth_m:
         raise ValueError("Expected 0 <= min_depth_m < max_depth_m")
     with Image.open(frame.rgb_path) as image:
-        image.load()
         if image.size != (frame.rgb_width, frame.rgb_height):
             raise ValueError("RGB dimensions differ from metadata")
+        if image.width * image.height > MAX_PIXELS:
+            raise ValueError("RGB exceeds the image pixel limit")
         if image.getexif().get(274, 1) != 1:
             raise ValueError("RGB EXIF orientation must be 1; preserve sensor pixel orientation")
+        image.load()
         rgb = np.array(image.convert("RGB").resize((frame.width, frame.height), Image.Resampling.BILINEAR))
     depth = np.fromfile(frame.depth_path, dtype="<f4").reshape(frame.height, frame.width)
     valid = np.isfinite(depth) & (depth >= min_depth_m) & (depth > 0) & (depth <= max_depth_m)

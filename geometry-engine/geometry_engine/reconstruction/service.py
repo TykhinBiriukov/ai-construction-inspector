@@ -14,7 +14,7 @@ import numpy as np
 from scipy.ndimage import maximum_filter, minimum_filter
 
 from geometry_engine.common.mesh import write_mesh
-from geometry_engine.capture.session_layout import prepare_session, raw_original_directory, raw_session
+from geometry_engine.capture.session_layout import prepare_session, raw_original_directory
 from geometry_engine.capture.raw_capture import load_raw_capture, load_rgbd
 
 

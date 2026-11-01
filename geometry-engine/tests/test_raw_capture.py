@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 from PIL import Image
@@ -112,6 +113,16 @@ class RawCaptureTests(unittest.TestCase):
         np.full((3, 4), 255, dtype="u1").tofile(self.base / "confidence.bin")
         with self.assertRaisesRegex(ValueError, "confidence values"):
             load_rgbd(frame)
+
+    def test_mismatched_rgb_header_is_rejected_before_decoding_pixels(self):
+        frame,=load_raw_capture(self.session)
+        Image.new('RGB',(4,6)).save(self.base/'rgb.png')
+        with Image.open(self.base/'rgb.png') as image:
+            with patch.object(image,'load',side_effect=AssertionError('Pixel decode must not run')) as decode, \
+                    patch('geometry_engine.capture.raw_capture.Image.open',return_value=image):
+                with self.assertRaisesRegex(ValueError,'RGB dimensions'):
+                    load_rgbd(frame)
+                decode.assert_not_called()
 
     def test_flat_capture_and_timestamp_order(self):
         original = self.session / "original"

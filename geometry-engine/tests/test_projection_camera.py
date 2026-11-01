@@ -12,7 +12,7 @@ from geometry_engine.segmentation.projection_camera import ProjectionCameras
 
 class ProjectionCameraTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1])
+        self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.session=Path(self.tmp.name)
         self.metadata={'frame_id':'f','intrinsics':{'K':np.eye(3).tolist()},

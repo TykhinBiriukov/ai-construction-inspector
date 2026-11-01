@@ -1,9 +1,9 @@
-"""Run Meta SAM image segmentation: python -m scripts.run_segmentation --max-frames 3."""
+"""Run Meta SAM: python -m scripts.run_segmentation --session data/processed/ID."""
 
 import argparse
 import os
 from pathlib import Path
-from geometry_engine.capture.session_layout import processed_session, original_directory
+from geometry_engine.capture.session_layout import processed_session
 
 from dotenv import load_dotenv
 
@@ -14,7 +14,7 @@ from geometry_engine.segmentation.service import SegmentationService, Segmentati
 def main():
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description="Segment selected session photos with the hosted Meta SAM API.")
-    parser.add_argument("--session", type=Path, default=root / "data" / "processed" / "47333462")
+    parser.add_argument("--session", type=Path, required=True, help="Raw or processed session directory")
     parser.add_argument("--output", type=Path, help="New output folder directly inside the session; defaults to SESSION/segmentation")
     parser.add_argument("--selected-frames", type=Path, help="Alternative selected_frames.json inside the session")
     parser.add_argument("--max-frames", type=int, help="Process only the first N selected frames")

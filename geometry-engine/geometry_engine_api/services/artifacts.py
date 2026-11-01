@@ -57,6 +57,12 @@ def sha_file(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+def _sha256(value):
+    if not isinstance(value, str) or len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+        raise ArtifactError('Invalid artifact fingerprint')
+    return value
+
+
 def json_bytes(value):
     return (json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False) + '\n').encode('utf-8')
 
@@ -170,18 +176,18 @@ class ArtifactRef:
 
 class ArtifactStore:
     def __init__(self, objects, chunk_bytes=CHUNK_BYTES, *, cache_dir=None):
-        if chunk_bytes < 1:
-            raise ValueError('Chunk size must be positive')
+        if type(chunk_bytes) is not int or not 1 <= chunk_bytes <= MAX_OBJECT_BYTES:
+            raise ValueError('Chunk size must be between 1 byte and 64 MiB')
         self.objects, self.chunk_bytes = objects, chunk_bytes
         self.cache_dir = Path(cache_dir).resolve() if cache_dir is not None else None
 
     def _cache_path(self, ref, kind):
-        if not isinstance(ref.sha256, str) or len(ref.sha256) != 64 or any(c not in '0123456789abcdef' for c in ref.sha256):
-            raise ArtifactError('Invalid manifest fingerprint')
-        return self.cache_dir / kind / ref.sha256
+        return self.cache_dir / kind / _sha256(ref.sha256)
 
     def put_json(self, prefix, value):
         data = json_bytes(value)
+        if len(data) > MAX_MANIFEST_BYTES:
+            raise ArtifactError('Artifact manifest exceeds size limit')
         digest = hashlib.sha256(data).hexdigest()
         key = safe_relative(f'{prefix}/{digest}.json')
         self.objects.upload(key, data, 'application/json')
@@ -190,6 +196,8 @@ class ArtifactStore:
         return ArtifactRef(key, digest)
 
     def read_json(self, ref):
+        safe_relative(ref.key)
+        _sha256(ref.sha256)
         cached = self._cache_path(ref, 'manifests') if self.cache_dir is not None else None
         data = None
         if cached is not None and cached.is_file() and cached.stat().st_size <= MAX_MANIFEST_BYTES:
@@ -312,8 +320,16 @@ class ArtifactStore:
         manifest = self.read_json(ref)
         chunks = manifest.get('chunks')
         if (not isinstance(chunks, list) or not chunks or len(chunks) > 10000
-                or not isinstance(manifest.get('size'), int) or not 0 < manifest['size'] <= MAX_RESTORE_BYTES):
+                or type(manifest.get('size')) is not int or not 0 < manifest['size'] <= MAX_RESTORE_BYTES):
             raise ArtifactError('Invalid artifact bundle')
+        _sha256(manifest.get('sha256'))
+        for chunk in chunks:
+            if not isinstance(chunk, dict) or type(chunk.get('size')) is not int or not 0 < chunk['size'] <= MAX_OBJECT_BYTES:
+                raise ArtifactError('Invalid artifact chunk')
+            safe_relative(chunk.get('key'))
+            _sha256(chunk.get('sha256'))
+        if sum(chunk['size'] for chunk in chunks) != manifest['size']:
+            raise ArtifactError('Artifact chunk sizes do not match bundle size')
         total = 0
         with target.open('wb') as stream:
             for chunk in chunks:
@@ -338,19 +354,40 @@ class ArtifactStore:
         local_files = {} if local_files is None else local_files
         chosen, seen, total = [], set(), 0
         for entry in files:
-            name = safe_relative(entry['path'])
+            if not isinstance(entry, dict):
+                raise ArtifactError('Invalid artifact file entry')
+            name = safe_relative(entry.get('path'))
             if name.casefold() in seen:
                 raise ArtifactError('Duplicate artifact path')
             seen.add(name.casefold())
             if type(entry.get('size')) is not int or entry['size'] < 0:
                 raise ArtifactError('Invalid file size')
+            _sha256(entry.get('sha256'))
+            source = entry.get('source')
+            if not isinstance(source, dict):
+                raise ArtifactError('Invalid artifact file source')
+            if 'object_key' in source:
+                safe_relative(source['object_key'])
+                if entry['size'] > MAX_OBJECT_BYTES:
+                    raise ArtifactError('Source object exceeds download size limit')
+            else:
+                safe_relative(source.get('bundle_key'))
+                safe_relative(source.get('member'))
+                _sha256(source.get('bundle_sha256'))
             total += entry['size']
             if total > MAX_RESTORE_BYTES:
                 raise ArtifactError('Restored stage exceeds size limit')
             if select_paths is None or name in select_paths:
                 chosen.append(entry)
         existing_bytes = sum(path.stat().st_size for path in workspace.rglob('*') if path.is_file())
-        additional_bytes = sum(entry['size'] for entry in chosen if not (workspace / entry['path']).is_file())
+        additional_bytes = 0
+        for entry in chosen:
+            target = workspace / entry['path']
+            if not target.resolve().is_relative_to(workspace):
+                raise ArtifactError('Artifact target leaves workspace')
+            # Replacing an existing file can grow the workspace too.
+            previous_size = target.stat().st_size if target.is_file() else 0
+            additional_bytes += max(0, entry['size'] - previous_size)
         if existing_bytes + additional_bytes > MAX_RESTORE_BYTES:
             raise ArtifactError('Restored workspace exceeds size limit')
         with TemporaryDirectory(prefix='.restore-', dir=workspace.parent) as temporary:
@@ -388,14 +425,23 @@ class ArtifactStore:
                             else:
                                 path = Path(temporary) / f'{len(bundles)}.zip'
                                 self._download_bundle(ArtifactRef(*identity), path)
-                            bundles[identity] = zipfile.ZipFile(path)
+                            try:
+                                bundles[identity] = zipfile.ZipFile(path)
+                            except zipfile.BadZipFile:
+                                raise ArtifactError('Invalid artifact ZIP bundle') from None
                         archive = bundles[identity]
-                        info = archive.getinfo(member)
+                        try:
+                            info = archive.getinfo(member)
+                        except KeyError:
+                            raise ArtifactError('Artifact bundle member is missing') from None
                         mode = info.external_attr >> 16
                         if info.file_size != entry['size'] or stat.S_ISLNK(mode):
                             raise ArtifactError('Invalid artifact member')
-                        with archive.open(info) as src, staged.open('wb') as dst:
-                            shutil.copyfileobj(src, dst, 1024 * 1024)
+                        try:
+                            with archive.open(info) as src, staged.open('wb') as dst:
+                                shutil.copyfileobj(src, dst, 1024 * 1024)
+                        except (zipfile.BadZipFile, RuntimeError, NotImplementedError):
+                            raise ArtifactError('Invalid artifact ZIP member') from None
                     if staged.stat().st_size != entry['size'] or sha_file(staged) != entry['sha256']:
                         raise ArtifactError('Artifact file fingerprint mismatch')
                     target.parent.mkdir(parents=True, exist_ok=True)

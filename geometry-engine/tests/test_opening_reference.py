@@ -10,9 +10,6 @@ from geometry_engine.comparison.opening_reference import load_opening_references
 from test_bim_reference import make_reference
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 def make_door_reference(path, millimeters=False):
     import ifcopenshell
     import ifcopenshell.guid
@@ -51,7 +48,7 @@ def make_door_reference(path, millimeters=False):
 @unittest.skipUnless(importlib.util.find_spec('ifcopenshell'), 'IfcOpenShell not installed')
 class OpeningReferenceTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory(dir=ENGINE)
+        temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
 

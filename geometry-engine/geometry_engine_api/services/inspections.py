@@ -22,6 +22,13 @@ class InspectionNotReady(ValueError):
     pass
 
 
+def viewer_fingerprint(manifest_key, manifest_sha256, viewer_version, implementation):
+    """One export identity for both queued viewers and comparison-only revisions."""
+    canonical = json.dumps({'manifest': manifest_key, 'sha256': manifest_sha256,
+        'viewer_version': viewer_version, 'implementation': implementation}, sort_keys=True)
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+
 class InspectionService:
     def __init__(self, session: Session):
         self.session = session
@@ -59,10 +66,8 @@ class InspectionService:
             if job.status != 'completed' or not job.result_manifest_key or not job.result_manifest_sha256:
                 raise InspectionNotReady('Complete the inspection before generating its viewer')
             implementation = code_fingerprint()
-            canonical = json.dumps({'manifest': job.result_manifest_key,
-                'sha256': job.result_manifest_sha256, 'viewer_version': VIEWER_VERSION,
-                'implementation': implementation}, sort_keys=True)
-            fingerprint = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+            fingerprint = viewer_fingerprint(job.result_manifest_key, job.result_manifest_sha256,
+                                             VIEWER_VERSION, implementation)
             export = self.session.scalar(insert(ViewerExport).values(
                 id=uuid4(), job_id=job.id, fingerprint=fingerprint,
                 source_manifest_key=job.result_manifest_key,

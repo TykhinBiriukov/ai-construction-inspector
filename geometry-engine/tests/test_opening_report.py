@@ -11,7 +11,7 @@ from geometry_engine.visualization.opening_report import write_opening_review, p
 
 class OpeningReviewTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1])
+        temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.session = Path(temp.name)
         self.original = self.session / 'original'

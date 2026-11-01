@@ -15,9 +15,6 @@ from geometry_engine.segmentation.sam_backend import Detection
 from geometry_engine.segmentation.service import SegmentationService, SegmentationSettings
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 class FixtureBackend:
     model_info = {"name": "test-double", "implementation": "test-only"}
 
@@ -35,7 +32,7 @@ class FixtureBackend:
 
 class SegmentationTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.session = Path(temporary.name)
         self.original = self.session / "original"

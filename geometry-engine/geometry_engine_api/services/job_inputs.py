@@ -1,6 +1,5 @@
 """Download one capture into a private worker workspace and pin its IFC bytes."""
 from dataclasses import replace
-import hashlib
 import json
 from pathlib import Path
 import shutil

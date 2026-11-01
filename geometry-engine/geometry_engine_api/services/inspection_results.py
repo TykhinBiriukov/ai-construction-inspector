@@ -9,6 +9,7 @@ import threading
 import time
 from urllib.parse import quote, urlencode
 
+from geometry_engine_api.schemas.inspection_results import InspectionResultResponse
 from .artifacts import ArtifactError, ArtifactRef, json_bytes, safe_relative, sha_file
 
 
@@ -28,7 +29,8 @@ def compact_object(finding, reference, photos):
         if reason in labels and labels[reason] not in issues:
             issues.append(labels[reason])
     status = finding.get('status')
-    match_status = ('ifc_object_not_observed' if status == 'unobserved_reference' else
+    match_status = ('ifc_reference_unavailable' if status == 'reference_unavailable' else
+                    'ifc_object_not_observed' if status == 'unobserved_reference' else
                     'ambiguous' if status == 'ambiguous_match' else
                     'matched' if finding.get('ifc_guid') else 'scan_object_not_matched')
     deltas = (measurements.get('deltas_m') or finding.get('deltas_m') or {}) if measurements else {}
@@ -100,12 +102,16 @@ class InspectionResults:
             if '/' in stage or stage not in manifest['stages']:
                 raise FileNotFoundError('Result stage not found')
             saved = manifest['stages'][stage]
+            if not isinstance(saved, dict):
+                raise ArtifactError('Invalid result stage reference')
             ref = ArtifactRef(saved['key'], saved['sha256'])
             stage_manifest = self.artifacts.read_json(ref)
             if stage_manifest.get('schema_version') != 1 or not isinstance(stage_manifest.get('files'), list):
                 raise ArtifactError('Invalid result stage manifest')
             files = {}
             for entry in stage_manifest['files']:
+                if not isinstance(entry, dict):
+                    raise ArtifactError('Invalid result file entry')
                 path = safe_relative(entry['path'])
                 if path.casefold() in files:
                     raise ArtifactError('Duplicate result artifact')
@@ -144,6 +150,8 @@ class InspectionResults:
                         and source.stat().st_size == entry['size'] and sha_file(source) == entry['sha256']):
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(source, target)
+                    if target.stat().st_size != entry['size'] or sha_file(target) != entry['sha256']:
+                        raise ArtifactError('Local result copy failed its integrity check')
                     return target
             self.artifacts.restore(ref, root, select_paths={relative})
             if not target.is_file():
@@ -161,32 +169,50 @@ class InspectionResults:
     def get(self, job, base_url, *, expires_in=3600):
         if not 60 <= expires_in <= MAX_LINK_LIFETIME:
             raise ValueError('Result link lifetime must be between 60 and 86400 seconds')
+        try:
+            result = self._build_result(job, base_url, expires_in)
+            # Validate before crossing the adapter boundary: malformed stored
+            # fields must be integrity failures, not FastAPI serialization errors.
+            InspectionResultResponse.model_validate(result)
+            return result
+        except ArtifactError:
+            raise
+        except (KeyError, TypeError, AttributeError, IndexError, ValueError, OverflowError):
+            raise ArtifactError('Invalid committed report structure') from None
+
+    def _build_result(self, job, base_url, expires_in):
         manifest, indexes = self._manifest(job), {}
         expires = int(self.signer.clock()) + expires_in
         base_url = base_url.rstrip('/')
 
         def link(path):
-            stage, _, entry = self._find(manifest, path, indexes)
+            stage, _, _ = self._find(manifest, path, indexes)
             query = urlencode({'expires': expires,
                                 'signature': self.signer.signature(job, stage, path, expires)})
             url = (f'{base_url}/inspections/{job.id}/result/files/{quote(stage, safe="")}/'
                    f'{quote(path, safe="/")}?{query}')
             return url
 
-        def document(path):
+        def document(path, expected_type=dict):
             _, ref, entry = self._find(manifest, path, indexes)
             if entry['size'] > 32 * 1024**2:
                 raise ArtifactError('Agent report JSON exceeds the size limit')
             try:
-                return json.loads(self._cache_file(job, ref, entry).read_bytes())
+                result = json.loads(self._cache_file(job, ref, entry).read_bytes())
             except (ValueError, UnicodeError):
                 raise ArtifactError('Invalid committed report JSON') from None
+            if not isinstance(result, expected_type):
+                raise ArtifactError('Invalid committed report structure')
+            return result
 
         report = document('opening_comparison/report.json')
         findings = document('opening_comparison/findings.json')['findings']
         references = document('opening_comparison/reference_objects.json')['objects']
-        evidence_index = document('opening_comparison/evidence_index.json')
+        evidence_index = document('opening_comparison/evidence_index.json', list)
         surface = document('scan_vs_bim/report.json')
+        for rows in (findings, references, evidence_index, surface.get('elements', [])):
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                raise ArtifactError('Invalid committed report entries')
         overlays = {(row['finding_id'], row['frame_id']): row for row in evidence_index}
         reference_by_guid = {row['guid']: row for row in references}
         objects = []
@@ -220,6 +246,7 @@ class InspectionResults:
                     'matched': sum(obj['match_status'] == 'matched' for obj in objects),
                     'unmatched_scan': sum(obj['match_status'] == 'scan_object_not_matched' for obj in objects),
                     'unobserved_ifc': sum(obj['match_status'] == 'ifc_object_not_observed' for obj in objects),
+                    'unavailable_ifc': sum(obj['match_status'] == 'ifc_reference_unavailable' for obj in objects),
                     'ambiguous': sum(obj['match_status'] == 'ambiguous' for obj in objects)},
                 'objects': objects, 'surfaces': surfaces,
                 'artifacts': {name: link(path) for name, path in paths.items()}}

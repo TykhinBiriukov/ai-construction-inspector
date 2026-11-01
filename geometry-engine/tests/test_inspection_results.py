@@ -1,12 +1,11 @@
 """Agent report, signed artifact access, cache reuse and failure contracts."""
 from copy import deepcopy
-import hashlib
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -186,3 +185,83 @@ class InspectionResultTests(unittest.TestCase):
         self.assertIn('possible_duplicate_fragments', obj['quality']['issues'])
         self.assertNotIn('review_reasons', obj)
         self.assertNotIn('agent_verdict', obj)
+
+    def test_unavailable_ifc_geometry_is_not_reported_as_a_match(self):
+        obj = compact_object({'finding_id': 'ifc-only', 'category': 'door',
+                              'ifc_guid': 'door-guid', 'status': 'reference_unavailable'},
+                             {'geometry_status': 'failed'}, [])
+        self.assertEqual(obj['match_status'], 'ifc_reference_unavailable')
+        self.assertIsNone(obj['scan_object_id'])
+        self.assertTrue(all(value is None for value in obj['dimensions']['width'].values()))
+
+    def test_wrong_report_structure_returns_integrity_error_instead_of_server_error(self):
+        # A valid, hash-checked JSON document can still have an invalid schema.
+        source = self.root/'malformed'
+        (source/'opening_comparison').mkdir(parents=True)
+        (source/'opening_comparison/report.json').write_text('[]', encoding='utf-8')
+        stage, _ = self.artifacts.publish(source, ('opening_comparison',), 'malformed/opening')
+        stages = {**self.stage_refs, 'opening_comparison': {'key': stage.key, 'sha256': stage.sha256}}
+        ref = self.artifacts.put_json('malformed/manifests', {'job_id': str(self.job_id),
+                'session_id': 'capture', 'stages': stages})
+        self.job.result_manifest_key, self.job.result_manifest_sha256 = ref.key, ref.sha256
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('integrity', response.json()['detail'])
+
+    def test_malformed_nested_fields_return_integrity_errors(self):
+        cases = (
+            ('quality', ['invalid']), ('measurements', 'invalid'),
+            ('quality', {'side_support': {'left': 'invalid'}}),
+            ('quality', {'reasons': [{'invalid': 'reason'}]}),
+            ('measurements', {'observed_width_m': float('nan')}),
+            ('evidence', [None]), ('bounds', [[0, 0, 0]]),
+        )
+        source = self.root/'source'
+        for index, (field, value) in enumerate(cases):
+            finding = deepcopy(self.finding)
+            reference = {'guid': 'ifc-door'}
+            if field == 'bounds':
+                reference['bounds_local_m'] = value
+                finding['measurements'] = None
+            else:
+                finding[field] = value
+            (source/'opening_comparison/findings.json').write_text(
+                json.dumps({'findings': [finding]}), encoding='utf-8')
+            (source/'opening_comparison/reference_objects.json').write_text(
+                json.dumps({'objects': [reference]}), encoding='utf-8')
+            stage, _ = self.artifacts.publish(source, ('opening_comparison',), f'nested/{index}')
+            stages = {**self.stage_refs, 'opening_comparison': {'key': stage.key, 'sha256': stage.sha256}}
+            ref = self.artifacts.put_json('nested/manifests', {'job_id': str(self.job_id),
+                    'session_id': 'capture', 'stages': stages})
+            self.job.result_manifest_key, self.job.result_manifest_sha256 = ref.key, ref.sha256
+            with self.subTest(field=field, value=value):
+                response = self.client.get(self.url)
+                self.assertEqual(response.status_code, 409)
+                self.assertIn('integrity', response.json()['detail'])
+
+    def test_nonobject_stage_entry_is_an_integrity_error_for_report_and_file(self):
+        stage = self.artifacts.put_json('invalid/files', {'schema_version': 1, 'files': [None]})
+        stages = {**self.stage_refs, 'opening_comparison': {'key': stage.key, 'sha256': stage.sha256}}
+        ref = self.artifacts.put_json('invalid/manifests', {'job_id': str(self.job_id),
+                'session_id': 'capture', 'stages': stages})
+        self.job.result_manifest_key, self.job.result_manifest_sha256 = ref.key, ref.sha256
+        self.assertEqual(self.client.get(self.url).status_code, 409)
+        expires = self.now[0] + 60
+        path = 'opening_comparison/report.json'
+        signature = self.signer.signature(self.job, 'opening_comparison', path, expires)
+        response = self.client.get(self.url + '/files/opening_comparison/' + path,
+                                   params={'expires': expires, 'signature': signature})
+        self.assertEqual(response.status_code, 409)
+
+    def test_local_file_changed_during_copy_is_not_served(self):
+        data = self.client.get(self.url).json()
+        source = self.root/'data/processed/capture/reconstruction/mesh.ply'
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b'mesh')
+        with patch('geometry_engine_api.services.inspection_results.shutil.copyfile',
+                   side_effect=lambda src, dst: Path(dst).write_bytes(b'oops')):
+            response = self.client.get(data['artifacts']['mesh'])
+        self.assertEqual(response.status_code, 409)
+        self.assertNotIn('oops', response.text)
+        # The failed disposable copy is revalidated and repaired on retry.
+        self.assertEqual(self.client.get(data['artifacts']['mesh']).content, b'mesh')

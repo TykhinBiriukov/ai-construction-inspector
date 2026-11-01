@@ -1,11 +1,11 @@
 import hashlib
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
-from geometry_engine_api.services.artifacts import ArtifactError, ArtifactRef, ArtifactStore, json_bytes
+from geometry_engine_api.services.artifacts import ArtifactError, ArtifactStore
 from geometry_engine_api.services.viewer_files import ViewerFiles
 
 
@@ -25,6 +25,59 @@ class MemoryObjects:
 
 
 class ArtifactTests(unittest.TestCase):
+    def test_restore_counts_growth_when_replacing_existing_file(self):
+        objects = MemoryObjects()
+        artifacts = ArtifactStore(objects)
+        objects.data['capture/photo'] = b'123456'
+        ref = artifacts.put_json('manifests', {'schema_version': 1, 'files': [
+            {'path': 'photo', 'size': 6, 'sha256': hashlib.sha256(b'123456').hexdigest(),
+             'source': {'object_key': 'capture/photo'}}]})
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'other').write_bytes(b'12345')
+            (root/'photo').write_bytes(b'x')
+            with patch('geometry_engine_api.services.artifacts.MAX_RESTORE_BYTES', 10):
+                with self.assertRaisesRegex(ArtifactError, 'workspace exceeds'):
+                    artifacts.restore(ref, root)
+            self.assertEqual((root/'photo').read_bytes(), b'x')
+            self.assertNotIn('capture/photo', objects.downloads)
+
+    def test_malformed_file_descriptors_fail_as_integrity_errors(self):
+        objects = MemoryObjects()
+        artifacts = ArtifactStore(objects)
+        base = {'path': 'photo', 'size': 1, 'sha256': hashlib.sha256(b'x').hexdigest(),
+                'source': {'object_key': 'capture/photo'}}
+        for entry in (None, {}, {**base, 'sha256': 'bad'}, {**base, 'source': None},
+                      {**base, 'source': {}}, {**base, 'size': True},
+                      {**base, 'source': {'object_key': '../escape'}}):
+            with self.subTest(entry=entry), TemporaryDirectory() as temporary:
+                ref = artifacts.put_json('manifests', {'schema_version': 1, 'files': [entry]})
+                with self.assertRaises(ArtifactError):
+                    artifacts.restore(ref, temporary)
+
+    def test_bundle_sizes_are_validated_before_downloading_chunks(self):
+        objects = MemoryObjects()
+        artifacts = ArtifactStore(objects)
+        ref = artifacts.put_json('bundles', {'size': 5, 'sha256': 'a' * 64,
+            'chunks': [{'key': 'chunk', 'size': 6, 'sha256': 'b' * 64}]})
+        with TemporaryDirectory() as temporary:
+            with self.assertRaisesRegex(ArtifactError, 'chunk sizes'):
+                artifacts._download_bundle(ref, Path(temporary)/'bundle.zip')
+        self.assertNotIn('chunk', objects.downloads)
+
+    def test_missing_bundle_member_is_an_integrity_error(self):
+        objects = MemoryObjects()
+        artifacts = ArtifactStore(objects)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'photo').write_bytes(b'photo')
+            _, manifest = artifacts.publish(root, ('photo',), 'capture/results/stage')
+            manifest['files'][0]['source']['member'] = 'missing'
+            ref = artifacts.put_json('manifests', manifest)
+            with self.assertRaisesRegex(ArtifactError, 'member is missing'):
+                artifacts.restore(ref, root/'restored')
+            self.assertFalse((root/'restored/photo').exists())
+
     def test_chunked_bundle_roundtrip_references_and_local_alias_reuse(self):
         objects, source_bytes = MemoryObjects(), b'photo-content'
         objects.data['capture/photo.jpg'] = source_bytes

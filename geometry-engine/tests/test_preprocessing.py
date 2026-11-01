@@ -19,7 +19,7 @@ ENGINE = Path(__file__).resolve().parents[1]
 
 class PreprocessingIntegrationTests(unittest.TestCase):
     def test_plain_mesh_needs_no_frames_or_dataset_manifest(self):
-        with tempfile.TemporaryDirectory(dir=ENGINE) as directory:
+        with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "input.ply"
             vertices = np.array([[0., 0, 0], [1., 0, 0], [0., 1, 0], [0., 0, 0]])
@@ -55,7 +55,7 @@ class PreprocessingIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_unsupported_units_are_rejected_before_writing(self):
-        with tempfile.TemporaryDirectory(dir=ENGINE) as directory:
+        with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with self.assertRaises(ValueError):
                 preprocess_mesh(root / "missing.ply", root / "prepared", unit="millimeter")

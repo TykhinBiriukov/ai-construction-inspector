@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 from geometry_engine.segmentation.projection_alignment import (
-    ProjectionAlignmentSettings, _partition, _observable, _rays, _render,
+    _partition, _observable, _rays, _render,
     align_frame, choose_camera, depth_metrics,
     load_projection_cameras,
 )

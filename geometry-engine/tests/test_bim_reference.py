@@ -9,7 +9,6 @@ import numpy as np
 from geometry_engine.comparison.bim_reference import load_bim_reference
 
 
-ENGINE = Path(__file__).resolve().parents[1]
 HAS_IFC = importlib.util.find_spec("ifcopenshell") is not None
 
 
@@ -58,7 +57,7 @@ def make_reference(path, *, millimeters=False, opening=False, broken_wall=False)
 @unittest.skipUnless(HAS_IFC, "IfcOpenShell not installed")
 class BimReferenceTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 

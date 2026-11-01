@@ -80,7 +80,6 @@ geometry-engine/
   geometry_engine_api/       # Thin HTTP endpoints and dependency providers
   scripts/                   # Commands for individual stages
   tests/                     # Active automated tests
-  archive/                   # Inactive source snapshots; excluded from Git
   data/
     raw/<session_id>/original/   # Original capture files
     processed/<session_id>/      # Derived stage outputs
@@ -88,6 +87,8 @@ geometry-engine/
     upload/<session_id>/        # Prepared short-layout folders for Storage upload
     work/                      # Temporary isolated worker workspaces
     viewer_cache/              # Downloaded generated viewers; disposable cache
+    artifact_cache/            # Verified Storage manifests and bundles
+    result_cache/              # Files served by expiring result links
 ```
 
 CLI captures/results remain local, excluded from Git. The durable worker publishes results to Supabase Storage and removes its temporary workspace afterwards. A stage stores its own output rather than duplicating the entire session. Reusable package metadata in `geometry_engine.egg-info` is generated during installation.
@@ -250,6 +251,8 @@ Returns the compact `schema_version: "2.0"` contract. All lengths are in metres;
 
 `surfaces[]` preserves compact wall/floor comparison metrics: compared area, p95 absolute deviation, fraction outside tolerance and whole-element verification flag. `artifacts` contains four download URLs: point cloud, mesh, segmented mesh and IFC. The response omits agent instructions/verdicts, camera metadata, corner coordinates, algorithm parameters, raw reports, duplicate JSON links and per-file technical metadata. Source reports and viewer measurements are unchanged. HTML/viewer generation is not required.
 
+`match_status: "ifc_reference_unavailable"` means the IFC element has no usable reference geometry, so it was not compared. It is counted separately in `summary.unavailable_ifc`, never as a successful match or a missing object in the scan.
+
 Links are signed by this API and expire after one hour; `expires_in=60..86400` optionally changes the lifetime. Files are read from committed Supabase artifacts and served through the API's verified local cache, since stored bundles are not standalone image/mesh URLs. A link is bound to the job, result version, stage and file; an expired or modified link returns 403. Request the result again for fresh links. The JSON response uses `Cache-Control: no-store`.
 
 Unknown jobs return 404. Queued/running/failed jobs return 409 with their status and status URL. Unavailable Storage returns 503; incomplete or corrupt committed artifacts return 409. Retrieval never starts reconstruction, SAM or another comparison. Reports/manifests are cached; large meshes are downloaded only when their links are used, with verified bundles reused between file requests.
@@ -334,7 +337,7 @@ The HTTP comparison uses accepted contour results. To inspect incomplete contour
 
 ## Run stages separately
 
-Run commands from the `geometry-engine` directory. Define:
+Run commands from the `geometry-engine` directory. Every session command requires an explicit session path; there is no hard-coded demo capture. Define:
 
 ```powershell
 $s = "data/processed/FULL_SESSION_ID"
@@ -428,7 +431,7 @@ All active UI and report text is English. Historic output directories and archiv
 python -m unittest discover -s tests -q
 ```
 
-The tests use synthetic geometry and mocked remote services. They do not send capture photos to Meta or download sessions. Existing optional-dependency tests may be skipped if their dependency is unavailable. `tests/check_comparison_runtime.cjs` checks viewer JavaScript against a mock DOM/WebGL interface; it is not a browser rendering test.
+The tests use synthetic geometry and mocked remote services. They do not send capture photos to Meta or download sessions. Temporary fixtures use the system temporary directory, not the repository. Existing optional-dependency tests may be skipped if their dependency is unavailable. `tests/check_comparison_runtime.cjs` checks viewer JavaScript against a mock DOM/WebGL interface; it is not a browser rendering test.
 
 PostgreSQL integration tests are opt-in via `TEST_DATABASE_URL`. They create and drop a uniquely named test schema, leaving application tables unchanged. They verify actual migrations, committed persistence, normalized idempotency, conflicts and concurrent submission. Use a local development database with schema-creation privileges. Without this variable, those tests are skipped.
 
@@ -436,4 +439,4 @@ PostgreSQL integration tests are opt-in via `TEST_DATABASE_URL`. They create and
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for upstream references and license notices. These notices remain applicable to archived code when that code is redistributed.
 
-The ZIP snapshots in `archive/` preserve retired source and integration points. They are not part of the installed package or the active tests. Raw captures, credentials and processed session data are not included in those source archives.
+Retired implementations remain in Git history. Some existing workspaces may also have ignored ZIP snapshots under `archive/`; those snapshots are not included in this checkout, the installed package or the active tests. Raw captures, credentials and processed session data remain outside Git.

@@ -1,11 +1,13 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "geometry-engine"
 version = "0.1.0"
 description = "RGB-D reconstruction, segmentation and scan-vs-BIM comparison for AI Construction Inspector"
+readme = "README.md"
+license-files = ["THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = ["numpy==2.4.3", "scipy==1.17.1", "Pillow==12.1.1"]
 

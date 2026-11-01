@@ -52,7 +52,12 @@ def semantic_contour_edges(edges,left,right,count,classes,instances,members,cate
     rim=(a!=b)&(count<=2)
     neighbour=np.where(a,right,left)
     strict=rim&(neighbour>=0)
-    strict[strict]=classes[neighbour[strict]]==wall
+    if wall is None:
+        # No wall detections means no verified interface. Unknown (-1) faces
+        # must never be substituted for the missing wall class.
+        strict[:]=False
+    else:
+        strict[strict]=classes[neighbour[strict]]==wall
     return edges[rim],edges[strict]
 
 
@@ -183,6 +188,7 @@ class MeshBoundaryService:
         with np.load(seg/'labels.npz',allow_pickle=False) as data:
             classes=data['face_class_id'].copy();instances=data['face_instance_id'].copy()
         objects=json.loads((seg/'objects.json').read_text(encoding='utf-8'));names=objects['labels']
+        wall_class=names.index('wall') if 'wall' in names else None
         if classes.shape!=(len(faces),) or instances.shape!=classes.shape:raise ValueError('Segmentation length differs from mesh')
         source=json.loads((seg/'report.json').read_text(encoding='utf-8'))
         if source.get('source_mesh_sha256',source.get('source_sha256'))!=file_hash(mesh):
@@ -222,7 +228,7 @@ class MeshBoundaryService:
                 for i in range(len(groups)):extra[i]=unassigned[valid&(best==i)].tolist()
             for index,group in enumerate(groups):
                 identity=f'mesh_{group[0]["category"]}_{index:03d}';members=[r['instance_id'] for r in group]
-                category=group[0]['category'];rim,wall=semantic_contour_edges(edges,left,right,count,classes,instances,members,names.index(category),names.index('wall'),extra[index])
+                category=group[0]['category'];rim,wall=semantic_contour_edges(edges,left,right,count,classes,instances,members,names.index(category),wall_class,extra[index])
                 points=np.concatenate([r['points'] for r in group]);result={'status':'needs_review','quality':{'reasons':['no_plane_or_contour']}}
                 plane=None
                 try:

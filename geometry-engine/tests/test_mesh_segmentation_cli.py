@@ -12,12 +12,9 @@ from unittest.mock import Mock, patch
 from scripts import run_mesh_segmentation
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 class MeshSegmentationCliTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.report = {"processed_frames": 3, "labeled_faces": 120, "total_faces": 200, "candidate_objects": 2}
@@ -48,7 +45,7 @@ class MeshSegmentationCliTests(unittest.TestCase):
 
     def test_cli_does_not_overwrite_an_existing_result(self):
         self.service.segment.side_effect = FileExistsError("Result already exists")
-        with patch("sys.argv", ["run_mesh_segmentation.py"]), \
+        with patch("sys.argv", ["run_mesh_segmentation.py", "--session", str(self.root)]), \
                 patch.object(run_mesh_segmentation, "MeshSegmentationService", return_value=self.service), \
                 redirect_stdout(StringIO()):
             with self.assertRaises(SystemExit) as failure:

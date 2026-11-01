@@ -5,7 +5,7 @@ from io import BytesIO
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 import zipfile
 
 import httpx
@@ -17,12 +17,9 @@ from geometry_engine_api.dependencies import get_archive_service, get_settings
 from geometry_engine_api.services.archive import ArchiveService, ExtractionResult, Settings, download_archive
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 class ApiTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.settings = Settings(data_dir=self.root / "data", supabase_url="https://storage.example", supabase_secret_key="test-secret", storage_bucket="inspection-captures")

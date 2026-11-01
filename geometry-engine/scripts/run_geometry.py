@@ -2,7 +2,7 @@
 
 import argparse
 from pathlib import Path
-from geometry_engine.capture.session_layout import processed_session, original_directory, prepare_session
+from geometry_engine.capture.session_layout import original_directory, prepare_session
 
 from geometry_engine.reconstruction.preprocessing import preprocess_mesh
 from geometry_engine.segmentation.frame_filter import FrameFilterService, FrameFilterSettings
@@ -42,7 +42,7 @@ def run_session(directory, output=None, *, frames_only=False, frame_settings=Non
 
 def main():
     parser = argparse.ArgumentParser(description="Validate a session, preprocess its mesh and select frames for SAM.")
-    parser.add_argument("--session", type=Path, default=Path(__file__).resolve().parents[1] / "data" / "processed" / "47333462")
+    parser.add_argument("--session", type=Path, required=True, help="Raw or processed session directory")
     parser.add_argument("--output", type=Path, help="New output folder; defaults to SESSION/mesh_preprocessing")
     parser.add_argument("--frames-only", action="store_true", help="Run only frame selection on an existing session")
     parser.add_argument("--frames-output", type=Path, help="New output folder inside session; defaults to SESSION/selected_frames")

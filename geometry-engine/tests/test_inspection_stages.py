@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 
@@ -17,12 +17,9 @@ from geometry_engine.inspection import (
 from geometry_engine.common.artifact_paths import resolve_artifact_reference
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 class InspectionStageTests(unittest.TestCase):
     def setUp(self):
-        temp = tempfile.TemporaryDirectory(dir=ENGINE)
+        temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name).resolve()
 

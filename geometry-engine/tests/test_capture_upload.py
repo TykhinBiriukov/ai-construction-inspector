@@ -1,5 +1,6 @@
 """Repackage captures without changing frame bytes or the original manifest."""
 import hashlib
+import copy
 import json
 from pathlib import Path
 import tempfile
@@ -59,3 +60,27 @@ class CaptureUploadTests(unittest.TestCase):
         for key in ('other/manifests/'+'a'*64+'/capture-manifest.json',
                     '../scan-001/manifests/'+'a'*64+'/capture-manifest.json'):
             with self.assertRaises(ValueError):capture_manifest_location(key,'scan-001')
+
+    def test_malformed_manifest_rows_do_not_publish_an_upload(self):
+        original=copy.deepcopy(self.manifest)
+        for field in ('manifest','observation','file'):
+            for invalid in (None,'invalid',[],42):
+                with self.subTest(field=field,invalid=invalid):
+                    value=copy.deepcopy(original)
+                    if field=='manifest':value=invalid
+                    elif field=='observation':value['observations']=[invalid]
+                    else:value['observations'][0]['files']=[invalid]
+                    self.path.write_text(json.dumps(value))
+                    with self.assertRaises(ValueError):
+                        prepare_capture_upload(self.session,self.output)
+                    self.assertFalse((self.output/'scan-001').exists())
+                    if self.output.exists():self.assertEqual(list(self.output.iterdir()),[])
+
+    def test_observation_count_requires_an_integer(self):
+        for invalid in (True,1.0,'1'):
+            with self.subTest(count=invalid):
+                self.manifest['observation_count']=invalid
+                self.path.write_text(json.dumps(self.manifest))
+                with self.assertRaisesRegex(ValueError,'observation count'):
+                    prepare_capture_upload(self.session,self.output)
+                self.assertFalse((self.output/'scan-001').exists())

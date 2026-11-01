@@ -11,12 +11,9 @@ from geometry_engine_api.dependencies import get_scan_vs_bim_service, get_settin
 from geometry_engine_api.services.archive import Settings
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 class CompareBimApiTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.data = self.root / "data"

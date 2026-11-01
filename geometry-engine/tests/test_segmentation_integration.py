@@ -15,8 +15,7 @@ from geometry_engine.segmentation.service import SegmentationService, Segmentati
 
 class SegmentationIntegrationTest(unittest.TestCase):
     def test_service_publishes_original_pixel_masks_from_meta_wire_response(self):
-        engine = Path(__file__).resolve().parents[1]
-        with tempfile.TemporaryDirectory(dir=engine) as temporary:
+        with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             session = root / "scan-01"
             frame = session / "original" / "frames" / "000001"

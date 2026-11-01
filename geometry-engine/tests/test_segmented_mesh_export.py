@@ -12,9 +12,6 @@ import numpy as np
 from geometry_engine.visualization.segmented_mesh_export import UNKNOWN_COLOR, export_segmented_mesh
 
 
-ENGINE = Path(__file__).resolve().parents[1]
-
-
 def read_export(path):
     with path.open("rb") as handle:
         header = []
@@ -36,7 +33,7 @@ def read_export(path):
 
 class SegmentedMeshExportTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ENGINE)
+        temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.output = Path(temporary.name)
         self.vertices = np.array([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [1., 1., 0.]])

@@ -2,7 +2,7 @@
 
 import argparse
 from pathlib import Path
-from geometry_engine.capture.session_layout import processed_session, original_directory
+from geometry_engine.capture.session_layout import processed_session
 
 from geometry_engine.segmentation.mask_fusion import FusionSettings
 from geometry_engine.segmentation.mesh_segmentation import MeshSegmentationService
@@ -10,9 +10,8 @@ from geometry_engine.segmentation.mask_projection import ProjectionSettings
 
 
 def main():
-    root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description="Project saved SAM masks onto the prepared mesh and fuse observations from multiple views.")
-    parser.add_argument("--session", type=Path, default=root / "data" / "processed" / "47333462")
+    parser.add_argument("--session", type=Path, required=True, help="Raw or processed session directory")
     parser.add_argument("--output", type=Path, help="New folder directly inside the session; defaults to SESSION/mesh_segmentation")
     parser.add_argument("--projection-dir", type=Path, help="New or reusable projection folder directly inside the session; defaults to SESSION/mask_projection")
     parser.add_argument("--segmentation-dir", type=Path, help="SAM stage to project; defaults to SESSION/segmentation")

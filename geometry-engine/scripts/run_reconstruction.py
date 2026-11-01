@@ -1,7 +1,7 @@
 """Reconstruct a local raw capture: python -m scripts.run_reconstruction --session data/ID."""
 import argparse
 from pathlib import Path
-from geometry_engine.capture.session_layout import processed_session, original_directory
+from geometry_engine.capture.session_layout import processed_session
 
 from geometry_engine.reconstruction.service import ReconstructionService, ReconstructionSettings
 

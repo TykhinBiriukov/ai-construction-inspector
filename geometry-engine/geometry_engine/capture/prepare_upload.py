@@ -23,12 +23,16 @@ def prepare_capture_upload(directory, output_root):
         raise ValueError('Manifest outside raw directory')
     source_bytes = source_manifest.read_bytes()
     manifest = json.loads(source_bytes)
-    if (manifest.get('format') != 'standalone_capture_v1' or manifest.get('session_id') != session_id
+    if (not isinstance(manifest, dict) or manifest.get('format') != 'standalone_capture_v1' or manifest.get('session_id') != session_id
             or manifest.get('project_id') != 'standalone'):
         raise ValueError('Expected a standalone capture matching the session directory')
     observations = manifest.get('observations')
-    if not isinstance(observations, list) or not observations or manifest.get('observation_count') != len(observations):
+    if (not isinstance(observations, list) or not observations
+            or type(manifest.get('observation_count')) is not int
+            or manifest['observation_count'] != len(observations)):
         raise ValueError('Invalid observation count')
+    if any(not isinstance(observation, dict) for observation in observations):
+        raise ValueError('Capture observations must be JSON objects')
     output_root = Path(output_root).resolve()
     destination = output_root / session_id
     if destination.is_relative_to(original) or original.is_relative_to(destination):
@@ -48,6 +52,8 @@ def prepare_capture_upload(directory, output_root):
                     or not isinstance(files, list) or not files):
                 raise ValueError('Invalid observation or file list')
             for item in files:
+                if not isinstance(item, dict):
+                    raise ValueError('Capture file descriptions must be JSON objects')
                 name, digest, size = item.get('name'), item.get('sha256'), item.get('byte_length')
                 if (not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}', name)
                         or name.endswith('.') or name.split('.')[0].upper() in
