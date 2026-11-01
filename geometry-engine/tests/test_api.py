@@ -160,7 +160,8 @@ class ApiTests(unittest.TestCase):
         with self.client() as client:
             paths = client.get("/openapi.json").json()["paths"]
         self.assertEqual(set(paths), {"/sessions/extract", "/sessions/process", "/sessions/compare-bim",
-                                      "/inspections", "/inspections/{job_id}"})
+                                  "/inspections", "/inspections/{job_id}", "/inspections/{job_id}/viewer",
+                                  "/inspections/{job_id}/result"})
 
 
 if __name__ == "__main__":

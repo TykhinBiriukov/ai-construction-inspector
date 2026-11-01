@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from geometry_engine_api.database.connection import get_database_session
-from geometry_engine_api.schemas.inspections import InspectionRequest, InspectionResponse
-from geometry_engine_api.services.inspections import IdempotencyConflict, InspectionService
+from geometry_engine_api.schemas.inspections import InspectionRequest, InspectionResponse, ViewerRequest, ViewerResponse
+from geometry_engine_api.services.inspections import IdempotencyConflict, InspectionNotReady, InspectionService
 
 
 router = APIRouter(prefix='/inspections', tags=['Inspections'])
@@ -46,3 +46,21 @@ def get_inspection(job_id: UUID, response: Response,
         raise HTTPException(status_code=404, detail='Inspection not found')
     response.headers['Cache-Control'] = 'no-store'
     return InspectionResponse.model_validate(job)
+
+
+@router.post('/{job_id}/viewer', response_model=ViewerResponse, status_code=202,
+             responses={404: {'description': 'Inspection not found'},
+                        409: {'description': 'Inspection results are not ready'}})
+def create_viewer(job_id: UUID, response: Response,
+                  service: Annotated[InspectionService, Depends(get_inspection_service)],
+                  payload: ViewerRequest | None = None):
+    try:
+        export = service.submit_viewer(job_id, retry_failed=payload.retry_failed if payload else False)
+    except InspectionNotReady as error:
+        raise HTTPException(status_code=409, detail=str(error)) from None
+    if export is None:
+        raise HTTPException(status_code=404, detail='Inspection not found')
+    result = ViewerResponse.model_validate(export)
+    response.headers['Location'] = result.status_url
+    response.headers['Cache-Control'] = 'no-store'
+    return result

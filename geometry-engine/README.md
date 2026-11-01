@@ -65,9 +65,11 @@ Official references: [PostgreSQL image](https://hub.docker.com/_/postgres), [Com
 ```text
 geometry-engine/
   main.py                    # Start the HTTP service
+  worker.py                  # Execute queued inspections and viewer exports
   pyproject.toml              # Dependencies and package metadata
   geometry_engine/
     pipeline.py              # Stage orchestration
+    inspection.py            # Durable worker stage adapters and dependencies
     capture/                 # Raw capture, paths and validation
     reconstruction/          # Point cloud, mesh and preprocessing
     segmentation/            # Frame selection, SAM, mask projection and fusion
@@ -83,9 +85,12 @@ geometry-engine/
     raw/<session_id>/original/   # Original capture files
     processed/<session_id>/      # Derived stage outputs
     references/                 # IFC design files
+    upload/<session_id>/        # Prepared short-layout folders for Storage upload
+    work/                      # Temporary isolated worker workspaces
+    viewer_cache/              # Downloaded generated viewers; disposable cache
 ```
 
-Original captures and generated results are local artifacts, excluded from Git. A stage stores its own output rather than duplicating the entire session. Reusable package metadata in `geometry_engine.egg-info` is generated during installation.
+CLI captures/results remain local, excluded from Git. The durable worker publishes results to Supabase Storage and removes its temporary workspace afterwards. A stage stores its own output rather than duplicating the entire session. Reusable package metadata in `geometry_engine.egg-info` is generated during installation.
 
 ## Processing chain
 
@@ -104,7 +109,7 @@ The current measurement path is:
 11. Match opening candidates to IFC and calculate dimensions and position differences.
 12. Export the comparison viewer with an optional synchronized original RGB mesh panel.
 
-The current HTTP process endpoint runs steps 2-9 with `measure_openings=true`. Comparison and the combined viewer are separate operations; they are not automatically appended to `PipelineService` yet. Without `measure_openings`, the process endpoint runs the shorter segmentation path and omits projection alignment and contour extraction.
+`POST /inspections` queues the complete chain through opening comparison (steps 1-11). A worker executes it. `POST /inspections/{job_id}/viewer` separately queues step 12 from the committed results. The legacy synchronous `/sessions/process` endpoint still runs only steps 2-9 with `measure_openings=true`; without it, that legacy endpoint uses the shorter segmentation path.
 
 The old VLM boundary-selection, numbered image-line, manual-window, wall-plane experiment, photo-texturing and camera-refinement branches are archived. They are not imported by the current processing modules.
 
@@ -116,9 +121,17 @@ python main.py
 
 The service listens on `http://127.0.0.1:8000`. Open `http://127.0.0.1:8000/docs` for Swagger.
 
+In a second terminal, from the same directory/environment, start the worker:
+
+```powershell
+python worker.py
+```
+
+`python worker.py --once` handles at most one ready inspection or viewer export. The API applies migrations through `main.py`; workers assume migrations have already been applied. Deployment can use `python -m geometry_engine_api.worker` after its separate migration step. One worker handles one job at a time; multiple workers use PostgreSQL claims to avoid duplicate ownership. RabbitMQ is not required for this implementation.
+
 ## Inspection submission API
 
-These two endpoints are the initial durable admission layer. They do not download captures, run SAM or execute the pipeline. A future worker will consume the saved `queued` jobs. The existing `/sessions/*` endpoints remain available for manually running the processing stages.
+Submission persists work and immediately returns `202`; it does not run the pipeline in the HTTP request. The worker consumes queued jobs, downloads their inputs and executes each stage. The existing `/sessions/*` endpoints remain available for manual local processing and do not participate in the durable worker's checkpoint/cache system.
 
 ### Submit a job
 
@@ -131,17 +144,27 @@ Idempotency-Key: demo-inspection-001
 ```json
 {
   "session_id": "FULL_SESSION_ID",
-  "capture_manifest_path": "standalone/demo-building/iphone-1/FULL_SESSION_ID/manifests/HASH/capture-manifest.json",
-  "ifc_object_key": "references/room.ifc",
+  "capture_manifest_path": "FULL_SESSION_ID/manifests/MANIFEST_HASH/capture-manifest.json",
+  "ifc_object_key": "FULL_SESSION_ID/reference.ifc",
   "parameters": {
     "tolerance_m": 0.1,
-    "include_boundary_candidates": false,
+    "include_boundary_candidates": true,
     "interior_point_ifc_m": null
   }
 }
 ```
 
 Inputs are relative storage object keys, not download URLs or uploaded files. Supply versioned/immutable keys for reproducible input selection. File existence and content hashes will be verified during download, not by this initial request handler. The IFC hash remains null until the file is fetched and verified.
+
+The preferred capture layout is now `<session_id>/...` inside `inspection-captures`. Existing phone-generated `standalone/<project>/<device>/<session_id>/...` manifests remain supported by the downloader. Short-layout observations can use `<session_id>/observations/<observation_id>/<filename>`; file lengths and SHA-256 checks are still enforced when downloaded.
+
+To prepare an existing raw capture for upload:
+
+```powershell
+python -m scripts.prepare_capture_upload --session data/raw/FULL_SESSION_ID
+```
+
+This creates `data/upload/FULL_SESSION_ID` with rewritten manifest object keys, a newly hashed manifest directory and byte-identical observation files. It verifies every copied file and leaves the original capture unchanged. Upload that session directory to the root of `inspection-captures`, preserving its nested folders. The command prints the exact `capture_manifest_path` for the request. Existing export folders are not overwritten. Use a new idempotency key when changing paths on an inspection request.
 
 The API normalizes parameters, hashes the request and inserts a job in one database transaction. A unique constraint and PostgreSQL `INSERT ... ON CONFLICT` protect against simultaneous duplicate requests. The transaction commits before returning `202 Accepted`, with the job UUID, `status: queued`, timestamps and `status_url`. The `Location` header points to the same status endpoint.
 
@@ -171,9 +194,89 @@ Idempotency keys are currently globally unique for this single-tenant API. Authe
 GET /inspections/JOB_UUID
 ```
 
-Returns `200` with the committed job state, or `404` for an unknown UUID (`422` for a malformed UUID). Responses disable caching. No worker is implemented yet, so newly submitted jobs remain queued.
+Returns `200` with the committed job state, or `404` for an unknown UUID (`422` for a malformed UUID). Responses disable caching. `current_stage`, `heartbeat_at`, `stages`, `next_attempt_at` and `error_code` show whether work is running, waiting for retry, completed or failed. Every stage includes its attempt count and artifact manifest reference. `viewer_exports` lists independent export jobs.
 
-The `inspection_jobs` table stores input references, request hash, idempotency key, pipeline version, normalized parameters, status, current stage, timestamps and future result/error references. Large capture files and meshes are not stored in PostgreSQL. Keys and request hashes are internal and are not included in HTTP responses.
+The four internal tables are `inspection_jobs`, `inspection_stages`, `viewer_exports` and `segmentation_cache`. Large capture files and meshes are stored in Storage. Migrations enable RLS without browser/client policies on these tables; API/worker connections must use the table-owning server database role or an explicitly configured privileged role. This remains a single-tenant server API: application authentication and per-user authorization must be integrated before exposing it to untrusted users.
+
+### Durable results and recovery
+
+```text
+inspection-captures/
+  SESSION_ID/
+    manifests/HASH/capture-manifest.json
+    observations/...
+    reference.ifc
+    results/JOB_ID/
+      download/attempt_001/...
+      reconstruction/attempt_001/...
+      input/attempt_001/...
+      validation/attempt_001/...
+      mesh_preprocessing/attempt_001/...
+      selected_frames/attempt_001/...
+      segmentation/attempt_001/...
+      projection_alignment/attempt_001/...
+      mesh_segmentation/attempt_001/...
+      mesh_boundaries/attempt_001/...
+      scan_vs_bim/attempt_001/...
+      opening_comparison/attempt_001/...
+      viewer/EXPORT_ID/attempt_001/...
+      result-manifests/SHA256.json
+  cache/sam/v1/REQUEST_HASH/...
+```
+
+Stage files are bundled into ZIPs and split into 8 MiB Storage objects. An immutable manifest maps the logical files (for example `reconstruction/mesh.ply`) to their bundle and records SHA-256/size. This avoids uploading every small mask individually and handles meshes larger than a bucket's per-object limit. Original capture assets and identical files from previous stages are referenced, not uploaded again. The IFC is snapshotted during download so later edits to the source object cannot change this job's comparison.
+
+The worker checks uploaded bytes before committing a stage as completed. Database pointers identify the successful attempt; partial uploads and old attempts never become a successful checkpoint. Retry restores and verifies completed stages into a fresh local workspace, reusing already downloaded identical files. A changed source object or corrupt artifact fails integrity validation instead of silently producing a different comparison.
+
+Temporary network failures, rate limits and server errors use up to three stage attempts with exponential delays (10 and 20 seconds by default). Invalid capture data, missing access and rejected geometric alignment are terminal failures. Rejected stage reports and sanitized error diagnostics are uploaded where possible and linked from the failed stage. If Storage itself is unavailable, the database still records the error code. Worker termination is recovered after the lease expires; expired workers cannot commit results. Heartbeats are independent of long geometry/model operations.
+
+Each stage fingerprint includes its effective settings, dependency artifact hashes and geometry implementation/runtime versions. Changed settings/code require a new inspection rather than mixing old and new stages. A new `Idempotency-Key` creates a new job and retains the previous results. Completed SAM inference can still be reused across these jobs when its own request identity matches.
+
+### SAM inference cache
+
+The worker computes keys locally from the exact upright RGB image sent to SAM, the individual prompt, effective model/decoder identity, preprocessing version and `SAM_CACHE_EPOCH`. It checks all selected keys in one database query, prefetches existing masks with bounded concurrency, and then processes local files. It does not query Storage for each pixel or triangle.
+
+Each successful prompt is cached independently, including a verified empty result. A failure halfway through a photograph or session does not discard completed requests. Masks are cached before confidence/area filtering; changing these local filters can reuse inference. Camera positions, IFC and comparison settings do not invalidate unchanged 2D model inputs; their geometry-dependent stages are recomputed. Concurrent requests for the same key use a separate fenced lease.
+
+The first run with a new request identity fills the cache. Subsequent runs reuse it. Old filtered/manual segmentation folders are not silently treated as raw provider responses. Set `SAM_CACHE_EPOCH=2` (or another new value) when intentionally invalidating cached results, for example after a provider changes the model behind the same model name. No original data or saved result is deleted.
+
+### Fetch the agent result
+
+```http
+GET /inspections/JOB_UUID/result
+```
+
+Returns the compact `schema_version: "2.0"` contract. All lengths are in metres; differences are scan minus IFC. `objects[]` contains the scan object ID, IFC GUID, match status, width/height (`ifc`, `scan`, `difference`), displacement (`along_wall`, `vertical`, `normal_to_wall`), factual quality flags and related `photos[]` (`rgb_url`, `mask_url`, `overlay_url`). Unknown measurements remain null; an unobserved IFC object is not declared absent. Signed displacement uses the matched IFC opening's local horizontal/normal axes; positive vertical is upward.
+
+`surfaces[]` preserves compact wall/floor comparison metrics: compared area, p95 absolute deviation, fraction outside tolerance and whole-element verification flag. `artifacts` contains four download URLs: point cloud, mesh, segmented mesh and IFC. The response omits agent instructions/verdicts, camera metadata, corner coordinates, algorithm parameters, raw reports, duplicate JSON links and per-file technical metadata. Source reports and viewer measurements are unchanged. HTML/viewer generation is not required.
+
+Links are signed by this API and expire after one hour; `expires_in=60..86400` optionally changes the lifetime. Files are read from committed Supabase artifacts and served through the API's verified local cache, since stored bundles are not standalone image/mesh URLs. A link is bound to the job, result version, stage and file; an expired or modified link returns 403. Request the result again for fresh links. The JSON response uses `Cache-Control: no-store`.
+
+Unknown jobs return 404. Queued/running/failed jobs return 409 with their status and status URL. Unavailable Storage returns 503; incomplete or corrupt committed artifacts return 409. Retrieval never starts reconstruction, SAM or another comparison. Reports/manifests are cached; large meshes are downloaded only when their links are used, with verified bundles reused between file requests.
+
+Set `GEOMETRY_PUBLIC_BASE_URL` to an externally reachable API URL when the reviewing agent runs elsewhere. Otherwise links use the request's base URL (localhost for local development). `RESULT_URL_SIGNING_SECRET` optionally supplies a separate signing secret; by default a purpose-specific key is derived from the server Storage secret. Neither secret appears in responses. Access control remains the existing single-tenant API policy.
+
+### Generate and open the latest comparison viewer
+
+After the inspection is completed:
+
+```http
+POST /inspections/JOB_UUID/viewer
+```
+
+No body is required. This returns `202` and an export ID. Poll `GET /inspections/JOB_UUID`; a completed entry under `viewer_exports` has `viewer_url`. Opening it serves HTML and relative report/photo assets through this API. Supabase Storage itself serves HTML as plain text, so its object URL is not the interactive page URL.
+
+The exporter restores saved results and generates the IFC/segmented scan comparison with animated side-by-side/overlay movement, object toggles, saved measurements, photo evidence and the synchronized original RGB mesh panel. It does not rerun SAM, registration or measurement. Matching completed exports are reused. A failed export can be explicitly retried with the same POST and body `{"retry_failed": true}`; it does not reset the completed inspection.
+
+To recalculate opening measurements from an existing completed inspection without rerunning reconstruction or SAM:
+
+```powershell
+python -m scripts.recompare_inspection JOB_UUID
+```
+
+This creates a separate completed inspection revision and viewer, referencing the original geometry/segmentation artifacts. The source job is preserved. Fitted contour measurements retain quality warnings; verified identical local files are reused before downloading missing inputs. The command prints the new job ID and viewer URL, and keeps the working files under `data/recomparisons/`.
+
+For the latest measurement convention, upload the exported interior-surface `reference.ifc`. If using the original solid IFC, supply a known room interior point in IFC metres via `interior_point_ifc_m` to select its interior surfaces. Fitted door/window contours are compared by default; incomplete wall-interface support remains an explicit quality warning beside the measurements. Impossible or missing contours still have no measurements. `include_boundary_candidates=false` is an optional strict mode which excludes incomplete-interface contours; it is not the normal comparison mode.
 
 ### Download a capture
 
@@ -191,7 +294,7 @@ For an explicit storage manifest, use:
 ```json
 {
   "session_id": "FULL_SESSION_ID",
-  "manifest_path": "standalone/PROJECT/DEVICE/FULL_SESSION_ID/manifests/HASH/capture-manifest.json"
+  "manifest_path": "FULL_SESSION_ID/manifests/MANIFEST_HASH/capture-manifest.json"
 }
 ```
 
@@ -210,7 +313,7 @@ Manifest references, file lengths and SHA-256 checksums are verified. The endpoi
 
 This is synchronous. The response arrives after processing finishes. Inspect `data/processed/<session_id>/pipeline.json` for status, current stage, completed stages and failure type. A client timeout does not establish whether the server stopped processing.
 
-Existing results are protected from accidental overwrites. A repeated run returns 409. Full-pipeline automatic resume is not implemented; individual stage commands can reuse supported saved results.
+This legacy synchronous endpoint protects existing local results from overwrites and returns 409 on a repeated run. Use the durable `/inspections` API and worker for automatic stage recovery and shared SAM caching; individual stage commands remain available for local debugging.
 
 ### Compare with IFC
 

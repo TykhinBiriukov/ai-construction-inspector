@@ -14,6 +14,7 @@ import httpx
 from storage3.exceptions import StorageApiError
 
 from .archive import ArchiveServiceError, ExtractionResult, download_archive, extract_archive
+from geometry_engine.capture.storage_layout import capture_manifest_location
 
 
 class SessionDownloadService:
@@ -23,15 +24,15 @@ class SessionDownloadService:
     def extract(self, project_id, session_id, *, manifest_path=None):
         explicit_manifest = manifest_path
         prefix = f"projects/{project_id}/sessions/{session_id}"
+        short_layout = False
         if explicit_manifest is not None:
-            identifier = r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
-            match = re.fullmatch(
-                rf"(standalone/{identifier}/{identifier}/({identifier}))/manifests/([a-f0-9]{{64}})/capture-manifest\.json",
-                explicit_manifest,
-            )
-            if not match or match[2] != session_id or project_id not in (None, "standalone"):
-                raise ArchiveServiceError("invalid_request", "Invalid standalone manifest_path or session identity")
-            prefix, project_id = match[1], "standalone"
+            try:
+                prefix, _, short_layout = capture_manifest_location(explicit_manifest, session_id)
+            except ValueError as error:
+                raise ArchiveServiceError("invalid_request", str(error)) from None
+            if project_id not in (None, "standalone"):
+                raise ArchiveServiceError("invalid_request", "Invalid project identity for explicit capture manifest")
+            project_id = "standalone"
         for name, value in (("project_id", project_id), ("session_id", session_id)):
             if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", value):
                 raise ArchiveServiceError("invalid_request", f"Invalid {name}")
@@ -117,10 +118,14 @@ class SessionDownloadService:
                         relative = f"observations/{identity}/{filename}"
                         key = (f"{prefix}/observations/{identity}/{digest}/{filename}"
                                if standalone else prefix+"/"+relative)
-                        if item.get("object_key") != key or relative.casefold() in seen:
+                        allowed_keys = {key}
+                        if short_layout:
+                            allowed_keys.add(prefix+"/"+relative)
+                        object_key = item.get("object_key")
+                        if not isinstance(object_key, str) or object_key not in allowed_keys or relative.casefold() in seen:
                             raise ValueError("Duplicate file or object outside the requested session")
                         seen.add(relative.casefold())
-                        jobs.append((key, original/relative, size, digest.lower()))
+                        jobs.append((object_key, original/relative, size, digest.lower()))
                         total += size
                 if len(jobs)+len(metadata_files) > self.settings.max_members or total > self.settings.max_download_bytes:
                     raise ValueError("Session exceeds download limits")

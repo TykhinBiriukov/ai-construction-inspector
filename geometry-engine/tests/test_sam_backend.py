@@ -29,6 +29,12 @@ def stream(text=WIRE, *, terminal="response.completed", done=True):
 
 
 class SamBackendTests(unittest.TestCase):
+    def test_retry_classification_distinguishes_auth_from_transient_errors(self):
+        for status in (400, 401, 403, 404, 429, 500, 503):
+            with self.subTest(status=status), self.assertRaises(Sam3UnavailableError) as caught:
+                self.backend("", status=status).predict(Image.new("RGB", (5, 4)), ("wall",))
+            self.assertEqual(caught.exception.retryable, status == 429 or status >= 500)
+
     def backend(self, content, *, status=200, handler=None):
         transport = httpx.MockTransport(handler or (lambda request: httpx.Response(
             status, text=content, headers={"content-type": "text/event-stream"})))

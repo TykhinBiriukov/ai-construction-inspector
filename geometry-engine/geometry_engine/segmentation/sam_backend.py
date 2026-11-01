@@ -24,6 +24,9 @@ MAX_IMAGE_PIXELS = 25_000_000
 
 class Sam3UnavailableError(RuntimeError):
     """A sanitized configuration, transport, or model response error."""
+    def __init__(self, message, *, retryable=True):
+        super().__init__(message)
+        self.retryable = retryable
 
 
 @dataclass(frozen=True)
@@ -86,7 +89,7 @@ class Sam3Backend:
 
     def __init__(self, api_key: str, *, timeout_s=120, transport=None):
         if not isinstance(api_key, str) or not api_key.strip() or "\n" in api_key or "\r" in api_key:
-            raise Sam3UnavailableError("Set MODEL_API_KEY to a valid Meta Model API key")
+            raise Sam3UnavailableError("Set MODEL_API_KEY to a valid Meta Model API key", retryable=False)
         if not math.isfinite(timeout_s) or timeout_s <= 0:
             raise ValueError("SAM timeout must be a positive finite number")
         self._api_key = api_key.strip()
@@ -96,6 +99,13 @@ class Sam3Backend:
     @property
     def model_info(self):
         return {"name": self.model, "provider": "Meta Model API", "decoder": "meta-sam-parser"}
+
+    @property
+    def cache_identity(self):
+        from importlib.metadata import version
+        return {**self.model_info, "decoder_version": version("meta-sam-parser"),
+                "endpoint": "https://api.meta.ai/v1/responses", "adapter_version": "1",
+                "metadata": {"include_confidence": "true", "mask_encoding": "one_bit"}}
 
     def predict(self, image: Image.Image, prompts: tuple[str, ...]) -> list[Detection]:
         if not isinstance(image, Image.Image):
@@ -109,7 +119,7 @@ class Sam3Backend:
         try:
             import meta_sam_parser as parser
         except ImportError:
-            raise Sam3UnavailableError('Install segmentation dependencies: python -m pip install -e ".[segmentation]"') from None
+            raise Sam3UnavailableError('Install segmentation dependencies: python -m pip install -e ".[segmentation]"', retryable=False) from None
         # Drop EXIF; keep stored sensor pixels aligned with camera intrinsics.
         clean_image = Image.fromarray(np.asarray(image.convert("RGB")))
         encoded = BytesIO()
@@ -134,7 +144,8 @@ class Sam3Backend:
                                         404: "The Meta account does not have access to sam-3.1",
                                         429: "Meta SAM rate limit reached; retry later"}
                             raise Sam3UnavailableError(messages.get(response.status_code,
-                                f"Meta SAM request failed with HTTP {response.status_code}"))
+                                f"Meta SAM request failed with HTTP {response.status_code}"),
+                                retryable=response.status_code in (408, 425, 429) or response.status_code >= 500)
                         if "text/event-stream" not in response.headers.get("content-type", ""):
                             raise Sam3UnavailableError("Meta SAM returned an unexpected response format")
                         events = []

@@ -9,6 +9,7 @@ from geometry_engine.comparison.bim_reference import _triangles, interior_faces
 from geometry_engine.segmentation.mask_projection import file_hash, save_json
 from geometry_engine.segmentation.service import _rename
 from geometry_engine.common.surface_geometry import surface_plane, clip_mesh, opening_on_wall, measure_against_display_opening
+from geometry_engine.common.artifact_paths import resolve_artifact_reference
 
 
 def pack_mesh(vertices,faces):
@@ -32,7 +33,7 @@ def build_model_comparison(session,ifc_path,output_dir=None,comparison_dir=None,
     report=json.loads((comparison/'report.json').read_text(encoding='utf-8'))
     if report.get('status')!='completed':raise ValueError('Completed opening comparison required')
     for filename,expected in report['input_fingerprints'].items():
-        if file_hash(filename)!=expected:raise ValueError('Comparison input changed: '+filename)
+        if file_hash(resolve_artifact_reference(filename,session,allow_external=True))!=expected:raise ValueError('Comparison input changed: '+filename)
     registration=json.loads(((Path(comparison_dir) if comparison_dir else session/'scan_vs_bim')/'report.json').read_text(encoding='utf-8'))
     if not registration['registration']['accepted'] or file_hash(ifc_path)!=registration['ifc_sha256']:
         raise ValueError('IFC or accepted alignment differs')
@@ -41,7 +42,8 @@ def build_model_comparison(session,ifc_path,output_dir=None,comparison_dir=None,
     findings=json.loads((comparison/'findings.json').read_text(encoding='utf-8'))['findings']
     v,_,f=read_mesh(session/'mesh_preprocessing/mesh.ply');v=v@T[:3,:3].T+T[:3,3]
     objects=json.loads((session/'mesh_segmentation/objects.json').read_text(encoding='utf-8'))
-    labels=np.load(session/'mesh_segmentation/labels.npz');ids=labels['face_instance_id'];classes=labels['face_class_id']
+    with np.load(session/'mesh_segmentation/labels.npz',allow_pickle=False) as labels:
+        ids=labels['face_instance_id'];classes=labels['face_class_id']
     layers=[];exports={'ifc':[], 'scan':[]}
     names={'wall':'Wall','floor':'Floor','ceiling':'Ceiling','door':'Door','window':'Window','unknown':'Unlabeled geometry'}
     def add(side,identity,category,title,vertices,faces,**extra):
@@ -93,7 +95,7 @@ def build_model_comparison(session,ifc_path,output_dir=None,comparison_dir=None,
             title=names[kind]+' · '+(element.Name or element.GlobalId)
             if extra:title+=' · original IFC position'
             add('ifc',element.GlobalId,kind,title,a,b,**extra)
-    boundary_stage=Path(report['boundary_stage']) if report.get('boundary_stage') else None
+    boundary_stage=resolve_artifact_reference(report['boundary_stage'],session) if report.get('boundary_stage') else None
     boundary_data=json.loads((boundary_stage/'objects.json').read_text(encoding='utf-8')) if boundary_stage else None
     mesh_contours=boundary_data is not None and boundary_data.get('boundary_method')=='semantic_mesh_contour_approximation'
     for obj in objects['objects']:

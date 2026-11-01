@@ -169,11 +169,14 @@ class MeshBoundaryService:
         if output.parent!=session or output.name in {'input','original','segmentation','mesh_segmentation','mesh_preprocessing'}:
             raise ValueError('Use a dedicated stage directory inside the session')
         mesh=session/'mesh_preprocessing/mesh.ply';seg=session/'mesh_segmentation'
-        fingerprints={str(p):file_hash(p) for p in [mesh,seg/'labels.npz',seg/'objects.json',seg/'report.json']}
+        from geometry_engine.common.artifact_paths import artifact_reference, resolve_artifact_reference
+        fingerprints={artifact_reference(p,session):file_hash(p) for p in [mesh,seg/'labels.npz',seg/'objects.json',seg/'report.json']}
         if output.exists():
             if not resume:raise FileExistsError(output)
             report=json.loads((output/'objects.json').read_text(encoding='utf-8'))
-            if report.get('input_fingerprints')!=fingerprints or report.get('parameters')!=asdict(self.settings):
+            previous={artifact_reference(resolve_artifact_reference(p,session),session):h
+                      for p,h in report.get('input_fingerprints',{}).items()}
+            if previous!=fingerprints or report.get('parameters')!=asdict(self.settings):
                 raise ValueError('Mesh or settings changed; use a new output')
             return report
         vertices,_,faces=read_mesh(mesh)
@@ -240,7 +243,7 @@ class MeshBoundaryService:
                 results.append(result)
                 if progress:progress(f'{identity}: {len(rim)} rim edges / {len(wall)} direct wall edges / {result["status"]}')
             for path,digest in fingerprints.items():
-                if file_hash(path)!=digest:raise ValueError('Input changed during contour extraction')
+                if file_hash(resolve_artifact_reference(path,session))!=digest:raise ValueError('Input changed during contour extraction')
             report={'schema_version':'1.0','status':'completed','coordinate_system':'arkit','unit':'meter',
                 'objects':results,'parameters':asdict(self.settings),'model':None,'input_fingerprints':fingerprints,
                 'boundary_method':'semantic_mesh_contour_approximation','grouping_uses_ifc':False,

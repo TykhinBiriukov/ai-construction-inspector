@@ -91,7 +91,7 @@ class InspectionPostgresTests(unittest.TestCase):
     def test_replay_returns_same_job_and_normalizes_defaults(self):
         first = self.post()
         body = dict(self.body, parameters={'interior_point_ifc_m': None,
-                                         'include_boundary_candidates': False, 'tolerance_m': .10})
+                                         'include_boundary_candidates': True, 'tolerance_m': .10})
         second = self.post(body)
         self.assertEqual(second.status_code, 202, second.text)
         self.assertEqual(first.json(), second.json())
@@ -146,6 +146,6 @@ class InspectionPostgresTests(unittest.TestCase):
         with self.engine.connect() as connection:
             upgrade_database(connection)
             context = MigrationContext.configure(connection)
-            self.assertEqual(context.get_current_revision(), '0001_inspection_jobs')
+            self.assertEqual(context.get_current_revision(), '0002_durable_pipeline')
             differences = compare_metadata(context, Base.metadata)
             self.assertEqual(differences, [])

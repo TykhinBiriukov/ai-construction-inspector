@@ -21,6 +21,8 @@ from geometry_engine.pipeline import PipelineService
 from geometry_engine.segmentation.sam_backend import Sam3UnavailableError
 from .database.connection import DatabaseConfigurationError
 from .routers.inspections import router as inspections_router
+from .routers.viewers import router as viewers_router
+from .routers.results import router as results_router
 
 
 class SessionRequest(BaseModel):
@@ -68,6 +70,8 @@ class CompareBimResponse(BaseModel):
 def create_app():
     app = FastAPI(title="Geometry Engine API", version="0.1.0")
     app.include_router(inspections_router)
+    app.include_router(viewers_router)
+    app.include_router(results_router)
 
     @app.exception_handler(DatabaseConfigurationError)
     @app.exception_handler(DBAPIError)

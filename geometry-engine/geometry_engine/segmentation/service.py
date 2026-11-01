@@ -60,6 +60,21 @@ def upright_quarter_turns(metadata, coordinates):
     return int(np.argmax(targets @ screen_up))
 
 
+def _model_image(rgb_path, metadata_path, size, coordinates, orientation):
+    with Image.open(rgb_path) as source:
+        if source.size != size:
+            raise ValueError("RGB dimensions differ from metadata")
+        if source.width * source.height > 25_000_000:
+            raise ValueError("RGB exceeds the 25 million pixel limit")
+        source.load()
+        image = source.convert("RGB")
+        image.info.clear()
+    metadata = read_object(metadata_path)
+    turns = upright_quarter_turns(metadata, coordinates) if orientation == "gravity" else 0
+    model_image = Image.fromarray(np.rot90(np.asarray(image), turns).copy())
+    return image, model_image, turns
+
+
 def _save_json(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
 
@@ -217,8 +232,18 @@ class SegmentationService:
                                                 getattr(self.backend, "model", None), manifest_hash)
             if previous.get("coordinate_system") != coordinates:
                 raise ValueError("Cannot resume: camera coordinate convention changed; use a new output")
+            identity = getattr(self.backend, "model_info", None)
+            if (("inference_identity" in previous or (isinstance(identity, dict)
+                    and "inference_cache" in identity)) and previous.get("inference_identity") != identity):
+                raise ValueError("Cannot resume: inference identity or cache epoch changed; use a new output")
         if cached and len(cached) == len(inputs):
             return {**previous, "reused_count": len(cached), "newly_processed_count": 0}
+        if hasattr(self.backend, "prepare"):
+            # Batch cache discovery downloads saved masks before local processing.
+            # Keep RGB images lazy so a large session does not exhaust RAM.
+            self.backend.prepare((_model_image(rgb, metadata, size, coordinates,
+                self.settings.orientation)[1] for row, rgb, metadata, size in inputs
+                if row["frame_id"] not in cached), self.settings.prompts)
         results, counts, rejected, empty_frames = [], Counter(), Counter(), []
         rejected.update(previous.get("rejected_counts", {}))
         with TemporaryDirectory(prefix=".segmentation-", dir=session) as temporary:
@@ -239,18 +264,8 @@ class SegmentationService:
                     if not frame["detections"]:
                         empty_frames.append(identity)
                     continue
-                with Image.open(rgb_path) as source:
-                    if source.size != size:
-                        raise ValueError(f"RGB dimensions differ from metadata: {identity}")
-                    if source.width * source.height > 25_000_000:
-                        raise ValueError("RGB exceeds the 25 million pixel limit")
-                    source.load()
-                    # No EXIF rotation/cropping: metadata and intrinsics use stored pixels.
-                    image = source.convert("RGB")
-                    image.info.clear()
-                metadata = read_object(metadata_path)
-                turns = upright_quarter_turns(metadata, coordinates) if self.settings.orientation == "gravity" else 0
-                model_image = Image.fromarray(np.rot90(np.asarray(image), turns).copy())
+                image, model_image, turns = _model_image(rgb_path, metadata_path, size, coordinates,
+                                                         self.settings.orientation)
                 detections = self.backend.predict(model_image, self.settings.prompts)
                 saved, rendered = [], []
                 for detection in detections:
@@ -301,6 +316,7 @@ class SegmentationService:
             report = {"schema_version": "1.0", "status": "completed",
                       "session_id": manifest.get("session_id", session.name),
                       "model": getattr(self.backend, "model", None), "parameters": asdict(self.settings),
+                      "inference_identity": getattr(self.backend, "model_info", None),
                       "coordinate_system": coordinates,
                       "selected_count": len(frames), "processed_count": len(results),
                       "reused_count": len(cached), "newly_processed_count": len(results)-len(cached),
@@ -315,6 +331,8 @@ class SegmentationService:
                        "artifact_path_base": "segmentation_directory", "mask_values": [0, 255],
                        "bbox_convention": "xyxy_pixels_max_exclusive", "instance_scope": "per_frame_observation",
                        "frames": results})
+            if hasattr(self.backend, "stats"):
+                report["inference_cache"] = dict(self.backend.stats)
             _save_json(staging / "report.json", report)
             _publish(staging, output, session, replacing)
         return report

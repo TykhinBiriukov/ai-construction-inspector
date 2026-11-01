@@ -16,6 +16,7 @@ from geometry_engine.comparison.scan_vs_bim import _hash, _save, load_semantics
 from geometry_engine.capture.session_layout import original_directory
 from geometry_engine.capture.validation import session_file
 from geometry_engine.segmentation.projection_camera import ProjectionCameras
+from geometry_engine.common.artifact_paths import artifact_reference, resolve_artifact_reference
 
 
 @dataclass(frozen=True)
@@ -181,12 +182,13 @@ def load_boundary_observations(session, directory, transform, hashes, include_ca
         raise ValueError('Completed fingerprinted boundary stage required')
     hashes[path] = _hash(path)
     for filename, expected in data['input_fingerprints'].items():
-        source = Path(filename).resolve()
+        source = resolve_artifact_reference(filename,session)
         if not source.is_relative_to(session) or _hash(source) != expected:
             raise ValueError('Boundary input changed or outside session')
         hashes[source] = expected
     required = [session/'mesh_preprocessing/mesh.ply', session/'mesh_segmentation/labels.npz']
-    if any(str(p) not in data['input_fingerprints'] for p in required):
+    bound_paths={resolve_artifact_reference(p,session) for p in data['input_fingerprints']}
+    if any(p not in bound_paths for p in required):
         raise ValueError('Boundary stage must bind current mesh and segmentation')
     accepted, rejected, consumed, names = [], [], set(), set()
     for row in data['objects']:
@@ -325,10 +327,10 @@ class OpeningComparisonService:
                         'Unmatched observations may be fragments or false labels, not necessarily extra objects.',
                         'Unobserved IFC elements are not proven absent; check actual visible surface evidence.',
                         'Record verdict, explanation and frame IDs; preserve original numeric measurements.']},
-                'boundary_stage':str(Path(boundaries_dir).resolve()) if boundaries_dir is not None else None,
+                'boundary_stage':artifact_reference(boundaries_dir,session) if boundaries_dir is not None else None,
                 'includes_unverified_contour_candidates':include_boundary_candidates,
                 'unverified_boundaries':unverified_boundaries,
-                'alignment_report':str(comparison/'report.json'),'transform_scan_to_ifc':transform.tolist(),
+                'alignment_report':artifact_reference(comparison/'report.json',session),'transform_scan_to_ifc':transform.tolist(),
                 'summary':{'observed_instances':len(observations),'ifc_objects':len(references),
                     'matched_pairs':len(assignments),'candidate_deviations':sum(f['status']=='candidate_deviation' for f in findings),
                     'ambiguous_matches':sum(f['status']=='ambiguous_match' for f in findings),
@@ -352,11 +354,15 @@ class OpeningComparisonService:
             staging=Path(tmp)/'result';staging.mkdir()
             report['findings']=findings
             report['artifacts']=write_opening_review(staging,report,session,segmentation)
+            for finding in findings:
+                for item in finding.get('evidence',[]):
+                    for name in ('rgb','metadata','mask'):
+                        if item.get(name):item[name]=artifact_reference(item[name],session)
             _save(staging/'reference_objects.json',{'schema_version':'1.0','objects':references})
             report['artifacts'].update(findings='findings.json',reference_objects='reference_objects.json')
             _save(staging/'findings.json',{'schema_version':'1.0','findings':findings})
             report.pop('findings')
-            report['input_fingerprints']={str(p):h for p,h in hashes.items()}
+            report['input_fingerprints']={artifact_reference(p,session):h for p,h in hashes.items()}
             for path,expected in hashes.items():
                 if _hash(path)!=expected:raise ValueError('Input changed during opening comparison')
             _save(staging/'report.json',report)

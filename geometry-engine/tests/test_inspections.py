@@ -21,6 +21,10 @@ def request_body():
 
 
 class InspectionContractTests(unittest.TestCase):
+    def test_fitted_contours_are_compared_by_default(self):
+        request = InspectionRequest.model_validate(request_body())
+        self.assertTrue(request.parameters.include_boundary_candidates)
+
     def setUp(self):
         self.app = create_app()
         self.service = Mock()

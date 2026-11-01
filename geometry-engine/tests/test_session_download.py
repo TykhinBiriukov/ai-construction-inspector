@@ -188,6 +188,52 @@ class SessionDownloadTests(unittest.TestCase):
         self.assertEqual(report["format"], "standalone_capture_v1")
         self.assertEqual(self.client.post("/sessions/extract", json=payload).status_code, 409)
 
+    def test_short_layout_downloads_flat_objects_without_descriptor(self):
+        payload = self.standalone_payload()
+        content = self.objects[self.asset['object_key']]
+        self.asset['object_key'] = 'scan-001/observations/frame-001/frame.json'
+        self.objects[self.asset['object_key']] = content
+        payload['manifest_path'] = 'scan-001/manifests/'+'b'*64+'/capture-manifest.json'
+        self.objects[payload['manifest_path']] = json.dumps(self.manifest).encode()
+        response = self.client.post('/sessions/extract', json=payload)
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual((self.settings.data_dir/'raw/scan-001/original/observations/frame-001/frame.json').read_bytes(), content)
+        self.bucket.list.assert_not_called()
+        report = json.loads((self.settings.data_dir/'raw/scan-001/download-report.json').read_text())
+        self.assertEqual(report['storage_prefix'], 'scan-001')
+        self.assertTrue(report['sha256_verified'])
+
+    def test_short_layout_also_accepts_hashed_file_directories(self):
+        payload = self.standalone_payload()
+        content = self.objects[self.asset['object_key']]
+        self.asset['object_key'] = f"scan-001/observations/frame-001/{self.asset['sha256']}/frame.json"
+        self.objects[self.asset['object_key']] = content
+        payload['manifest_path'] = 'scan-001/manifests/'+'b'*64+'/capture-manifest.json'
+        self.objects[payload['manifest_path']] = json.dumps(self.manifest).encode()
+        response = self.client.post('/sessions/extract', json=payload)
+        self.assertEqual(response.status_code, 201, response.text)
+
+    def test_short_layout_rejects_cross_session_paths_and_corruption(self):
+        payload = self.standalone_payload()
+        content = self.objects[self.asset['object_key']]
+        key = 'scan-001/observations/frame-001/frame.json'
+        payload['manifest_path'] = 'scan-001/manifests/'+'b'*64+'/capture-manifest.json'
+        for fault in ('cross_session', 'content', 'traversal'):
+            with self.subTest(fault=fault):
+                self.asset['object_key'] = {'cross_session': 'other-session/observations/frame-001/frame.json',
+                    'traversal': 'scan-001/../other-session/frame.json'}.get(fault, key)
+                self.objects[key] = b'corrupt' if fault == 'content' else content
+                self.objects[payload['manifest_path']] = json.dumps(self.manifest).encode()
+                response = self.client.post('/sessions/extract', json=payload)
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertFalse((self.settings.data_dir/'raw/scan-001').exists())
+
+    def test_short_layout_rejects_wrong_session_before_storage_access(self):
+        response = self.client.post('/sessions/extract', json={'session_id':'scan-001',
+            'manifest_path': 'other-session/manifests/'+'b'*64+'/capture-manifest.json'})
+        self.assertEqual(response.status_code, 422)
+        self.bucket.create_signed_url.assert_not_called()
+
     def test_standalone_invalid_paths_rejected_before_storage_access(self):
         payload = self.standalone_payload()
         for path in (payload["manifest_path"].replace("scan-001", "other-session"),

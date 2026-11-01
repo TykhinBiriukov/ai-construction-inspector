@@ -15,6 +15,7 @@ from geometry_engine.segmentation.projection_camera import ProjectionCameras
 from geometry_engine.segmentation.service import upright_quarter_turns
 from geometry_engine.capture.session_layout import original_directory
 from geometry_engine.capture.validation import session_file
+from geometry_engine.common.artifact_paths import artifact_reference
 
 
 STATUS_LABELS = {
@@ -223,7 +224,7 @@ def write_opening_review(output_dir, report, session, segmentation_dir):
             prefix = f"{number:04d}_{photo_number:02d}"
             record = {"finding_id": finding.get("finding_id"), "frame_id": item.get("frame_id")}
             rgb_path = _safe_source(item.get("rgb"), session, segmentation, original=True)
-            record["source_rgb"] = str(rgb_path)
+            record["source_rgb"] = artifact_reference(rgb_path,session)
             photo = _picture(rgb_path)
             turns = 0
             metadata = None
@@ -246,7 +247,7 @@ def write_opening_review(output_dir, report, session, segmentation_dir):
                 pixels = np.asarray(photo).copy()
                 pixels[mask] = (pixels[mask] * .55 + np.array([40, 210, 245]) * .45).astype(np.uint8)
                 labeled = Image.fromarray(pixels)
-                record["source_mask"] = str(mask_path)
+                record["source_mask"] = artifact_reference(mask_path,session)
                 has_labels = True
             elif item.get("overlay"):
                 overlay_path = _safe_source(item["overlay"], session, segmentation)
