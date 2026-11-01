@@ -4,11 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from fastapi.testclient import TestClient
 from geometry_engine.pipeline import PipelineService, prepare_input
-from geometry_engine_api.app import create_app
-from geometry_engine_api.dependencies import get_pipeline_service, get_settings
-from geometry_engine_api.services.archive import Settings
 
 
 class PipelineTests(unittest.TestCase):
@@ -52,23 +48,6 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((report['status'], report['current_stage']), ('failed', 'reconstruction'))
         sam.segment.assert_not_called()
 
-    def test_two_endpoints_and_error_mapping(self):
-        app = create_app()
-        service = Mock()
-        service.run.return_value = {'status': 'completed'}
-        app.dependency_overrides[get_pipeline_service] = lambda: service
-        app.dependency_overrides[get_settings] = lambda: Settings(data_dir=self.data)
-        self.assertTrue({'/sessions/extract', '/sessions/process'}.issubset(app.openapi()['paths']))
-        with TestClient(app) as client:
-            response = client.post('/sessions/process', json={'session_id': 'scan'})
-            self.assertEqual(response.status_code, 200, response.text)
-            service.run.assert_called_once_with(self.session.resolve())
-            for error, status in ((FileExistsError(), 409), (ValueError('invalid'), 422), (OSError('secret'), 500)):
-                service.run.side_effect = error
-                response = client.post('/sessions/process', json={'session_id': 'scan'})
-                self.assertEqual(response.status_code, status)
-                self.assertNotIn('secret', response.text)
-            self.assertEqual(client.post('/sessions/process', json={'session_id': '../escape'}).status_code, 422)
 
     def test_adapter_preserves_raw_and_binds_reconstructed_mesh(self):
         from tests.test_raw_capture import RawCaptureTests

@@ -6,14 +6,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 import numpy as np
 from PIL import Image
 
 from geometry_engine.common.mesh import write_mesh
-from geometry_engine_api.app import create_app
-from geometry_engine_api.dependencies import get_archive_service
-from geometry_engine_api.services.archive import ExtractionResult
 from geometry_engine.capture.validation import SessionValidationService
 from scripts.run_geometry import run_session
 
@@ -99,22 +95,6 @@ class SessionValidationTests(unittest.TestCase):
         self.save_json(self.root / "scene.json", dict(self.scene, mesh="../outside.ply"))
         self.assertEqual(self.service.validate(self.session)["status"], "invalid")
 
-    def test_extraction_defers_validation_to_processing(self):
-        root = self.session
-        class Archive:
-            def extract(self, session_id):
-                return ExtractionResult(session_id, root)
-        app = create_app()
-        app.dependency_overrides[get_archive_service] = lambda: Archive()
-        with TestClient(app) as client:
-            response = client.post("/sessions/extract", json={"session_id": "test"})
-            self.assertEqual(response.status_code, 201, response.text)
-            self.assertEqual(response.json()["validation"]["status"], "not_run")
-            (root / "original" / "mesh.ply").write_bytes(b"invalid")
-            response = client.post("/sessions/extract", json={"session_id": "test"})
-            self.assertEqual(response.status_code, 201)
-            self.assertEqual(response.json()["validation"]["status"], "not_run")
-        self.assertFalse((root / "validation" / "report.json").exists())
 
     def test_capture_contract_and_binary_depth_size(self):
         (self.root / "scene.json").unlink()

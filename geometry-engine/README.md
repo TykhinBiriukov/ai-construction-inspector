@@ -110,7 +110,7 @@ The current measurement path is:
 11. Match opening candidates to IFC and calculate dimensions and position differences.
 12. Export the comparison viewer with an optional synchronized original RGB mesh panel.
 
-`POST /inspections` queues the complete chain through opening comparison (steps 1-11). A worker executes it. `POST /inspections/{job_id}/viewer` separately queues step 12 from the committed results. The legacy synchronous `/sessions/process` endpoint still runs only steps 2-9 with `measure_openings=true`; without it, that legacy endpoint uses the shorter segmentation path.
+`POST /inspections` queues the complete chain through opening comparison (steps 1-11). A worker executes it. `POST /inspections/{job_id}/viewer` separately queues step 12 from the committed results.
 
 The old VLM boundary-selection, numbered image-line, manual-window, wall-plane experiment, photo-texturing and camera-refinement branches are archived. They are not imported by the current processing modules.
 
@@ -132,7 +132,7 @@ python worker.py
 
 ## Inspection submission API
 
-Submission persists work and immediately returns `202`; it does not run the pipeline in the HTTP request. The worker consumes queued jobs, downloads their inputs and executes each stage. The existing `/sessions/*` endpoints remain available for manual local processing and do not participate in the durable worker's checkpoint/cache system.
+Submission persists work and immediately returns `202`; it does not run the pipeline in the HTTP request. The worker consumes queued jobs, downloads their inputs and executes each stage. Individual stage commands remain available for local debugging.
 
 ### Submit a job
 
@@ -280,60 +280,6 @@ python -m scripts.recompare_inspection JOB_UUID
 This creates a separate completed inspection revision and viewer, referencing the original geometry/segmentation artifacts. The source job is preserved. Fitted contour measurements retain quality warnings; verified identical local files are reused before downloading missing inputs. The command prints the new job ID and viewer URL, and keeps the working files under `data/recomparisons/`.
 
 For the latest measurement convention, upload the exported interior-surface `reference.ifc`. If using the original solid IFC, supply a known room interior point in IFC metres via `interior_point_ifc_m` to select its interior surfaces. Fitted door/window contours are compared by default; incomplete wall-interface support remains an explicit quality warning beside the measurements. Impossible or missing contours still have no measurements. `include_boundary_candidates=false` is an optional strict mode which excludes incomplete-interface contours; it is not the normal comparison mode.
-
-### Download a capture
-
-`POST /sessions/extract` supports a session/project request:
-
-```json
-{
-  "session_id": "FULL_SESSION_ID",
-  "project_id": "PROJECT_ID"
-}
-```
-
-For an explicit storage manifest, use:
-
-```json
-{
-  "session_id": "FULL_SESSION_ID",
-  "manifest_path": "FULL_SESSION_ID/manifests/MANIFEST_HASH/capture-manifest.json"
-}
-```
-
-Manifest references, file lengths and SHA-256 checksums are verified. The endpoint downloads and extracts capture data; it does not run reconstruction.
-
-### Process a downloaded capture
-
-`POST /sessions/process`:
-
-```json
-{
-  "session_id": "FULL_SESSION_ID",
-  "measure_openings": true
-}
-```
-
-This is synchronous. The response arrives after processing finishes. Inspect `data/processed/<session_id>/pipeline.json` for status, current stage, completed stages and failure type. A client timeout does not establish whether the server stopped processing.
-
-This legacy synchronous endpoint protects existing local results from overwrites and returns 409 on a repeated run. Use the durable `/inspections` API and worker for automatic stage recovery and shared SAM caching; individual stage commands remain available for local debugging.
-
-### Compare with IFC
-
-Place the design in `data/references/room.ifc`, then call `POST /sessions/compare-bim`:
-
-```json
-{
-  "session_id": "FULL_SESSION_ID",
-  "ifc_file": "room.ifc",
-  "compare_openings": true,
-  "use_opening_boundaries": true
-}
-```
-
-`use_opening_boundaries` reads the local `mesh_boundaries` stage; the name does not refer to the archived VLM implementation. `measure_openings=true` on this endpoint runs that local stage before comparison. `resume_boundaries` is valid only with `measure_openings=true`.
-
-The HTTP comparison uses accepted contour results. To inspect incomplete contour candidates explicitly, use the comparison CLI flag below. They remain unverified and must not be presented as confirmed measurements.
 
 ## Run stages separately
 

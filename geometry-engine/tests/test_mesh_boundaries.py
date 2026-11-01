@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 
 import numpy as np
 
@@ -87,10 +86,6 @@ class MeshContourTests(unittest.TestCase):
         rim,wall=semantic_contour_edges(e,a,b,c,np.array([1,1]),np.array([1,2]),[1,2],1,0)
         self.assertEqual(len(rim),4);self.assertEqual(len(wall),0)
 
-    def test_default_dependency_constructs_no_meta_backend(self):
-        from geometry_engine_api.dependencies import get_opening_boundary_factory
-        with patch.dict('os.environ',{'MODEL_API_KEY':''}):
-            self.assertIsInstance(get_opening_boundary_factory()(),MeshBoundaryService)
 
     def test_incomplete_contour_requires_explicit_candidate_comparison(self):
         from geometry_engine.comparison.opening_comparison import load_boundary_observations

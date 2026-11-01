@@ -1,52 +1,25 @@
 """FastAPI dependency providers."""
 
 from typing import Annotated
-import os
 
 from fastapi import Depends, HTTPException
 import httpx
-from supabase import Client, ClientOptions, create_client
+from supabase import ClientOptions, create_client
 
-from .services.archive import ArchiveService, ArchiveServiceError, Settings, validate_url
-from geometry_engine.segmentation.sam_backend import Sam3Backend
-from geometry_engine.segmentation.service import SegmentationService, SegmentationSettings
+from .services.archive import Settings, validate_url
 
 
 def get_settings() -> Settings:
     return Settings.from_env()
 
 
-def get_sam_backend(settings: Annotated[Settings, Depends(get_settings)]) -> Sam3Backend:
-    # get_settings loads .env; this dependency needs no Supabase connection.
-    api_key = os.getenv("MODEL_API_KEY", "").strip()
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Set MODEL_API_KEY in geometry-engine/.env to use Meta SAM")
-    return Sam3Backend(api_key=api_key)
-
-
-def get_segmentation_service(backend: Annotated[Sam3Backend, Depends(get_sam_backend)]) -> SegmentationService:
-    return SegmentationService(backend, SegmentationSettings())
-
-
-def get_scan_vs_bim_service():
-    # Local geometry only: this dependency never loads model/storage credentials.
-    from geometry_engine.comparison.scan_vs_bim import ScanVsBimService
-    return ScanVsBimService()
-
-
-def get_opening_comparison_service():
-    # Existing segmentation and registration only; no hosted model calls.
-    from geometry_engine.comparison.opening_comparison import OpeningComparisonService
-    return OpeningComparisonService()
-
-
 def get_supabase_client(settings: Annotated[Settings, Depends(get_settings)]):
     if not settings.supabase_url or not settings.supabase_secret_key or not settings.storage_bucket:
-        raise ArchiveServiceError("invalid_request", "Set SUPABASE_URL, SUPABASE_SECRET_KEY and SUPABASE_STORAGE_BUCKET")
+        raise HTTPException(status_code=503, detail="Set SUPABASE_URL, SUPABASE_SECRET_KEY and SUPABASE_STORAGE_BUCKET")
     try:
         validate_url(settings.supabase_url)
     except ValueError:
-        raise ArchiveServiceError("invalid_request", "Invalid SUPABASE_URL") from None
+        raise HTTPException(status_code=503, detail="Invalid SUPABASE_URL") from None
     with httpx.Client(timeout=30, trust_env=False) as http_client:
         client = create_client(
             settings.supabase_url,
@@ -54,25 +27,3 @@ def get_supabase_client(settings: Annotated[Settings, Depends(get_settings)]):
             options=ClientOptions(httpx_client=http_client, auto_refresh_token=False, persist_session=False),
         )
         yield client
-
-
-def get_archive_service(
-    settings: Annotated[Settings, Depends(get_settings)],
-    client: Annotated[Client, Depends(get_supabase_client)],
-) -> ArchiveService:
-    return ArchiveService(settings, client)
-
-
-def get_pipeline_service(
-    segmentation: Annotated[SegmentationService, Depends(get_segmentation_service)],
-):
-    from geometry_engine.pipeline import PipelineService
-    return PipelineService(segmentation, boundary_factory=get_opening_boundary_factory())
-
-
-def get_opening_boundary_factory():
-    """Local semantic mesh contours; measurement never constructs a VLM backend."""
-    def create():
-        from geometry_engine.openings.mesh_boundaries import MeshBoundaryService
-        return MeshBoundaryService()
-    return create

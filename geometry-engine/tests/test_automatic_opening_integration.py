@@ -124,28 +124,4 @@ class AutomaticPipelineTests(unittest.TestCase):
                 self.assertNotIn('wall_planes',report['completed_stages'])
 
 
-class AutomaticOpeningApiTests(unittest.TestCase):
-    def test_existing_endpoint_builds_or_reuses_contours_only_when_requested(self):
-        from test_opening_api import OpeningApiTests
-        from unittest.mock import Mock
-        from geometry_engine_api.dependencies import get_opening_boundary_factory
-        fixture=OpeningApiTests('test_no_new_endpoint_is_added')
-        fixture.setUp()
-        try:
-            stage=Mock(); factory=Mock(return_value=stage)
-            fixture.app.dependency_overrides[get_opening_boundary_factory]=lambda:factory
-            response=fixture.post(compare_openings=True,measure_openings=True,resume_boundaries=True)
-            self.assertEqual(response.status_code,200,response.text)
-            stage.run.assert_called_once_with(fixture.session.resolve(),resume=True)
-            self.assertEqual(fixture.opening_service.compare.call_args.kwargs['boundaries_dir'],fixture.session.resolve()/'mesh_boundaries')
-            stage.reset_mock();factory.reset_mock()
-            response=fixture.post(compare_openings=True,use_opening_boundaries=True)
-            self.assertEqual(response.status_code,200,response.text)
-            factory.assert_not_called()
-            response=fixture.post(measure_openings=True)
-            self.assertEqual(response.status_code,422)
-        finally:
-            fixture.doCleanups()
-
-
 if __name__=='__main__':unittest.main()
