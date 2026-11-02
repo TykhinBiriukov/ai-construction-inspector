@@ -3,6 +3,7 @@
 import copy
 import time
 from uuid import uuid4
+from ai_inspector.observability import Telemetry
 
 from .errors import APIError
 from .model_client import validated_message
@@ -11,14 +12,17 @@ from .storage import canonical_json
 
 
 class AgentHarness:
-    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool):
+    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool, telemetry=None):
         self.state = state
         self.model = model
+        if getattr(model, "analysis_origin", None) in ("synthetic", "mock", "recorded"):
+            self.state.setdefault("analysis_origin", model.analysis_origin)
         self.max_steps = max_steps
         self.checkpoint = checkpoint
         self.prepare_model = prepare_model
         self.plan_tool = plan_tool
         self.execute_tool = execute_tool
+        self.telemetry = telemetry or Telemetry()
 
     def _start_activity(self, kind, name, operation_id):
         events = self.state.setdefault("activity_events", [])
@@ -41,6 +45,15 @@ class AgentHarness:
                      duration_ms=max(0, round((time.monotonic() - started) * 1000)), summary=summary)
 
     def advance(self):
+        with self.telemetry.scope(self.state, self.state.get("inspector_id", self.state.get("agent_role", "inspector"))) as span:
+            try:
+                return self._advance()
+            finally:
+                span.update(output={"status": self.state.get("status"), "steps": self.state.get("steps")},
+                            metadata={"prompt_versions": {name: {k: v for k, v in snapshot.items() if k != "text"}
+                                      for name, snapshot in self.state.get("prompt_snapshots", {}).items()}})
+
+    def _advance(self):
         state = self.state
         activity = started = None
         try:
@@ -52,7 +65,12 @@ class AgentHarness:
                     activity, started = self._start_activity("tool", plan["name"], plan["operation_id"])
                     self.checkpoint()  # Fence ownership before executing a persisted command.
                     try:
-                        result, session_id = self.execute_tool(plan)
+                        with self.telemetry.step(state, activity, input={"tool": plan["name"],
+                                "inspector_id": next((d["inspector_id"] for d in state.get("delegations", [])
+                                    if d["run_id"] == plan.get("delegation_run_id")), None)}) as span:
+                            result, session_id = self.execute_tool(plan)
+                            span.update(output={"status": "failed" if result.get("error") else "completed",
+                                                "result_keys": list(result)[:20]})
                     except APIError as error:
                         if error.body["retryable"]:
                             raise
@@ -75,7 +93,11 @@ class AgentHarness:
                 request = state["pending_model"]
                 activity, started = self._start_activity("model", "model_request", f"model-{state['steps']}")
                 self.checkpoint()  # Freeze the exact model request before network IO.
-                message = validated_message(self.model.complete(request["messages"], request["tools"]))
+                with self.telemetry.step(state, activity, input={"message_count": len(request["messages"]),
+                        "available_tools": [t["function"]["name"] for t in request["tools"]]}) as span:
+                    message = validated_message(self.model.complete(request["messages"], request["tools"]))
+                    span.update(output={"selected_tools": [c["function"]["name"] for c in message.get("tool_calls", [])],
+                                        "response_characters": len(message.get("content") or "")})
                 self._finish_activity(activity, started, "completed", "Tool call selected" if message.get("tool_calls") else "Response prepared")
                 state["pending_model"] = None
                 state["steps"] += 1
@@ -103,6 +125,8 @@ class AgentHarness:
                         rejected, since = self._start_activity("tool", call["function"]["name"],
                                                                f"validation-{state['steps']}")
                         self._finish_activity(rejected, since, "failed", error.body["message"])
+                        with self.telemetry.step(state, rejected) as span:
+                            span.update(level="WARNING", status_message=error.body["code"], output={"executed": False})
                         state.setdefault("tool_validation_errors", []).append({
                             "name": call["function"]["name"], "error": error.body,
                             "event_id": rejected["event_id"], "executed": False})

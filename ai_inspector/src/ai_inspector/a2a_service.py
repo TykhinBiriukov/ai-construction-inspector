@@ -9,6 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import UUID, uuid5
+from ai_inspector.observability import ObservabilityConfig, telemetry, trace_context
 
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -55,6 +56,7 @@ class InspectorAgentService:
     def __init__(self, settings, *, profile, database_path, public_url, callers, model_client=None, tool_client=None):
         self.profile = InspectorProfile.model_validate(profile.model_dump(warnings=False))
         self.settings = settings
+        self.telemetry = telemetry(settings.observability)
         self.public_url = service_url(public_url)
         self.callers = tuple(AgentCaller.model_validate(item.model_dump()) for item in callers)
         tokens = [item.token.get_secret_value() for item in self.callers]
@@ -92,7 +94,7 @@ class InspectorAgentService:
                 "skills": [{"id": profile.inspector_id, "name": profile.inspector_id,
                             "description": profile.description, "tags": ["construction", "inspection"]}]}
 
-    def submit(self, caller, raw):
+    def submit(self, caller, raw, *, traceparent=None):
         try:
             request = SendRequest.model_validate(raw)
         except (ValueError, TypeError):
@@ -117,7 +119,8 @@ class InspectorAgentService:
                 history.extend([{"role": "user", "content": prior["task"]}, {"role": "assistant", "content": prior["reply"]}])
             now = utc_now()
             return {"run_id": task_id, "context_id": context_id, "task": task_text, "binding": data,
-                    "request_sha256": digest(raw), "wire_message": raw["message"], "profile": self.profile.model_dump(mode="json"),
+                    "_trace_context": trace_context(traceparent), "inspector_id": self.profile.inspector_id,
+                    "request_sha256": digest(raw), "wire_message": raw["message"], "profile": self.profile.model_dump(mode="json", exclude_none=True),
                     "status": "pending", "reply": None, "error": None, "created_at": now, "updated_at": now,
                     "messages": [{"role": "developer", "content": INSPECTOR_PROMPT + "\nSpecialty instructions:\n"
                                   + self.profile.instructions + "\nServer context: " + canonical_json(data["context"])},
@@ -125,7 +128,7 @@ class InspectorAgentService:
                     "history": history, "history_run_ids": [item["run_id"] for item in previous],
                     "steps": 0, "pending_model": None, "pending_tool": None, "tool_results": [], "retry_failures": 0}
         return self.store.admit(caller.client_id, caller.project_id, data["operation_id"], body,
-                                self.profile.model_dump(mode="json"), make_state)
+                                self.profile.model_dump(mode="json", exclude_none=True), make_state)
 
     @staticmethod
     def public_task(state, history_length=0):
@@ -160,6 +163,10 @@ class InspectorAgentService:
             def checkpoint(**_):
                 self.store.save(state, token, lease_seconds)
             def prepare_model():
+                if not state.get("steps") and not state.get("pending_model") and self.profile.instructions_prompt:
+                    instructions = self.telemetry.resolve_prompt(state, self.profile.instructions_prompt,
+                        self.profile.instructions, version=self.profile.instructions_prompt_version)
+                    state["messages"][0]["content"] = INSPECTOR_PROMPT + "\nSpecialty instructions:\n" + instructions + "\nServer context: " + canonical_json(state["binding"]["context"])
                 messages = state["messages"]
                 return [messages[0]] + state["history"] + messages[1:], [item for item in TOOLS if item["function"]["name"] in self.profile.allowed_tools]
             def plan_tool(call):
@@ -176,7 +183,8 @@ class InspectorAgentService:
                     raise APIError(502, "inspector_tool_forbidden", "The inspector selected an unallowed tool")
                 return self.tool_client.execute(self.profile.inspector_id, state["binding"], plan["name"], plan["operation_id"])
             AgentHarness(state, model=self.model, max_steps=self.profile.max_steps, checkpoint=checkpoint,
-                         prepare_model=prepare_model, plan_tool=plan_tool, execute_tool=execute_tool).advance()
+                         prepare_model=prepare_model, plan_tool=plan_tool, execute_tool=execute_tool,
+                         telemetry=self.telemetry).advance()
         except APIError as error:
             if error.body["code"] == "agent_lease_lost":
                 return True
@@ -223,6 +231,7 @@ def create_inspector_app(service, *, background_worker=True):
             stop.set()
             if background_worker:
                 await asyncio.to_thread(thread.join, 5)
+            await asyncio.to_thread(service.telemetry.flush)
 
     app = FastAPI(title="Inspector agent — A2A polling", version=VERSION, lifespan=lifespan)
     app.state.service = service
@@ -273,7 +282,7 @@ def create_inspector_app(service, *, background_worker=True):
             raw = decode_json(content)
         except (ValueError, UnicodeError, RecursionError):
             raise APIError(400, "invalid_argument", "Invalid inspector task JSON") from None
-        state = service.submit(identity, raw)
+        state = service.submit(identity, raw, traceparent=request.headers.get("traceparent"))
         return {"task": service.public_task(state, SendRequest.model_validate(raw).configuration.historyLength)}
 
     @app.get("/tasks/{task_id}")
@@ -307,6 +316,7 @@ def create_app_from_env():
         profile = InspectorProfile.model_validate_json(os.environ["INSPECTOR_AGENT_PROFILE_JSON"])
         callers = [AgentCaller.model_validate(item) for item in json.loads(os.environ["INSPECTOR_AGENT_CALLERS_JSON"])]
         settings = Settings(data_dir=Path(os.environ.get("INSPECTOR_AGENT_DATA_DIR", "agent-data")),
+                            observability=ObservabilityConfig.from_mapping(os.environ),
                             operator_token="unused-a2a-operator", device_token="unused-a2a-device",
                             meta_base_url=os.environ.get("INSPECTOR_META_BASE_URL", "https://api.meta.ai/v1"),
                             meta_model=os.environ.get("INSPECTOR_META_MODEL", "muse-spark-1.3"),

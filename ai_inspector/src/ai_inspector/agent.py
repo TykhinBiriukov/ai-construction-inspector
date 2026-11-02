@@ -6,6 +6,7 @@ import os
 import time
 from typing import Annotated, Literal
 from uuid import UUID, uuid4, uuid5
+from ai_inspector.observability import telemetry
 
 from pydantic import Field, ValidationError, field_validator
 
@@ -151,6 +152,7 @@ class OrchestratorAgent:
         self.service = service
         self.database = service.database
         self.settings = service.settings
+        self.telemetry = telemetry(self.settings.observability)
         self.minion = drawing_photo.MinionClient(self.settings)
         self.model = model_client if model_client is not None else MetaModelClient(self.settings)
         self.inspectors = InspectorRegistry(inspectors)
@@ -256,12 +258,12 @@ class OrchestratorAgent:
                     content = [{"type":"text","text":content},
                                {"type":"image_url","image_url":{"url":request.document_selection.image_data}}]
                 run = {"document_selection": selection, "file_ids": request.file_ids, "workspace_context": workspace_context, "schema_version": "0.1", "run_id": str(uuid4()), "chat_id": chat_id,
-                       "request_id": str(request.request_id), "text": request.text, "status": "pending",
+                       "project_id": chat["project_id"], "request_id": str(request.request_id), "text": request.text, "status": "pending",
                        "reply": None, "error": None, "session_id": chat["session_id"],
                        "created_at": utc_now(), "updated_at": utc_now(), "history": history,
                        "messages": [{"role": "user", "content": content}],
                        "steps": 0, "pending_tool": None, "tool_results": [],
-                       "agent_role": "orchestrator", "delegations": []}
+                       "agent_role": "orchestrator", "delegations": [], "prompt_management_version": 1}
                 connection.execute("INSERT INTO agent_runs(run_id, chat_id, request_id, request_body, data) VALUES (?, ?, ?, ?, ?)",
                                    (run["run_id"], chat_id, str(request.request_id), body, canonical_json(run)))
                 chat["active_run_id"] = run["run_id"]
@@ -439,6 +441,13 @@ class OrchestratorAgent:
                     self._save(run, lease)
                 def prepare_model():
                     self._context(principal, child)
+                    if not child.get("steps") and not child.get("pending_model") and profile.instructions_prompt:
+                        instructions = self.telemetry.resolve_prompt(child, profile.instructions_prompt,
+                            profile.instructions, version=profile.instructions_prompt_version)
+                        original = child["messages"][0]["content"]
+                        prefix, context = original.split("\nSpecialty instructions:\n", 1)
+                        _, server = context.rsplit("\nServer context: ", 1)
+                        child["messages"][0]["content"] = prefix + "\nSpecialty instructions:\n" + instructions + "\nServer context: " + server
                     messages = child["messages"]
                     return ([messages[0]] + child["history"] + messages[1:],
                             [item for item in TOOLS if item["function"]["name"] in profile.allowed_tools])
@@ -449,7 +458,8 @@ class OrchestratorAgent:
                     self._inspector_permission(profile, command["name"])
                     return self._execute(principal, child, command)
                 AgentHarness(child, model=self.model, max_steps=profile.max_steps, checkpoint=checkpoint,
-                             prepare_model=prepare_model, plan_tool=plan_tool, execute_tool=execute_tool).advance()
+                             prepare_model=prepare_model, plan_tool=plan_tool, execute_tool=execute_tool,
+                             telemetry=self.telemetry).advance()
             except APIError as error:
                 if error.body["code"] == "agent_lease_lost":
                     raise
@@ -488,7 +498,11 @@ class OrchestratorAgent:
                 client.check_card(profile)
                 child["card_validated"] = True
                 self._save(run, lease)
-            task_id, context_id, state, reply = client.task(child)
+            with self.telemetry.scope(child, "a2a.poll" if child.get("remote_task_id") else "a2a.submit", "tool",
+                    metadata={"remote_task_id": child.get("remote_task_id")}) as span:
+                task_id, context_id, state, reply = client.task(child)
+                span.update(output={"remote_task_id": task_id, "remote_state": state,
+                                    "report_accepted": state == "TASK_STATE_COMPLETED"})
             child.update(remote_task_id=task_id, remote_context_id=context_id, remote_state=state, updated_at=utc_now(), error=None)
             child["next_poll_at"] = time.time() + profile.poll_interval_s
             run["remote_next_attempt_at"] = child["next_poll_at"]
@@ -600,12 +614,15 @@ class OrchestratorAgent:
             self._save(run, lease, release=run["status"] in ("completed", "failed", "retryable"), link_session=link_session)
         def prepare_model():
             chat, session = self._context(principal, run)
+            run["project_id"] = chat["project_id"]
+            prompt = self.telemetry.resolve_prompt(run, "inspector/orchestrator", SYSTEM_PROMPT,
+                                                  fetch=bool(run.get("prompt_management_version")))
             context = {"project_id": chat["project_id"], "device_id": chat["device_id"],
                        "room_id": chat["room_id"], "session": session_summary(session),
                        "registered_inspectors": self.inspectors.catalog()}
             tools = [tool for tool in TOOLS if tool['function']['name'] != 'drawing_photo_compare'
                      or len(run.get('file_ids', [])) >= 2]
-            return ([{"role": "developer", "content": SYSTEM_PROMPT + "\nServer context: " + canonical_json(context)}]
+            return ([{"role": "developer", "content": prompt + "\nServer context: " + canonical_json(context)}]
                     + run["history"] + run["messages"], tools + self.inspectors.tools())
         def execute_tool(plan):
             if plan["name"] == "delegate_inspection":
@@ -614,7 +631,7 @@ class OrchestratorAgent:
         try:
             AgentHarness(run, model=self.model, max_steps=self.settings.agent_max_steps, checkpoint=checkpoint,
                          prepare_model=prepare_model, plan_tool=lambda call: self._plan(principal, run, call),
-                         execute_tool=execute_tool).advance()
+                         execute_tool=execute_tool, telemetry=self.telemetry).advance()
         except APIError as error:
             if error.body["code"] == "agent_lease_lost":
                 raise

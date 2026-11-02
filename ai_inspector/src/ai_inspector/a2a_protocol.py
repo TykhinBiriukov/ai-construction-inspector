@@ -185,13 +185,14 @@ class ServiceHTTP:
         self.transport = transport
 
     def request(self, method, path, *, body=None):
+        from ai_inspector.observability import current_headers
         if not path.startswith("/") or ".." in path or "://" in path:
             raise ValueError("Service paths must be predefined relative paths")
         try:
             with httpx.Client(timeout=self.timeout, follow_redirects=False, transport=self.transport) as client:
                 with client.stream(method, self.base_url + path,
                                    headers={"Authorization": "Bearer " + self.token, "A2A-Version": VERSION,
-                                            "Content-Type": "application/a2a+json", "A2A-Extensions": EXTENSION},
+                                            "Content-Type": "application/a2a+json", "A2A-Extensions": EXTENSION, **current_headers()},
                                    content=body.encode("utf-8") if body is not None else None) as response:
                     if response.status_code != 200:
                         retryable = response.status_code in (408, 429) or response.status_code >= 500

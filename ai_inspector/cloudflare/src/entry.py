@@ -9,6 +9,8 @@ from database import WorkerDatabase
 from runtime_settings import meta_settings
 from model_transport import WorkerModelTransport
 from ai_inspector.model_client import MetaModelClient
+from ai_inspector.worker_observability import WorkerTelemetry
+from ai_inspector.observability import ObservabilityConfig
 
 CLOUD_LIMITS = dict(max_bim_bytes=8 * 1024**2, max_archive_bytes=16 * 1024**2,
                     max_unpacked_archive_bytes=64 * 1024**2, max_capture_file_bytes=16 * 1024**2,
@@ -33,6 +35,10 @@ class InspectorRuntime(DurableObject):
     def service(self):
         env = self.env
         settings = Settings(
+            observability=ObservabilityConfig.from_mapping({name: getattr(env, name, None) or default for name, default in {
+                'LANGFUSE_PUBLIC_KEY':'', 'LANGFUSE_SECRET_KEY':'', 'LANGFUSE_BASE_URL':'https://cloud.langfuse.com',
+                'LANGFUSE_ENABLED':'true', 'LANGFUSE_TRACING_ENVIRONMENT':'production', 'LANGFUSE_RELEASE':'',
+                'INSPECTOR_LANGFUSE_PROMPTS_ENABLED':'false', 'INSPECTOR_LANGFUSE_PROMPT_LABEL':'production'}.items()}),
             data_dir=Path('/tmp/inspector'), **CLOUD_LIMITS, **meta_settings(env),
             operator_token=env.INSPECTOR_OPERATOR_TOKEN,
             device_token=env.INSPECTOR_DEVICE_TOKEN,
@@ -56,6 +62,7 @@ class InspectorRuntime(DurableObject):
             model_client=MetaModelClient(settings, transport=WorkerModelTransport()),
             remote_transport=WorkerModelTransport(), secret_resolver=lambda name: getattr(env, name, None))
         service.localization_transport = WorkerModelTransport()
+        service.agent.telemetry = WorkerTelemetry(settings.observability, WorkerModelTransport())
         return service
 
     async def fetch(self, request):
@@ -67,13 +74,17 @@ class InspectorRuntime(DurableObject):
                 return await asgi.websocket(APP,request,self.env)
             return await asgi.fetch(APP,request,self.env)
         finally:
+            service.agent.telemetry.flush()
             _service.reset(service_token)
             _settings.reset(settings_token)
 
     async def process(self):
         service = self.service()
-        captured = service.capture.process_next(heartbeat_enabled=False)
-        return service.agent.process_next() or captured
+        try:
+            captured = service.capture.process_next(heartbeat_enabled=False)
+            return service.agent.process_next() or captured
+        finally:
+            service.agent.telemetry.flush()
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):

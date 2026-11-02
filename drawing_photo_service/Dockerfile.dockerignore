@@ -1,0 +1,15 @@
+**
+!drawing_photo_service
+!drawing_photo_service/**
+!ai_inspector
+!ai_inspector/src
+!ai_inspector/src/ai_inspector
+!ai_inspector/src/ai_inspector/observability.py
+!ai_inspector/src/ai_inspector/__init__.py
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+**/.local
+**/data
+**/*.sqlite*

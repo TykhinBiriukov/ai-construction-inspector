@@ -4,6 +4,7 @@ import json
 from typing import Annotated, Literal
 
 import httpx
+from ai_inspector.observability import record_generation
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .errors import APIError
@@ -72,6 +73,8 @@ class MetaModelClient:
             if not isinstance(result, dict) or not isinstance(result.get("choices"), list):
                 raise ValueError
             choice, = result["choices"]
+            record_generation(model=self.settings.meta_model, usage=result.get("usage"),
+                              finish_reason=choice.get("finish_reason") if isinstance(choice, dict) else None)
             if not isinstance(choice, dict) or choice.get("finish_reason") not in ("stop", "tool_calls"):
                 raise ValueError
             return validated_message(choice["message"])

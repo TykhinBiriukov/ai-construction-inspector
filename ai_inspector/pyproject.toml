@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+observability = ["langfuse==5.1.0"]
 test = ["httpx>=0.28.1,<0.29"]
 
 [tool.setuptools.packages.find]

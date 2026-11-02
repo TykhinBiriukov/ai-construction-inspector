@@ -171,6 +171,18 @@ unchecking/removing a selection persists, including an empty selection; no files
 automatically borrowed from another chat. No document preview or image bytes are
 stored by this preference. Delete controls are disabled while a request is pending.
 
+## Langfuse Cloud: traces, prompts and evaluation
+
+Install the optional native integration from ai_inspector with `python -m pip install -e ".[observability]"` (tested SDK 5.1.0). Set LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_BASE_URL in the ignored backend .env; EU uses https://cloud.langfuse.com. Native Settings loads these without exporting them to the process. Independent inspector services read their own process environment. LANGFUSE_ENABLED=false disables export. LANGFUSE_TRACING_ENVIRONMENT and LANGFUSE_RELEASE distinguish development, staging and deployed releases. Missing SDK/credentials or export failure does not fail a business task.
+
+The Langfuse project Tracing screen shows orchestrator/inspector attempts, model/tool/validation observations, A2A submission/polling and accepted results. Model usage is taken from provider responses, with cached/reasoning tokens normalized into non-overlapping buckets. Missing usage stays unknown. Configure a model price in Langfuse to calculate cost; it is not a guaranteed billing receipt. Session grouping uses project/chat, independently of capture sessions. Trace context is saved outside immutable request bodies and carried in traceparent headers. Workers restore it after restart. Polling/waiting is distinct from a new model delegation.
+
+Export is metadata-only: IDs, available/selected tool names, status, attempts, durations, usage, model and prompt versions. It does not automatically upload user/model text, document contents, images/base64, signed URLs, credentials or raw errors. Durable operational state, private history, minion audit and the existing UI activity events remain authoritative in their services. Synthetic verification runs have a separate environment/origin; their scores are not measured construction accuracy.
+
+Set INSPECTOR_LANGFUSE_PROMPTS_ENABLED=true to resolve inspector/orchestrator by INSPECTOR_LANGFUSE_PROMPT_LABEL (default production). New runs save text/version/hash before model IO and reuse them on retry. Failed resolution pins the bundled fallback for that run. Legacy runs do not silently adopt managed prompts. Local/remote InspectorProfile may opt in with both instructions_prompt and immutable instructions_prompt_version; changing these/instructions requires a profile version bump. Base specialist rules, schemas, allowlists and budgets stay in code.
+
+Cloudflare Python uses a bounded OTLP/HTTP JSON transport instead of native SDK threads. Set the same keys as Worker Secrets and other options as bindings; each fetch/process flushes up to 128 observations with bounded IO, dropping telemetry on failure. Prompt reads use the same frozen-snapshot rule. Native inspector deployments and the separate minion need their own configuration/deployment; putting keys in the local .env does not configure Cloudflare or remote services. There is no telemetry retry that re-executes business actions, and this is not a lossless audit log.
+
 ## Verification boundary
 
 Local fixtures cover model/tool validation, scopes, retries/restart, separate HTTP services/stores and cancellation fencing. They do not establish deployed connectivity, live Meta access, a real phone, inspection accuracy or a configured external Geometry service. Capture_task display in the actual phone, business messages, BIM measurements and automatic Geometry continuation require separate implementation/integration acceptance.

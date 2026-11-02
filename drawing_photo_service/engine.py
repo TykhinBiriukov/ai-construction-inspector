@@ -4,6 +4,7 @@ import json
 import time
 
 import httpx
+from ai_inspector.observability import Telemetry, record_generation
 from pydantic import ValidationError
 
 from .images import data_url, identity, evidence_context
@@ -107,6 +108,7 @@ class MetaClient:
             reason = choice.get("finish_reason")
             self.last_diagnostic["finish_reason"] = reason if reason in ("stop", "tool_calls", "length", "content_filter") else "unexpected"
             usage = value.get("usage", {})
+            record_generation(model=self.model, usage=usage, finish_reason=reason)
             if isinstance(usage, dict):
                 self.last_diagnostic["usage"] = {k: v for k, v in usage.items()
                     if k in ("prompt_tokens", "completion_tokens", "total_tokens") and isinstance(v, int)}
@@ -130,7 +132,8 @@ class MetaClient:
             raise ModelFailure("invalid_model_output") from None
 
 
-def run(request: TaskRequest, images: dict, client, audit: list) -> Report:
+def run(request: TaskRequest, images: dict, client, audit: list, *, telemetry=None, prompt=None, prompt_snapshot=None) -> Report:
+    tracing = telemetry or Telemetry()
     views = Views(images)
     kinds = {asset.asset_id: asset.kind for asset in request.assets}
     # Preserve source tasks, but delimit existing C-number labels unambiguously.
@@ -143,7 +146,7 @@ def run(request: TaskRequest, images: dict, client, audit: list) -> Report:
         content += [{"type": "text", "text": json.dumps({**identity(asset, images[asset.asset_id]),
                      "view_id": asset.asset_id, "grid": "columns A-J; rows 1-10; inclusive cells; margins excluded"})},
                     {"type": "image_url", "image_url": {"url": data_url(views.grid(asset.asset_id))}}]
-    messages = [{"role": "system", "content": PROMPT}, {"role": "user", "content": content}]
+    messages = [{"role": "system", "content": prompt or PROMPT}, {"role": "user", "content": content}]
     started = time.monotonic()
     reviewing = False
     repairs = 0
@@ -153,7 +156,12 @@ def run(request: TaskRequest, images: dict, client, audit: list) -> Report:
             raise ModelFailure("task_time_budget_exhausted")
         before = time.monotonic()
         try:
-            message = client.complete(messages, timeout=min(60, remaining), final_only=reviewing or step >= MAX_CALLS-2)
+            with tracing.scope({'run_id': str(request.request_id),
+                                'prompt_snapshots': {'inspector/drawing-photo': prompt_snapshot} if prompt_snapshot else {}},
+                               'evidence_review' if reviewing else 'visual_analysis',
+                               'generation', metadata={'step': step}) as span:
+                message = client.complete(messages, timeout=min(60, remaining), final_only=reviewing or step >= MAX_CALLS-2)
+                span.update(output={'selected_tools': [c.get('function', {}).get('name') for c in message.get('tool_calls') or []]})
         except ModelFailure as exc:
             audit.append({"event": "model_call_failed", "step": step, "code": exc.code,
                           "duration_ms": round((time.monotonic()-before)*1000),
@@ -173,7 +181,8 @@ def run(request: TaskRequest, images: dict, client, audit: list) -> Report:
                 if not isinstance(call["id"], str) or not 1 <= len(call["id"]) <= 200:
                     raise ValueError
                 ref = GridRegion.model_validate_json(call["function"]["arguments"])
-                name = views.new_crop(ref)
+                with tracing.scope({'run_id': str(request.request_id)}, 'crop_region', 'tool'):
+                    name = views.new_crop(ref)
             except (KeyError, ValueError, TypeError):
                 audit.append({"event": "tool_validation_failed", "step": step})
                 raise ModelFailure("invalid_tool_call") from None

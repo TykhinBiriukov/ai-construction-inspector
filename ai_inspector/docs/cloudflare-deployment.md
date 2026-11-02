@@ -28,6 +28,8 @@ The runtime reads operator/device tokens, restricted database URI, Supabase URL/
 
 The model API key belongs only on `ai-inspector-runtime`; nonsecret model defaults and limits are in Wrangler config. Missing model settings leave requests retryable, not backed by a mock. Optional Geometry, Localization, drawing/photo and remote A2A connections need their own configured endpoints and scoped service credentials. See [agent configuration](agent-chat.md#server-configuration); presence of a setting is not a successful connection.
 
+Optional Langfuse tracing also belongs on the Python runtime, never the public frontend. Add LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY as Worker Secrets, and LANGFUSE_BASE_URL, LANGFUSE_TRACING_ENVIRONMENT, LANGFUSE_RELEASE and optional INSPECTOR_LANGFUSE_PROMPTS_ENABLED / INSPECTOR_LANGFUSE_PROMPT_LABEL as bindings. Existing bindings/secrets must be preserved. The Python Worker uses a bounded OTLP/HTTP JSON exporter and does not install the native SDK or start exporter threads. Local .env credentials do not configure a deployed Worker. See [Langfuse integration](agent-chat.md#langfuse-cloud-traces-prompts-and-evaluation).
+
 To supply secrets during native tooling deployment, use an ignored private JSON file restricted to your account and `./deploy.sh --secrets-file /absolute/private/path/secrets.json`. Omitted existing secrets are preserved. A developer workstation's administrator `.env` is not a runtime secrets bundle. Do not publish real example values.
 
 ## CI deployment

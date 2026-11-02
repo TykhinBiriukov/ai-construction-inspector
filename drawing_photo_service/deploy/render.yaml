@@ -6,7 +6,7 @@ services:
     region: frankfurt
     branch: feat/drawing-photo-minion
     dockerfilePath: ./drawing_photo_service/Dockerfile
-    dockerContext: ./drawing_photo_service
+    dockerContext: .
     healthCheckPath: /healthz
     envVars:
       - key: PORT

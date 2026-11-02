@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from dotenv import dotenv_values
+from ai_inspector.observability import ObservabilityConfig
 
 
 IDENTIFIER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
@@ -59,6 +60,7 @@ class Settings:
     agent_max_steps: int = 6
     remote_agents_json: str = field(default="[]", repr=False)
     remote_agent_secrets: dict[str, str] = field(default_factory=dict, repr=False, compare=False)
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig, repr=False)
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.meta_timeout_s) or not 1 <= self.meta_timeout_s <= 120:
@@ -167,6 +169,7 @@ class Settings:
         profiles = remote_profiles(agents_json)
         credential_refs = {name for profile in profiles for name in (profile.token_env, profile.tool_token_env) if name}
         return cls(
+            observability=ObservabilityConfig.from_mapping(values),
             meta_base_url=get("INSPECTOR_META_BASE_URL", "https://api.meta.ai/v1"),
             meta_model=get("INSPECTOR_META_MODEL", "muse-spark-1.3"),
             meta_api_key=get("INSPECTOR_META_API_KEY", ""),

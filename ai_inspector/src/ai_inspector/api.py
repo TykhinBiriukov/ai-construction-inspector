@@ -106,6 +106,7 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
             stop.set()
             await asyncio.to_thread(thread.join, 5)
             await asyncio.to_thread(agent_thread.join, 5)
+            await asyncio.to_thread(service.agent.telemetry.flush)
 
     errors = {status: {"model": ErrorEnvelope} for status in (400, 401, 403, 404, 409, 413, 422, 503)}
     app = FastAPI(

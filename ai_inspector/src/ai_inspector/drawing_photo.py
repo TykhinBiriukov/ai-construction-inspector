@@ -107,6 +107,7 @@ class MinionClient:
         self.settings,self.transport=settings,transport
 
     def request(self, method, task_id, body=None):
+        from ai_inspector.observability import current_headers
         base=self.settings.drawing_photo_base_url
         token=self.settings.drawing_photo_service_token
         if not base or not token:
@@ -114,7 +115,7 @@ class MinionClient:
         path='/v1/tasks' if method=='POST' else '/v1/tasks/'+str(UUID(task_id))
         try:
             with httpx.Client(timeout=20,follow_redirects=False,transport=self.transport) as client:
-                with client.stream(method,base.rstrip('/')+path,headers={'Authorization':'Bearer '+token,'Prefer':'respond-async'},json=body) as response:
+                with client.stream(method,base.rstrip('/')+path,headers={'Authorization':'Bearer '+token,'Prefer':'respond-async',**current_headers()},json=body) as response:
                     if response.status_code not in (200,202):
                         retry=response.status_code in (408,429,503) or response.status_code>=500
                         code='comparison_unavailable'

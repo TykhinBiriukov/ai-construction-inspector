@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from .errors import APIError
 from .schemas import APIModel
@@ -21,6 +21,14 @@ class InspectorProfile(APIModel):
     instructions: Annotated[str, Field(min_length=1, max_length=16000)]
     allowed_tools: tuple[Literal["session_get", "device_status"], ...] = ()
     max_steps: Annotated[int, Field(ge=1, le=32)] = 6
+    instructions_prompt: Annotated[str, Field(pattern=r"^[a-zA-Z0-9_/-]{1,128}$")] | None = None
+    instructions_prompt_version: Annotated[int, Field(ge=1)] | None = None
+
+    @model_validator(mode="after")
+    def pinned_prompt(self):
+        if bool(self.instructions_prompt) != bool(self.instructions_prompt_version):
+            raise ValueError("Inspector prompt name and immutable version must be configured together")
+        return self
 
     @field_validator("allowed_tools")
     @classmethod
