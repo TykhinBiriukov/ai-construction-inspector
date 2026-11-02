@@ -254,8 +254,8 @@ to operators of `INSPECTOR_PROJECT_ID`. Model-provided endpoints and storage key
 are forbidden. Result metadata, capture identity, IFC hash, committed result/stage
 manifests and bounded evidence are checked by the normal Geometry adapter. Raw
 RGB-D files and large reconstruction artifacts are not reprocessed. Provenance says
-`saved_result`; previous local context is retained in an audit receipt, old Geometry
-jobs/results are never deleted. A cancelled chat review stays cancelled: start a new
+`saved_result`; each use gets a separate local result session bound to the original capture UUID;
+old capture sessions and Geometry jobs/results are not changed. A cancelled chat review stays cancelled: start a new
 chat for a new test. Active processing must be stopped before switching modes.
 
 `source_validation_progress` is available to the main conversation for progress
@@ -267,3 +267,5 @@ and posts Bob's continuation automatically. The user supplies neither candidate-
 JSON nor a notification that Geometry is ready. The UI identifies loading a saved
 result and shows reviewed batch counts. New phone capture remains a separate explicit
 `session_create` action; previously queued raw imports retain their frozen commands.
+
+Unexpected execution errors checkpoint a safe retryable state and preserve the pending command. Resume continues the same operation. The work panel shows saved-result loading, evidence review counts and last-update time; unknown duration uses an indeterminate indicator, not a fabricated percentage.

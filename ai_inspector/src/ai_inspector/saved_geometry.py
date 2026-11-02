@@ -93,7 +93,10 @@ def plan(service, principal, run, sid):
 
 def execute(service, principal, run, plan):
     require_role(principal, 'operator')
-    sid, snapshot, model, remote = plan['session_id'], plan['snapshot'], plan['model'], plan['remote']
+    source_sid, snapshot, model, remote = plan['session_id'], plan['snapshot'], plan['model'], plan['remote']
+    # One geometry_jobs row per Inspector session: each review gets its own local
+    # result session while the original capture and cancelled jobs stay immutable.
+    sid = str(uuid5(UUID(plan['operation_id']), 'saved-result-session'))
     capture_import.check_store(service, snapshot)
     job_id = str(uuid5(UUID(plan['operation_id']), 'saved-result'))
     with service.database.connection() as conn:
@@ -115,6 +118,7 @@ def execute(service, principal, run, plan):
     command = {'adapter': 'inspections_v1', 'schema_version': '0.1', 'read_only_result': True,
         'expected_result_manifest_sha256': remote['result_manifest_sha256'], 'job_id': job_id,
         'operation_key': plan['operation_id'], 'project_id': principal.project_id, 'session_id': sid,
+        'source_session_id': source_sid,
         'manifest_sha256': snapshot['manifest_sha256'], 'model_sha256': model['sha256'],
         'base_url': service.settings.geometry_base_url.rstrip('/'),
         'storage_origin': snapshot['storage_origin'], 'storage_bucket': snapshot['storage_bucket'],
@@ -131,12 +135,12 @@ def execute(service, principal, run, plan):
         'parent_session_id': None, 'created_at': utc_now(), 'revision': 1, 'capture_state': 'sealed',
         'processing_state': 'queued_geometry', 'device_acknowledged_at': None, 'capture_task': None,
         'completion': None, 'source': {'status': 'accepted', 'capture_ref': {'format': 'saved_geometry_result_v1',
-            'source_job_id': remote['job_id'], 'manifest_key': snapshot['manifest_key']},
+            'source_job_id': remote['job_id'], 'source_session_id': source_sid, 'manifest_key': snapshot['manifest_key']},
             'manifest_sha256': snapshot['manifest_sha256'], 'observation_count': snapshot['inventory']['observation_count'],
             'validation_error': None, 'validation_scope': 'saved_result_binding'},
         'geometry_job': job, 'display_view_id': None, 'result': None, 'error': None, 'geometry_result': None,
         'processing_scope': 'geometry_only_v1', 'storage': {'provider': 'supabase', 'storage_id': 'geometry-import',
-            'key_prefix': sid+'/', 'project_url': snapshot['storage_origin'], 'bucket': snapshot['storage_bucket'], 'folder_status': 'ready'}}
+            'key_prefix': source_sid+'/', 'project_url': snapshot['storage_origin'], 'bucket': snapshot['storage_bucket'], 'folder_status': 'ready'}}
     with service.database.transaction() as conn:
         row = conn.execute('SELECT data FROM sessions WHERE session_id=?', (sid,)).fetchone()
         if row:

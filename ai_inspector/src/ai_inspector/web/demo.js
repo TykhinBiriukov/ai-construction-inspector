@@ -69,8 +69,29 @@
     $('run-status').textContent=sending ? 'AI Inspector is working. Progress appears in Work process.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     const review=chat?.geometry_reviews?.find(r=>!['completed','cancelled'].includes(r.status));
     if(review&&!sending&&!pending){const labels={waiting_geometry:'Processing captured geometry. Review will continue automatically.',preparing_evidence:'Preparing captured evidence.',reviewing:'Reviewing the captured evidence.',summarizing:'Preparing the inspection response.',waiting_configuration:'Inspection is waiting for service configuration.',retrying:'Inspection will retry automatically.',failed:'Inspection needs attention.'};const saved=scopedSessions.find(s=>s.session_id===chat.session_id)?.geometry_job?.processing_mode==='saved_result';$('run-status').textContent=review.status==='waiting_geometry'&&saved?'Loading saved inspection results. No reconstruction or segmentation.':labels[review.status]||'Inspection is continuing automatically.';if(review.status==='reviewing'&&review.batches)$('run-status').textContent+=` ${review.reviewed}/${review.batches} batches reviewed.`;}
-    updateActivityStatus();
+    updateActivityStatus();renderGeometryProgress();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
+  }
+  function renderGeometryProgress() {
+    let panel=$('geometry-progress');
+    if(!panel){panel=node('div','action-card');panel.id='geometry-progress';$('activity-open').after(panel);}
+    const run=chat?.runs?.at(-1),review=chat?.geometry_reviews?.filter(r=>r.status!=='cancelled').at(-1);
+    const importing=run?.active_tool==='session_import'&&!['completed','failed'].includes(run.status);
+    panel.hidden=!review&&!importing;panel.replaceChildren();if(panel.hidden)return;
+    const stale=importing&&run.status==='running'&&Date.now()-Date.parse(run.updated_at)>90000;
+    const paused=stale||run?.status==='retryable'||review?.status==='failed';
+    const labels={waiting_geometry:'Reading saved inspection result',preparing_evidence:'Preparing evidence',reviewing:'Checking findings',summarizing:'Preparing the report',completed:'Inspection completed',waiting_configuration:'Waiting for service configuration',retrying:'Retrying the saved inspection',failed:'Inspection paused'};
+    const label=paused?(review?.status==='failed'?'Inspection paused — see error details':'Processing interrupted — resume the saved request'):importing?'Connecting saved inspection result':labels[review?.status]||'Preparing evidence';
+    panel.append(node('p','',label));
+    if(review&&!importing){$('activity-current').textContent=label;$('process-state').textContent=label;}
+    if(!paused&&review?.status!=='completed'){
+      const progress=node('progress');progress.setAttribute('aria-label',label);
+      if(review?.status==='reviewing'&&review.batches>0){progress.max=review.batches;progress.value=review.reviewed;panel.append(node('p','',`${review.reviewed} of ${review.batches} groups checked`));}
+      panel.append(progress);
+    }
+    const saved=importing||scopedSessions.find(s=>s.session_id===chat?.session_id)?.geometry_job?.processing_mode==='saved_result';
+    panel.append(node('small','',paused?'The last state is preserved.':saved?'Using existing results. Reconstruction and segmentation are not repeated.':'The inspection continues automatically.'));
+    const updated=review?.updated_at||run?.updated_at;if(updated)panel.append(node('small','',`Last update: ${new Date(updated).toLocaleTimeString()}`));
   }
   function renderRails() {
     $('project-name').textContent=overview.project_id;
@@ -179,7 +200,7 @@
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
   const comparisonPhaseLabels={drawing_checklist:'Reading the drawing',checklist_reuse:'Using saved checklist',photo_inspection:'Checking the photo',review:'Reviewing the findings'};
-  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Reviewing inspection evidence'};
+  const toolLabels={session_import:'Connecting saved inspection result',device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Reviewing inspection evidence'};
   let activitySync=0,activitySignature='',activityExpanded=new Map();
   function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
   function updateActivityStatus(){
@@ -199,6 +220,7 @@
   }
 
   function toolSummary(tool){const r=tool.result||{};if(r.error)return r.error.message||'This action could not be completed.';
+    if(tool.name==='session_import')return r.new_geometry_computation===false?'Saved result connected. Evidence review continues automatically.':'Saved capture connected.';
     if(tool.name==='device_status')return `${r.device_id||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
     const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
     if(tool.name==='session_create'||tool.name==='session_get')return session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
@@ -237,7 +259,7 @@
     const body=node('div','action-body');
     const comparison=['drawing_photo_compare','drawing_photo_result'].includes(event.name);
     const result=event.status==='failed'?'This step could not be completed. See the response for what to do next.':
-      ['running','waiting'].includes(event.status)?(comparison?'The drawing/photo comparison is in progress.':'This step is in progress.'):
+      ['running','waiting'].includes(event.status)?(event.name==='session_import'?'Connecting the saved result; no reconstruction or segmentation.':comparison?'The drawing/photo comparison is in progress.':'This step is in progress.'):
       event.kind==='model'?'Step completed.':comparison?(tool?.result?.error?'The comparison could not be completed. See the response for details.':'Comparison results received.'):'Step completed.';
     body.append(node('p','',result));
     if(comparison&&run.comparison_progress?.operation_id===event.operation_id){
@@ -288,7 +310,7 @@
         for(const run of runs) {
           const user=node('article','message user'); user.append(node('div','message-author',run.continuation?'AUTOMATIC REVIEW':'YOU'),messageText(run.continuation?'Results from the saved capture inspection.':run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
           const assistant=node('article','message assistant'); assistant.id='reply-'+run.run_id; assistant.append(node('div','message-author','✳ AI INSPECTOR'));
-          assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
+          assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?(Date.now()-Date.parse(run.updated_at)>90000?'No recent server update. Resume continues this saved request.':toolLabels[run.active_tool]||'Preparing response…'):'Request saved. Awaiting a response.')));
           const grid=node('div','artifact-grid'),comparisons=comparisonResults(run);
           for(const item of run.artifacts||[]) {
             const source=String(item.source||'');

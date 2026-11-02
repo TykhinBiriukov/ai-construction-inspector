@@ -262,6 +262,8 @@ class GeometryEngineAdapter:
         self.check_config(command)
         if command.get('read_only_result') and method != 'GET':
             raise APIError(409, 'saved_result_read_only', 'Saved-result mode cannot start Geometry computation')
+        if command.get('source_session_id') and not command.get('read_only_result'):
+            raise invalid()
         owns = client is None
         client = client or httpx.Client(transport=getattr(self.service, 'geometry_transport', None), timeout=self.settings.geometry_timeout_s)
         try:
@@ -292,7 +294,7 @@ class GeometryEngineAdapter:
             identity = str(UUID(body['job_id']))
         except (KeyError, ValueError, TypeError):
             raise invalid() from None
-        if (remote_id is not None and identity != remote_id) or body.get('session_id') != command['session_id']:
+        if (remote_id is not None and identity != remote_id) or body.get('session_id') != command.get('source_session_id', command['session_id']):
             raise invalid()
         if any(body.get(k) != command['payload'][k] for k in ('capture_manifest_path', 'ifc_object_key', 'parameters')):
             raise invalid()
@@ -374,7 +376,7 @@ class GeometryEngineAdapter:
             if body.get('ifc_sha256') != command['model_sha256']:
                 raise invalid()
             manifest = self.storage_json(body.get('result_manifest_key'), body.get('result_manifest_sha256'))
-            if (manifest.get('job_id') != remote_id or manifest.get('session_id') != command['session_id']
+            if (manifest.get('job_id') != remote_id or manifest.get('session_id') != command.get('source_session_id', command['session_id'])
                     or manifest.get('ifc_sha256') != command['model_sha256']):
                 raise invalid()
             payload = self.request('GET', command, f'/inspections/{remote_id}/result', client)
@@ -382,7 +384,7 @@ class GeometryEngineAdapter:
                 report = CompactResult.model_validate(payload).model_dump(mode='json')
             except ValueError:
                 raise invalid() from None
-            if report['job_id'] != remote_id or report['session_id'] != command['session_id']:
+            if report['job_id'] != remote_id or report['session_id'] != command.get('source_session_id', command['session_id']):
                 raise invalid()
             after = self.request('GET', command, '/inspections/' + remote_id, client)
             self.validate_status(after, command, remote_id)
@@ -421,6 +423,7 @@ class GeometryEngineAdapter:
                 'geometry_revision': 1, 'job_revision': 3, 'processing_scope': 'geometry_only_v1',
                 'analysis_origin': 'recorded_model' if session.get('input_mode') == 'recorded_capture' else 'live_model',
                 'processing_mode': 'saved_result' if command.get('read_only_result') else 'full_pipeline',
+                'source_session_id': command.get('source_session_id', command['session_id']),
                 'is_synthetic': session.get('capture_origin') == 'synthetic',
                 'model_is_synthetic': session.get('model_is_synthetic', False),
                 'observation_accounting': 'unreported_by_geometry', 'evidence_observation_ids': [],
