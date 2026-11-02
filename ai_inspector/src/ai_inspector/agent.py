@@ -118,6 +118,10 @@ visual roles. If the service requests role confirmation, explain that conflict t
 never silently swap sources or treat a needs_input response as a failed inspection.
 This tool sends the full selected files, not only a viewer crop. It cannot compare IFC/3D.
 Use drawing_photo_result for a task already bound to this chat. Never invent a task ID.
+For replacement photos on the same drawing retain the saved checklist. Do not request
+new_checklist unless the user explicitly changes requirements or asks for a new revision.
+Report each checklist category separately: a geometry match does not imply material or
+product verification. Do not merge independent category verdicts in your summary.
 Use comparison_tasks in the current server context for IDs and last observed states;
 the user need not copy or remember internal IDs. A status/report request reads the
 existing task even when no files are selected. Do not start a new analysis to answer
@@ -197,7 +201,7 @@ class OrchestratorAgent:
     def public_run(run):
         return {key: run.get(key) for key in (
             "schema_version", "run_id", "chat_id", "request_id", "text", "status", "reply",
-            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection", "activity_events", "tool_validation_errors",
+            "error", "session_id", "created_at", "updated_at", "tool_results", "file_ids", "document_selection", "activity_events", "tool_validation_errors", "comparison_progress",
         )} | {"active_tool": (run.get("pending_tool") or {}).get("name"),
               "agent_role": run.get("agent_role", "chat"), "auto_resume": bool(run.get("remote_waiting")),
               "delegations": [public_delegation(item) for item in run.get("delegations", [])]} | presentation(run.get("reply")) | (
@@ -636,7 +640,43 @@ class OrchestratorAgent:
     def _execute(self, principal, run, plan):
         chat, session = self._context(principal, run)
         if plan["name"] in drawing_photo.SCHEMAS:
-            return drawing_photo.execute(self.service, principal, run, plan, self.minion), None
+            retry = run.get('comparison_retry')
+            if not retry or retry.get('operation_id') != plan['operation_id'] or retry.get('exhausted'):
+                retry = {'operation_id': plan['operation_id'], 'started_at': time.time(), 'attempts': 0}
+                run['comparison_retry'] = retry
+            retry['attempts'] += 1
+            try:
+                result = drawing_photo.execute(self.service, principal, run, plan, self.minion)
+                if (result.get('provenance') or {}).get('workflow') == 'staged':
+                    phases = {}
+                    for event in result.get('audit') or []:
+                        if event.get('phase') in ('drawing_checklist', 'checklist_reuse', 'photo_inspection', 'review'):
+                            if event.get('event') in ('phase_started', 'phase_completed'):
+                                phases[event['phase']] = 'completed' if event['event'] == 'phase_completed' else 'running'
+                    current_phase = result.get('phase')
+                    if result.get('status') == 'running' and current_phase in ('drawing_checklist', 'checklist_reuse', 'photo_inspection', 'review'):
+                        phases.setdefault(current_phase, 'running')
+                    run['comparison_progress'] = {'operation_id': plan['operation_id'], 'phases': phases}
+                if result.get('status') == 'running':
+                    raise APIError(503, 'comparison_pending',
+                                   'Analysis is in progress. The saved task will be checked automatically.', retryable=True)
+            except APIError as error:
+                if error.body['retryable'] and error.body['code'] in ('comparison_unavailable', 'comparison_pending'):
+                    if retry['attempts'] < 40 and time.time() - retry['started_at'] < 600:
+                        run['remote_waiting'] = True
+                        run['remote_next_attempt_at'] = time.time() + 15
+                        message = ('Analysis is in progress. Waiting for the report.' if error.body['code'] == 'comparison_pending'
+                                   else 'Waiting for the analysis service. It may be starting after inactivity; this request will continue automatically.')
+                        raise APIError(503, 'comparison_waiting', message, retryable=True) from None
+                    retry['exhausted'] = True
+                    run['remote_waiting'] = False
+                    raise APIError(503, 'comparison_wait_limit',
+                                   'The analysis service is taking longer than expected. Automatic waiting has stopped; Resume will check the same saved task.', retryable=True) from None
+                run['remote_waiting'] = False
+                raise
+            run.pop('comparison_retry', None)
+            run['remote_waiting'] = False
+            return result, None
         if plan["name"] == "device_status":
             return self.service.device_events.status(principal, chat["device_id"]), None
         if plan["name"] == "session_get":

@@ -29,6 +29,7 @@ class Settings:
     max_capture_bytes: int = 50 * 1024**3
     source_url_lifetime_s: int = 900
     drawing_photo_base_url: str = ""
+    drawing_photo_workflow: str = "legacy"
     drawing_photo_service_token: str = field(default="", repr=False)
     localization_base_url: str = ""
     localization_service_token: str = field(default="", repr=False)
@@ -63,6 +64,8 @@ class Settings:
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig, repr=False)
 
     def __post_init__(self) -> None:
+        if self.drawing_photo_workflow not in ("legacy", "staged"):
+            raise ValueError("INSPECTOR_DRAWING_PHOTO_WORKFLOW must be legacy or staged")
         if not math.isfinite(self.meta_timeout_s) or not 1 <= self.meta_timeout_s <= 120:
             raise ValueError("INSPECTOR_META_TIMEOUT_S must be between 1 and 120")
         if not 1 <= self.agent_max_steps <= 12:
@@ -192,6 +195,7 @@ class Settings:
             max_capture_files=int(get("INSPECTOR_MAX_CAPTURE_FILES", "40000")),
             max_capture_bytes=int(get("INSPECTOR_MAX_CAPTURE_BYTES", "53687091200")),
             source_url_lifetime_s=int(get("INSPECTOR_SOURCE_URL_LIFETIME_S", "900")),
+            drawing_photo_workflow=get("INSPECTOR_DRAWING_PHOTO_WORKFLOW", "legacy"),
             drawing_photo_base_url=get("INSPECTOR_DRAWING_PHOTO_BASE_URL", ""),
             drawing_photo_service_token=get("INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN", ""),
             localization_base_url=get("INSPECTOR_LOCALIZATION_BASE_URL", ""),

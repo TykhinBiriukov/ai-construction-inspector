@@ -117,6 +117,7 @@ class AgentHarness:
                             "comparison_file_type", "comparison_file_unavailable", "comparison_page_required",
                             "comparison_task_too_long", "comparison_task_required",
                             "comparison_task_not_found", "comparison_task_ambiguous",
+                            "comparison_checklist_unavailable", "comparison_checklist_conflict",
                         }
                         if not recoverable or error.body["retryable"]:
                             raise

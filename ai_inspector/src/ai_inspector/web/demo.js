@@ -35,7 +35,9 @@
     return el;
   }
   function notify(text='') { $('notice').textContent=text; $('notice').hidden=!text; }
+  const chatPendingKey = id => `inspector-pending:${overview?.project_id}:${id}`;
   function remember() {
+    if(chat?.chat_id)write(sessionStorage,chatPendingKey(chat.chat_id),pending?JSON.stringify(pending):null);
     write(localStorage,pointerKey,chat?.chat_id ? JSON.stringify({chat_id:chat.chat_id, project_id:overview?.project_id}) : null);
     write(sessionStorage,pendingKey,pending || create ? JSON.stringify({pending,create,chat_id:chat?.chat_id,project_id:overview?.project_id}) : null);
   }
@@ -54,10 +56,9 @@
   }
   function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
-    const unfinished=chat?.runs?.find(r=>!['completed','failed'].includes(r.status));
-    $('chat-picker').disabled=sending||workspaceBusy||!!pending;
+    $('chat-picker').disabled=sending||workspaceBusy;
     $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
-    $('new-chat').disabled= !token || sending || workspaceBusy || !!pending || !!unfinished;
+    $('new-chat').disabled= !token || sending || workspaceBusy;
     $('attach-file').disabled=!token||sending||workspaceBusy||!!pending; $('add-plan-item').disabled=!token||workspaceBusy; $('import-plan').disabled=!chat||workspaceBusy;
     $('room').readOnly=!!chat || !!create || sending;
     if(chat?.room_id) $('room').value=chat.room_id;
@@ -65,7 +66,7 @@
     $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
-    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? 'Waiting for the specialist inspector. This request continues automatically.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     updateActivityStatus();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
@@ -93,6 +94,67 @@
     const box=node('div'); const heading=node('div','bar-label'); heading.append(node('span','',label),node('span','',`${value}${unit?' '+unit:''}`));
     const track=node('div','bar-track'); const fill=node('div','bar-fill'); fill.style.width=`${Math.max(0,Math.min(100,max>0?value/max*100:0))}%`; track.append(fill); box.append(heading,track); return box;
   }
+  let evidenceVersion=0,evidenceUrl=null,evidenceDetail=null,evidenceFull=false;
+  function clearEvidence(){
+    evidenceVersion++;if(evidenceUrl)URL.revokeObjectURL(evidenceUrl);if(evidenceDetail)URL.revokeObjectURL(evidenceDetail);
+    evidenceUrl=null;evidenceDetail=null;$('evidence-image').removeAttribute('src');$('evidence-image').hidden=true;
+    $('evidence-toggle').hidden=true;$('evidence-retry').hidden=true;
+  }
+  function showEvidenceImage(){
+    $('evidence-image').src=evidenceFull?evidenceUrl:evidenceDetail;
+    $('evidence-image').hidden=false;$('evidence-toggle').hidden=false;
+    $('evidence-toggle').textContent=evidenceFull?'Show detail':'Show full image';
+  }
+  async function openEvidence(chatId,result,findingIndex,kind,refIndex){
+    clearEvidence();const version=evidenceVersion,current=epoch;
+    const finding=result.report.findings[findingIndex],claim=kind==='photo'?finding.photo_claim:finding.design_claim;
+    const region=claim.evidence[refIndex],asset=(result.assets||[]).find(a=>a.asset_id===region.asset_id);
+    $('evidence-title').textContent=`${kind==='photo'?'Photo':'Drawing'}${asset?.page?' · page '+asset.page:''} — ${finding.criterion}`;
+    $('evidence-claim').textContent=claim.text;$('evidence-status').textContent='Loading evidence…';
+    if(!$('evidence-dialog').open)$('evidence-dialog').showModal();
+    $('evidence-retry').onclick=()=>openEvidence(chatId,result,findingIndex,kind,refIndex);
+    try{
+      const blob=await api(`/v1/chats/${encodeURIComponent(chatId)}/comparisons/${encodeURIComponent(result.task_id)}/evidence/${findingIndex}/${kind}/${refIndex}`,{blob:true});
+      if(version!==evidenceVersion||current!==epoch)return;
+      evidenceUrl=URL.createObjectURL(blob);const image=new Image();image.src=evidenceUrl;await image.decode();
+      if(version!==evidenceVersion||current!==epoch)return;
+      const [x,y,w,h]=region.bbox,padX=Math.max(.04,w*.2),padY=Math.max(.04,h*.2);
+      const left=Math.max(0,x-padX),top=Math.max(0,y-padY),right=Math.min(1,x+w+padX),bottom=Math.min(1,y+h+padY);
+      const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.ceil((right-left)*image.naturalWidth));canvas.height=Math.max(1,Math.ceil((bottom-top)*image.naturalHeight));
+      canvas.getContext('2d').drawImage(image,left*image.naturalWidth,top*image.naturalHeight,(right-left)*image.naturalWidth,(bottom-top)*image.naturalHeight,0,0,canvas.width,canvas.height);
+      const detail=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      if(version!==evidenceVersion||current!==epoch)return;
+      if(!detail)throw new Error('Could not display the evidence region.');
+      evidenceDetail=URL.createObjectURL(detail);evidenceFull=false;showEvidenceImage();
+      $('evidence-status').textContent='Highlighted area cited by the analysis. Open the full image to see its context.';
+    }catch(error){if(version===evidenceVersion&&current===epoch){$('evidence-status').textContent=error.message||'Could not load evidence.';$('evidence-retry').hidden=false;}}
+  }
+  function comparisonResults(run){
+    const results=new Map();
+    for(const tool of run.tool_results||[]){const r=tool.result;if(['drawing_photo_compare','drawing_photo_result'].includes(tool.name)&&r?.task_id&&r.report?.findings?.length)results.set(r.task_id,r);}
+    return [...results.values()];
+  }
+  function renderComparison(result,chatId){
+    const box=node('section','artifact artifact-wide comparison-evidence');box.append(node('h4','','Drawing and photo comparison'));
+    const table=node('table'),head=node('thead'),heading=node('tr');for(const name of ['Detail','Result','Evidence'])heading.append(node('th','',name));head.append(heading);table.append(head);
+    const body=node('tbody');
+    result.report.findings.forEach((finding,index)=>{
+      const requirement=result.checklist?.checklist?.items?.find(item=>item.criterion===finding.criterion);
+      const categories={geometry:'Geometry',material:'Material',product:'Product',measurement:'Measurement',installation:'Installation',performance:'Performance'};
+      const label=categories[requirement?.category]?`${categories[requirement.category]} · ${finding.criterion}`:finding.criterion;
+      const row=node('tr');row.append(node('td','',label),node('td','',({match:'Match',mismatch:'Mismatch',inconclusive:'Unclear'})[finding.verdict]||'Unclear'));
+      const links=node('td');
+      for(const [kind,key,label] of [['photo','photo_claim','Photo'],['drawing','design_claim','Drawing']]){
+        const refs=finding[key]?.evidence||[];
+        refs.forEach((region,i)=>{if(!Array.isArray(region.bbox)||region.bbox.length!==4||!region.bbox.every(Number.isFinite))return;
+          const link=node('button','quiet evidence-link',label+(refs.length>1?' '+(i+1):''));link.type='button';link.setAttribute('aria-label',`View ${label.toLowerCase()} evidence ${i+1}: ${finding.criterion}`);
+          link.onclick=()=>openEvidence(chatId,result,index,kind,i);links.append(link);
+        });
+      }
+      if(!links.childNodes.length)links.append(node('span','','Unavailable'));
+      row.append(links);body.append(row);
+    });table.append(body);box.append(table);return box;
+  }
   function renderArtifact(item) {
     if(!['metric','bar_chart','table'].includes(item.type)) return null;
     if(item.type==='table'&&String(item.source).includes('device_status')){
@@ -114,27 +176,26 @@
     }
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
-  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task'};
+  const comparisonPhaseLabels={drawing_checklist:'Reading the drawing',checklist_reuse:'Using saved checklist',photo_inspection:'Checking the photo',review:'Reviewing the findings'};
+  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Specialist inspection'};
   let activitySync=0,activitySignature='',activityExpanded=new Map();
   function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
   function updateActivityStatus(){
-    const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event);
+    const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event),active=live||!!last?.auto_resume;
     let text=last?'Response ready':'Inspector is ready';
-    if(last?.status==='retryable')text=last.auto_resume?'Waiting for specialist inspector':'Waiting for retry';
+    if(last?.status==='retryable')text=last.auto_resume?'Analyzing your files':'Action needed';
     else if(last?.status==='failed')text='Request failed';
-    else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||event.name:'Preparing response'):'Waiting for server update';
+    else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||'Working on your request':'Preparing response'):'Waiting for server update';
     else if(sending)text='Sending request';
     else if(last&&!['completed','failed'].includes(last.status))text='Waiting for server';
-    $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',live);
-    $('activity-graph').classList.toggle('live',live);$('activity-feed').classList.toggle('live',live);
-    for(const clock of document.querySelectorAll('[data-action-start]')){
-      const running=clock.dataset.actionStatus==='running',duration=clock.dataset.duration;
-      clock.textContent=duration!==''?formatDuration(Number(duration)):running&&live&&clock.dataset.eventId===event?.event_id?formatDuration(Date.now()-Date.parse(clock.dataset.actionStart))+' elapsed':'Duration not recorded';
-    }
+    const phase=Object.entries(last?.comparison_progress?.phases||{}).find(([name,status])=>comparisonPhaseLabels[name]&&status==='running');
+    if(last?.auto_resume&&phase)text=comparisonPhaseLabels[phase[0]];
+    $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',active);
+    $('activity-graph').classList.toggle('live',active);$('activity-feed').classList.toggle('live',active);
     const contextual=live&&last?.document_selection?.file_id===documentOpenId;
     viewer.setActivity(last?.document_selection,!!contextual);
   }
-  function formatDuration(ms){return ms<1000?`${Math.round(ms)} ms`:`${(ms/1000).toFixed(1)} s`;}
+
   function toolSummary(tool){const r=tool.result||{};if(r.error)return r.error.message||'This action could not be completed.';
     if(tool.name==='device_status')return `${r.device_id||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
     const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
@@ -142,8 +203,19 @@
     return 'Completed';
   }
   function actionEvents(run){
-    if(run.activity_events?.length)return run.activity_events;
-    return (run.tool_results||[]).map((tool,i)=>({event_id:`legacy-${run.run_id}-${i}`,kind:'tool',name:tool.name,operation_id:tool.operation_id,status:tool.result?.error?'failed':'completed',origin:'unrecorded',summary:toolSummary(tool),duration_ms:null}));
+    const raw=run.activity_events?.length?run.activity_events:(run.tool_results||[]).map((tool,i)=>({event_id:`legacy-${run.run_id}-${i}`,kind:'tool',name:tool.name,operation_id:tool.operation_id,status:tool.result?.error?'failed':'completed',origin:'unrecorded'}));
+    const events=[],positions=new Map();
+    for(const event of raw){
+      // Planning corrections and network retries are diagnostics, not user-facing steps.
+      if(String(event.operation_id||'').startsWith('validation-'))continue;
+      if(event.kind==='tool'&&event.operation_id&&positions.has(event.operation_id)){
+        events[positions.get(event.operation_id)]={...event};continue;
+      }
+      if(event.kind==='model'&&events.at(-1)?.kind==='model'){events[events.length-1]={...event};continue;}
+      if(event.kind==='tool'&&event.operation_id)positions.set(event.operation_id,events.length);
+      events.push({...event});
+    }
+    return events;
   }
   async function openActionContext(run,fileId){
     const file=workState?.files?.find(f=>f.file_id===fileId&&!f.deleted);
@@ -157,15 +229,22 @@
     details.open=activityExpanded.get(key)??['running','waiting','failed'].includes(event.status);
     details.addEventListener('click',e=>{if(e.target.closest('summary'))activityExpanded.set(key,!details.open);});
     const summary=node('summary'),icon=node('span','action-icon',event.status==='completed'?'✓':event.status==='failed'?'!':event.status==='waiting'?'Ⅱ':'◌');
-    const label=node('span','action-label',event.kind==='model'?'Preparing response':toolLabels[event.name]||event.name);
-    const badge=node('span','action-state',({completed:'Done',running:'Running',waiting:'Waiting',failed:'Failed',interrupted:'Interrupted'})[event.status]||event.status);
+    const label=node('span','action-label',event.kind==='model'?'Preparing response':toolLabels[event.name]||'Working on your request');
+    const badge=node('span','action-state',event.status==='waiting'&&run.auto_resume?'Working':({completed:'Done',running:'Running',waiting:'Waiting',failed:'Failed',interrupted:'Interrupted'})[event.status]||event.status);
     summary.append(icon,label,badge);details.append(summary);
-    const body=node('div','action-body');const meta=node('div','action-meta');meta.append(node('code','',event.kind==='model'?'model request':event.name));
-    const clock=node('span');clock.dataset.eventId=event.event_id;clock.dataset.actionStart=event.started_at||'';clock.dataset.actionStatus=event.status;clock.dataset.duration=event.duration_ms==null?'':String(event.duration_ms);clock.textContent=event.duration_ms==null?'Duration not recorded':formatDuration(event.duration_ms);meta.append(clock);body.append(meta);
-    if(event.attempt>1)body.append(node('p','action-retry',`Retry · attempt ${event.attempt}`));
-    const result=tool?toolSummary(tool):event.summary||'Waiting for a result from the server.';body.append(node('p','',result));
+    const body=node('div','action-body');
+    const comparison=['drawing_photo_compare','drawing_photo_result'].includes(event.name);
+    const result=event.status==='failed'?'This step could not be completed. See the response for what to do next.':
+      ['running','waiting'].includes(event.status)?(comparison?'The drawing/photo specialist is working on your files.':'This step is in progress.'):
+      event.kind==='model'?'Step completed.':comparison?(tool?.result?.error?'The comparison could not be completed. See the response for details.':'Comparison results received.'):'Step completed.';
+    body.append(node('p','',result));
+    if(comparison&&run.comparison_progress?.operation_id===event.operation_id){
+      for(const [phase,status] of Object.entries(run.comparison_progress.phases||{})){
+        if(comparisonPhaseLabels[phase])body.append(node('p','',`${status==='completed'?'✓':'◌'} ${comparisonPhaseLabels[phase]}`));
+      }
+    }
     const synthetic=event.origin==='synthetic'||tool?.result?.analysis_origin==='synthetic'||tool?.result?.geometry_mode==='mock';if(synthetic)body.append(node('strong','action-synthetic','Synthetic result'));
-    if(event.status==='waiting')body.append(node('p','action-retry','Paused. Use Resume to retry the saved request.'));
+    if(event.status==='waiting'&&run.status==='retryable')body.append(node('p','action-retry',run.auto_resume?'Continuing automatically. You can leave this page open or return later.':'Select Resume to continue.'));
     const links=node('div','action-links');
     if(tool?.name==='device_status'){const link=node('button','quiet','Show device');link.onclick=()=>{$('activity-dialog').close();document.querySelector('.device-card').scrollIntoView({block:'nearest'});};links.append(link);}
     const sessionId=tool?.result?.session?.session_id;if(sessionId){const session=scopedSessions.find(s=>s.session_id===sessionId);if(session){const link=node('button','quiet','Open capture task');link.onclick=()=>{$('activity-dialog').close();showTask(session);$('selection').scrollIntoView({block:'nearest'});};links.append(link);}}
@@ -176,7 +255,7 @@
     body.append(links);details.append(body);return details;
   }
   function renderActivity(runs){
-    const signature=JSON.stringify(runs.map(r=>[r.run_id,r.status,r.activity_events,r.tool_results]));if(activitySignature===signature)return;activitySignature=signature;
+    const signature=JSON.stringify(runs.map(r=>[r.run_id,r.status,r.activity_events,r.tool_results,r.comparison_progress]));if(activitySignature===signature)return;activitySignature=signature;
     $('activity').replaceChildren();$('activity-feed').replaceChildren();$('activity-graph').replaceChildren();
     const last=runs.at(-1),events=last?actionEvents(last):[];
     $('activity-feed').hidden=!events.length;$('activity-graph').hidden=!events.length;
@@ -185,14 +264,14 @@
       const agent=node('span','graph-agent','Inspector');$('activity-graph').append(agent);
       const tools=[...new Set(events.filter(e=>e.kind==='tool').map(e=>e.name))];
       const branches=node('div','graph-branches');
-      for(const name of tools){const event=events.filter(e=>e.name===name).at(-1);const branch=node('div',`graph-branch${event.status==='running'?' graph-active':''}`);branch.append(node('i','graph-link'),node('span','graph-tool',name));branches.append(branch);}
-      if(!tools.length)branches.append(node('span','graph-no-tools','No tool calls'));$('activity-graph').append(branches);
+      for(const name of tools){const event=events.filter(e=>e.name===name).at(-1);const branch=node('div',`graph-branch${event.status==='running'?' graph-active':''}`);branch.append(node('i','graph-link'),node('span','graph-tool',toolLabels[name]||'Specialist task'));branches.append(branch);}
+      if(!tools.length)branches.append(node('span','graph-no-tools','Preparing your response'));$('activity-graph').append(branches);
       for(const event of events.slice(-4))$('activity-feed').append(actionCard(last,event,true));
     }
     for(const run of [...runs].reverse()){
       const group=node('section','process-run');group.append(node('h3','',run.text.slice(0,140)),node('small','process-date',timestamp(run.created_at)));
       const history=actionEvents(run);for(const event of history)group.append(actionCard(run,event));
-      if(!history.length)group.append(node('p','process-empty',run.status==='completed'?'Response delivered. Step timing was not recorded for this request.':run.error?.message||'Waiting for server events.'));
+      if(!history.length)group.append(node('p','process-empty',run.status==='completed'?'Response delivered.':run.status==='failed'?'This request could not be completed. See the response for details.':'Preparing your request.'));
       $('activity').append(group);
     }
   }
@@ -208,7 +287,14 @@
           const user=node('article','message user'); user.append(node('div','message-author','YOU'),messageText(run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
           const assistant=node('article','message assistant'); assistant.id='reply-'+run.run_id; assistant.append(node('div','message-author','✳ INSPECTOR'));
           assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
-          const grid=node('div','artifact-grid'); for(const item of run.artifacts||[]) { const artifact=renderArtifact(item); if(artifact) grid.append(artifact); } if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
+          const grid=node('div','artifact-grid'),comparisons=comparisonResults(run);
+          for(const item of run.artifacts||[]) {
+            const source=String(item.source||'');
+            if(comparisons.length&&item.type==='table'&&(/drawing_photo_(compare|result)/.test(source)||comparisons.some(r=>source.includes(r.task_id))))continue;
+            const artifact=renderArtifact(item);if(artifact)grid.append(artifact);
+          }
+          for(const result of comparisons)grid.append(renderComparison(result,chat.chat_id));
+          if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
         }
       } else {
         const welcome=node('div','welcome'); welcome.append(node('div','hero-icon','✳'),node('p','','Attach files or send a message.')); $('messages').replaceChildren(welcome);
@@ -265,13 +351,13 @@
     const current=epoch; sending=true; notify();
     if(!pending) pending={schema_version:'0.1',request_id:uid(),text:$('message').value.trim(),file_ids:[...chosenFiles],...(documentContext?{document_selection:documentContext}:{})};
     if(!chat && !create) create={schema_version:'0.1',request_id:uid(),room_id:$('room').value.trim()};
-    remember(); controls();
+    remember(); $('message').value=''; controls();
     try {
       if(!chat) { const created=await api('/v1/chats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(create)}); if(current!==epoch) return; chat=created; create=null; remember(); }
       const result=await api(`/v1/chats/${chat.chat_id}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pending)});
       if(current!==epoch) return;
       if(['completed','failed'].includes(result.status)) { pending=null; $('message').value=''; remember(); }
-      if(result.error) notify(result.error.message);
+      if(result.error&&!result.auto_resume) notify(result.error.message);
       const runs=(chat.runs||[]).filter(r=>r.run_id!==result.run_id); chat={...chat,runs:[...runs,result]}; renderConversation();
     } catch(error) {
       if(current!==epoch) return;
@@ -410,6 +496,8 @@
   });
   $('trash-toggle').addEventListener('click',()=>{showTrash=!showTrash;renderFiles();});
   $('add-plan-item').addEventListener('click',()=>openPlan());
+  $('evidence-dialog').addEventListener('close',clearEvidence);
+  $('evidence-toggle').addEventListener('click',()=>{evidenceFull=!evidenceFull;showEvidenceImage();});
   for(const button of document.querySelectorAll('[data-close]'))button.addEventListener('click',()=>$(button.dataset.close).close());
   $('plan-form').addEventListener('submit',async event=>{
     event.preventDefault();if(workspaceBusy)return;workspaceBusy=true;event.submitter.disabled=true;
@@ -466,20 +554,27 @@
     for(const item of chatChoices||[]){const option=node('option','',`${item.room_id} · ${timestamp(item.created_at)}`);option.value=item.chat_id;$('chat-picker').append(option);}
     $('chat-picker').value=chat?.chat_id||'';
   }
-  $('chat-picker').addEventListener('change',async()=>{
-    if(sending||workspaceBusy||pending)return;
-    const id=$('chat-picker').value;
+  async function switchConversation(id){
+    if(sending||workspaceBusy)return;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
-    chat=id?{chat_id:id}:null;create=null;workState=null;chosenFiles.clear();selectionScope=null;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
-    $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderRails();renderConversation();await refresh();
-  });
+    remember(); // Keep the exact frozen payload in the old chat, including document selection.
+    epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
+    if(id){try{pending=JSON.parse(read(sessionStorage,chatPendingKey(id))||'null');}catch{}}
+    workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];showTrash=false;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
+    $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();
+  }
+  $('chat-picker').addEventListener('change',()=>switchConversation($('chat-picker').value));
   $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await refresh(); event.submitter.disabled=false;});
   $('lock').addEventListener('click',lock);
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
-  $('new-chat').addEventListener('click',()=>{if(sending||workspaceBusy||pending) return; workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];importRequest=null;showTrash=false; chat=null;create=null; selected=null; scopedSessions=[]; scopedInspections=[]; $('selection').hidden=true; historySignature='';resetDocument();remember();$('message').value='';renderChatPicker();renderRails();renderConversation();notify();});
+  $('new-chat').addEventListener('click',()=>switchConversation(''));
   for(const button of $('suggestions').querySelectorAll('button')) button.addEventListener('click',()=>{$('message').value=button.dataset.prompt;$('message').focus();});
-  $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();send();}});
+  $('message').addEventListener('keydown',event=>{
+    if(event.key!=='Enter'||event.isComposing||event.keyCode===229)return;
+    if(event.metaKey||event.ctrlKey){event.preventDefault();const input=$('message');input.setRangeText('\n',input.selectionStart,input.selectionEnd,'end');input.dispatchEvent(new Event('input',{bubbles:true}));}
+    else if(!event.shiftKey&&!event.altKey){event.preventDefault();send();}
+  });
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);
   setInterval(()=>{if(token)updateActivityStatus();},1000);
   if(token) refresh();

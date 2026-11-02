@@ -5,15 +5,25 @@ import json
 from pathlib import PurePosixPath
 from uuid import UUID
 import httpx
-from pydantic import Field
+from pydantic import Field, field_validator
 from .schemas import APIModel
 from .errors import APIError
 
 
 class CompareArguments(APIModel):
+    checklist_task_id: UUID | None = Field(default=None, description='Optional existing comparison_tasks task whose checklist to reuse. Normally omit: server reuses the latest compatible saved checklist in this chat for the same drawing/page.')
+    new_checklist: bool = Field(default=False, description='True only when the user explicitly requests revised/new requirements or a different inspection scope. A replacement photo alone must keep false.')
     drawing_file_id: str = Field(min_length=1, max_length=150)
     photo_file_id: str = Field(min_length=1, max_length=150)
-    drawing_page: int | None = Field(default=None, ge=1, le=200)
+    drawing_page: int | None = Field(default=None, ge=1, le=200,
+        description='PDF drawings only: the user-confirmed 1-based page number, e.g. 2. For PNG/JPEG omit this field. Never use the string "null". Ask for the page when a PDF page is unspecified.')
+
+    @field_validator('drawing_page', mode='before')
+    @classmethod
+    def normalize_absent_page(cls, value):
+        # A known model serialization mistake; PDF page requirements still apply in planning.
+        return None if value == 'null' else value
+
     task: str | None = Field(default=None, min_length=1, max_length=4000,
         description='Self-contained user comparison request, including relevant earlier instructions and confirmed file roles. Always supply this, even after a short confirmation. Do not invent criteria.')
 
@@ -23,15 +33,15 @@ class ResultArguments(APIModel):
 
 
 DESCRIPTIONS = {
-    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. PDF drawings require the caller-specified page; ask if missing. No IFC/BIM/3D. Returns running or a saved report; running is not a verdict.',
-    'drawing_photo_result': 'Read a previously submitted drawing/photo task from comparison_tasks. No selected files are needed. Omit task_id only if there is exactly one task. Do not repeatedly poll in one turn; if still running, tell the user and check on their next request.',
+    'drawing_photo_compare': 'Compare one explicitly selected drawing and one selected photo using the dedicated minion. Pass file IDs from selected_files and a self-contained task from the conversation, not just the latest confirmation. For PNG/JPEG omit drawing_page: {"drawing_file_id":"<selected drawing ID>","photo_file_id":"<selected photo ID>","task":"<full user task>"}. For PDF add "drawing_page":2 only when the user selected page 2; ask if the page is missing. Do not send "drawing_page":"null". No IFC/BIM/3D. The runtime waits for a saved report; running is not a verdict. Same-drawing replacement photos reuse the saved checklist automatically; do not set new_checklist for a new photo. Use new_checklist=true only for an explicitly requested new scope or checklist revision.',
+    'drawing_photo_result': 'Read a previously submitted drawing/photo task from comparison_tasks. No selected files are needed. Omit task_id only if there is exactly one task. The runtime handles bounded automatic waiting; do not submit a duplicate comparison.',
 }
 SCHEMAS = {'drawing_photo_compare': CompareArguments, 'drawing_photo_result': ResultArguments}
 TOOLS = [{'type':'function','function':{'name':name,'description':DESCRIPTIONS[name],
           'parameters':schema.model_json_schema()}} for name,schema in SCHEMAS.items()]
 
 
-def task_context(runs):
+def task_context(runs, limit=5):
     """Latest observed task states from persisted tool results, never assistant prose.
 
     Caller supplies this chat's bounded runs newest first. Keep multiple identities
@@ -50,9 +60,12 @@ def task_context(runs):
             if task_id not in tasks:
                 tasks[task_id] = {'task_id': task_id, 'last_observed_status': result.get('status'),
                                   'observed_at': run.get('updated_at')}
+            if result.get('checklist') and not tasks[task_id].get('checklist_id'):
+                tasks[task_id]['checklist_id'] = result['checklist'].get('checklist_id')
+                tasks[task_id]['checklist_scope'] = result['checklist'].get('task')
             if result.get('source_bindings'):
                 tasks[task_id]['source_bindings'] = result['source_bindings']
-    return list(tasks.values())[:5]
+    return list(tasks.values())[:limit]
 
 
 def plan_compare(service, principal, run, args, operation_id):
@@ -85,7 +98,27 @@ def plan_compare(service, principal, run, args, operation_id):
         if f['byte_length'] > 6_000_000:
             raise APIError(422,'comparison_file_too_large','Each minion input must be at most 6 MB')
         assets.append(dict(asset_id=kind,kind=kind,mime_type=mime,page=page,file_id=file_id,sha256=f['sha256']))
-    return {'task_id':operation_id,'question':question,'assets':assets}
+    if args.new_checklist and args.checklist_task_id:
+        raise APIError(422, 'comparison_checklist_conflict', 'Choose saved checklist reuse or an explicit new checklist, not both')
+    checklist_task_id = None
+    if service.settings.drawing_photo_workflow == 'staged' and not args.new_checklist:
+        with service.database.connection() as conn:
+            rows = conn.execute('SELECT data FROM agent_runs WHERE chat_id=? ORDER BY sequence DESC LIMIT 200', (run['chat_id'],)).fetchall()
+        tasks = task_context([json.loads(row['data']) for row in rows], limit=200)
+        drawing = assets[0]
+        for task in tasks:
+            if args.checklist_task_id and task['task_id'] != str(args.checklist_task_id):
+                continue
+            old = next((a for a in task.get('source_bindings', []) if a.get('asset_id') == 'drawing'), {})
+            if task.get('checklist_id') and task.get('last_observed_status') != 'running' and old.get('sha256') == drawing['sha256'] and old.get('page') == drawing['page']:
+                checklist_task_id = task['task_id']
+                break
+        if args.checklist_task_id and not checklist_task_id:
+            raise APIError(422, 'comparison_checklist_unavailable', 'The saved checklist must belong to this chat and the same drawing/page')
+    elif args.checklist_task_id:
+        raise APIError(422, 'comparison_checklist_unavailable', 'Saved checklists require staged analysis')
+    return {'task_id':operation_id,'question':question,'assets':assets,
+            'workflow':service.settings.drawing_photo_workflow,'checklist_task_id':checklist_task_id}
 
 
 def bound_task(service, principal, chat_id, task_id):
@@ -106,6 +139,33 @@ class MinionClient:
     def __init__(self, settings, *, transport=None):
         self.settings,self.transport=settings,transport
 
+    def evidence(self, task_id, finding_index, kind, ref_index):
+        base, token = self.settings.drawing_photo_base_url, self.settings.drawing_photo_service_token
+        if not base or not token:
+            raise APIError(503, 'comparison_not_configured', 'Comparison evidence is unavailable')
+        path = f'/v1/tasks/{UUID(task_id)}/evidence/{finding_index}/{kind}/{ref_index}'
+        try:
+            with httpx.Client(timeout=30, follow_redirects=False, transport=self.transport) as client:
+                with client.stream('GET', base.rstrip('/') + path, headers={'Authorization': 'Bearer ' + token}) as response:
+                    if response.status_code == 404:
+                        raise APIError(404, 'evidence_not_found', 'This evidence image is no longer available')
+                    if response.status_code != 200:
+                        raise APIError(503, 'evidence_unavailable', 'Could not load the evidence image. Please try again.', retryable=True)
+                    if response.headers.get('content-type', '').split(';')[0] != 'image/jpeg':
+                        raise ValueError
+                    raw = bytearray()
+                    for chunk in response.iter_bytes():
+                        raw.extend(chunk)
+                        if len(raw) > 6_000_000:
+                            raise ValueError
+                    if not raw.startswith(b'\xff\xd8\xff'):
+                        raise ValueError
+                    return bytes(raw)
+        except httpx.HTTPError:
+            raise APIError(503, 'evidence_unavailable', 'Could not load the evidence image. Please try again.', retryable=True) from None
+        except ValueError:
+            raise APIError(502, 'invalid_evidence', 'The evidence image could not be displayed') from None
+
     def request(self, method, task_id, body=None):
         from ai_inspector.observability import current_headers
         base=self.settings.drawing_photo_base_url
@@ -117,6 +177,8 @@ class MinionClient:
             with httpx.Client(timeout=20,follow_redirects=False,transport=self.transport) as client:
                 with client.stream(method,base.rstrip('/')+path,headers={'Authorization':'Bearer '+token,'Prefer':'respond-async',**current_headers()},json=body) as response:
                     if response.status_code not in (200,202):
+                        if method == 'GET' and response.status_code == 404:
+                            raise APIError(404, 'comparison_task_not_found', 'The comparison task has not been accepted by the service')
                         retry=response.status_code in (408,429,503) or response.status_code>=500
                         code='comparison_unavailable'
                         if response.status_code==409:
@@ -135,10 +197,10 @@ class MinionClient:
             if not isinstance(value,dict) or value.get('task_id')!=task_id or value.get('status') not in ('running','completed','needs_input','failed'):
                 raise ValueError
             if value['status'] in ('completed','needs_input') and not isinstance(value.get('report'),dict):raise ValueError
-            result={k:value.get(k) for k in ('task_id','status','report','assets','provenance','audit')}
+            result={k:value.get(k) for k in ('task_id','status','report','assets','provenance','audit','phase','checklist')}
             if value['status']=='failed':
                 result['error']={'code':'comparison_failed','message':'Minion analysis failed; no inspection verdict is available','retryable':False}
-                if value.get('error') == 'invalid_report_schema':
+                if value.get('error') in ('invalid_report_schema', 'invalid_stage_output'):
                     result['error']={'code':'comparison_invalid_report',
                         'message':'The analysis service could not validate its generated report or evidence references. No verdict is available. This technical failure does not establish a problem with image quality.',
                         'retryable':False}
@@ -154,6 +216,19 @@ def execute(service, principal, run, plan, client):
         bound_task(service,principal,run['chat_id'],plan['task_id'])
         return client.request('GET',plan['task_id'])
     comparison=plan['comparison']; assets=[]
+    # A timeout does not mean admission failed. Reconcile the immutable task ID
+    # before resending bytes, including old saved requests awaiting manual Resume.
+    recovery = run.get('comparison_retry', {})
+    previously_waited = any(e.get('operation_id') == plan['operation_id'] and e.get('status') == 'waiting'
+                            for e in run.get('activity_events', []))
+    if recovery.get('attempts', 0) > 1 or previously_waited:
+        try:
+            result = client.request('GET', comparison['task_id'])
+            result['source_bindings'] = [{k:p[k] for k in ('asset_id','file_id','sha256','page')} for p in comparison['assets']]
+            return result
+        except APIError as error:
+            if error.body['code'] != 'comparison_task_not_found':
+                raise
     for pinned in comparison['assets']:
         f=service.workspace.download(principal,run['chat_id'],pinned['file_id'])
         if f.get('sha256')!=pinned['sha256']:
@@ -165,6 +240,10 @@ def execute(service, principal, run, plan, client):
         assets.append({k:pinned[k] for k in ('asset_id','kind','mime_type','page')}|{'data_base64':base64.b64encode(raw).decode()})
     body={'request_id':comparison['task_id'],'question':comparison['question'],
           'context':'Inspector-selected chat files. No measured geometry or independent alignment supplied.','assets':assets}
+    if comparison.get('workflow', 'legacy') == 'staged':
+        body['workflow'] = 'staged'
+        if comparison.get('checklist_task_id'):
+            body['checklist_task_id'] = comparison['checklist_task_id']
     result=client.request('POST',comparison['task_id'],body)
     result['source_bindings']=[{k:p[k] for k in ('asset_id','file_id','sha256','page')} for p in comparison['assets']]
     return result
