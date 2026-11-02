@@ -26,6 +26,7 @@ from .workspace import WorkItem, Observation, ImportPlan
 from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
 from .agent import CreateChatRequest, ChatMessageRequest
+from .geometry_review import GeometryReviewRequest
 from .errors import APIError
 from .schemas import (
     Acknowledgement, AcknowledgeRequest, AssignmentList, CaptureStartReceipt,
@@ -137,12 +138,6 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         require_role(principal, "operator")
         return principal
 
-    def geometry_identity(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> Principal:
-        token = settings.geometry_service_token
-        if token and credentials is not None and hmac.compare_digest(credentials.credentials.encode("utf-8"), token.encode("ascii")):
-            return Principal("geometry", settings.project_id)
-        raise APIError(401, "unauthorized", "A valid Geometry Service bearer token is required")
-
     @app.middleware("http")
     async def private_responses(request: Request, call_next):
         response = await call_next(request)
@@ -246,7 +241,7 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
                 "max_unpacked_archive_bytes": settings.max_unpacked_archive_bytes,
                 "max_capture_file_bytes": settings.max_capture_file_bytes, "max_manifest_bytes": settings.max_manifest_bytes,
                 "geometry_configured": bool(settings.geometry_base_url),
-                "geometry_mode": settings.geometry_mode if settings.geometry_base_url else "unconfigured",
+                "geometry_mode": "external" if settings.geometry_base_url else "unconfigured",
                 "agent_chat": True, "agent_model_configured": bool(settings.meta_base_url and settings.meta_model and settings.meta_api_key)}
 
     @app.post("/v1/chats", status_code=201, tags=["agent chat"])
@@ -278,6 +273,16 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
                      principal: Annotated[Principal, Depends(operator)]):
         result, response.status_code = service.agent.submit(principal, str(chat_id), request)
         return result
+
+    @app.post('/v1/chats/{chat_id}/geometry-review', status_code=202, tags=['agent chat'])
+    def geometry_review(chat_id: UUID, request: GeometryReviewRequest,
+                        principal: Annotated[Principal, Depends(operator)]):
+        return service.geometry_review.register(principal, str(chat_id), request)
+
+    @app.post('/v1/chats/{chat_id}/geometry-review/{review_id}/cancel', tags=['agent chat'])
+    def cancel_geometry_review(chat_id: UUID, review_id: UUID,
+                               principal: Annotated[Principal, Depends(operator)]):
+        return service.geometry_review.cancel(principal, str(chat_id), str(review_id))
 
     @app.get("/v1/chats", tags=["workspace"])
     def list_chats(principal: Annotated[Principal, Depends(operator)]):
@@ -463,23 +468,6 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         session_id: UUID, response: Response, principal: Annotated[Principal, Depends(operator)],
     ):
         result, response.status_code = service.capture.request_dispatch(principal, str(session_id))
-        return result
-
-    @app.get("/internal/v1/sessions/{session_id}/capture-source", tags=["geometry handoff"])
-    def get_capture_source(session_id: UUID, principal: Annotated[Principal, Depends(geometry_identity)]):
-        return service.capture.source_access(principal, str(session_id))
-
-    @app.get("/internal/v1/sessions/{session_id}/capture-source/files", tags=["geometry handoff"])
-    def get_capture_source_files(
-        session_id: UUID, principal: Annotated[Principal, Depends(geometry_identity)],
-        after: Annotated[str | None, Query(pattern=r"^[0-9]{1,12}$")] = None,
-        limit: Annotated[int, Query(ge=1, le=100)] = 100,
-    ):
-        return service.capture.source_access(principal, str(session_id), after=int(after or "0"), limit=limit, files_only=True)
-
-    @app.post("/internal/v1/geometry-events", status_code=202, tags=["geometry handoff"])
-    def geometry_event(body: dict, response: Response, principal: Annotated[Principal, Depends(geometry_identity)]):
-        result, response.status_code = service.geometry_results.receive(principal, body)
         return result
 
     @app.get("/v1/devices/{device_id}/status", tags=["iPhone handoff"])

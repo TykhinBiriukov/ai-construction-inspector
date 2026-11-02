@@ -61,7 +61,7 @@ class Workspace:
         runs = [json.loads(r['data']) for r in conn.execute(
             'SELECT data FROM agent_runs WHERE chat_id=? ORDER BY sequence DESC LIMIT 200', (chat_id,)).fetchall()]
         for run in runs:
-            if run.get('reply'):
+            if run.get('reply') and not run.get('internal_geometry_batch'):
                 identity = 'result-' + run['run_id']
                 if identity not in files:
                     content = canonical_json({'reply': run['reply'], 'tools': safe_evidence(run.get('tool_results', []))})
@@ -111,7 +111,7 @@ class Workspace:
         total = sum(counts.values())
         public_files = [{k:v for k,v in f.items() if k not in ('text','content','sha256')} |
                         {'content_available': f.get('text') is not None} for f in files.values()
-                        if not (f.get('origin') in ('inspector', 'capture') and
+                        if not f.get('internal_evidence') and not (f.get('origin') in ('inspector', 'capture') and
                                 f['file_id'].startswith(('result-', 'capture-')))]
         return dict(files=public_files, items=items, observations=observations,
                     progress=dict(counts=counts,total=total,confirmed_percent=round(counts['confirmed']/total*100,1) if total else None,

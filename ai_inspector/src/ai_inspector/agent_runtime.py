@@ -12,7 +12,7 @@ from .storage import canonical_json
 
 
 class AgentHarness:
-    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool, telemetry=None, finalize_reply=None, fatal_tool_errors=()):
+    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool, telemetry=None, finalize_reply=None, fatal_tool_errors=(), complete_after_tool=None):
         self.state = state
         self.model = model
         if getattr(model, "analysis_origin", None) in ("synthetic", "mock", "recorded"):
@@ -25,6 +25,7 @@ class AgentHarness:
         self.telemetry = telemetry or Telemetry()
         self.finalize_reply = finalize_reply
         self.fatal_tool_errors = frozenset(fatal_tool_errors)
+        self.complete_after_tool = complete_after_tool
 
     def _start_activity(self, kind, name, operation_id):
         events = self.state.setdefault("activity_events", [])
@@ -86,6 +87,12 @@ class AgentHarness:
                     if session_id:
                         state["session_id"] = session_id
                     self.checkpoint(link_session=session_id)
+                    if self.complete_after_tool is not None:
+                        reply = self.complete_after_tool(result)
+                        if reply is not None:
+                            state.update(status='completed', reply=reply, updated_at=utc_now())
+                            self.checkpoint()
+                            return
                     continue
                 if state["steps"] >= self.max_steps:
                     raise APIError(502, "agent_step_limit", "The agent reached its model turn limit")

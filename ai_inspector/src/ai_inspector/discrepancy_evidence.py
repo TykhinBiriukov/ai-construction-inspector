@@ -63,8 +63,15 @@ def pin_assets(service, connection, principal, chat, request):
     pinned = {}
     for asset in request.assets:
         file = files.get(asset.file_id)
-        if not file or file.get("deleted") or file.get("origin") != "upload" or file.get("sha256") != asset.sha256:
+        imported = bool(file and file.get('origin') == 'geometry' and source.session_id is not None
+            and file.get('session_id') == str(source.session_id)
+            and file.get('geometry_job_id') == str(source.geometry_job_id)
+            and file.get('manifest_sha256') == source.manifest_sha256
+            and file.get('result_manifest_sha256') == result.get('result_manifest_sha256'))
+        if not file or file.get("deleted") or (file.get("origin") != "upload" and not imported) or file.get("sha256") != asset.sha256:
             raise APIError(422, "inspection_asset_unavailable", "An evidence file is unavailable or its hash differs")
+        if source.origin == 'geometry' and not imported:
+            raise APIError(422, 'inspection_asset_unavailable', 'Geometry-origin evidence must come from the accepted server import')
         if asset.kind == "photo" and PurePosixPath(file["name"]).suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
             raise APIError(422, "inspection_asset_unavailable", "Photo evidence must refer to an uploaded image")
         pinned[asset.asset_id] = {key: file[key] for key in ("file_id", "name", "sha256", "byte_length")}

@@ -8,7 +8,7 @@ The device completes an assigned capture using a supported format from `/v1/capa
 
 The first completion response is 202: the reference is durable but not accepted yet. Same completion ID/content replay returns 200 with that operation's current status; changed content is 409. Another completion cannot overtake a pending one. Permanent input rejection is retained; a corrected set needs a new manifest/completion ID. Temporary storage/service failures retain IDs and pending state.
 
-Validation enforces scope, schema, frame/segment identities, file count/size/hash, archive safety and required RGB/metadata plus conditional depth/confidence. It accepts frame.json 0.1/0.2; source validity does not establish geometric quality, units/alignment across segments, measured coverage or construction compliance. RGB-only dispatch needs the configured consumer's explicit support.
+Validation enforces scope, schema, frame/segment identities, file count/size/hash, archive safety and required RGB/metadata plus conditional depth/confidence. It accepts frame.json 0.1/0.2; source validity does not establish geometric quality, units/alignment across segments, measured coverage or construction compliance. Geometry Engine dispatch requires RGB-D; accepting an RGB-only source does not imply that this consumer supports it.
 
 | State/fact | Meaning |
 |---|---|
@@ -26,33 +26,53 @@ S3 completion uses capture_manifest_v1 and exact manifest version/length/SHA-256
 
 Only this S3 path requires INSPECTOR_CAPTURE_BUCKET/AWS versioned-object access. The Supabase formats use backend Supabase credentials and scoped upload plans instead. Do not invent S3 version IDs for Supabase objects or require AWS credentials for a Supabase deployment.
 
-## Geometry service contract
+## Geometry service API
 
-Inspector persists job/operation IDs and the concrete request before:
+Inspector uses the Geometry Engine's existing API: `POST /inspections`, `GET /inspections/{remote_job_id}` and `GET /inspections/{remote_job_id}/result`. There is no selectable protocol or second Geometry API. Inspector retains its own operation/job identity and records the remote job ID after admission.
 
-```text
-PUT {INSPECTOR_GEOMETRY_BASE_URL}/internal/v1/jobs/{job_id}
-```
+Configure `INSPECTOR_GEOMETRY_BASE_URL`, the outgoing `INSPECTOR_GEOMETRY_API_TOKEN`, and the Inspector Supabase origin/bucket/server credential. Geometry must use that same private Storage. Its current API is single-tenant and does not enforce Inspector bearer/project scopes: it must be a trusted service, not a multi-tenant authorization boundary. Inspector permits HTTPS or loopback HTTP and never follows redirects.
 
-The body binds session/inspection/project/room/model/profile and source_ref containing the protected Inspector source endpoint plus exact manifest identity. Consumers use their dedicated Geometry identity:
+For a Basic-authenticated deployment, set `INSPECTOR_GEOMETRY_API_USERNAME`; the token is its password. These server-only credentials also authenticate verified same-origin evidence downloads. An empty username retains Bearer authentication. Credentials never follow redirects or enter model context.
 
-- `GET /internal/v1/sessions/{session_id}/capture-source` returns the authorized exact manifest reference and file-list address.
-- `GET .../capture-source/files` supplies cursor-paginated short-lived links to accepted files/versions only.
+The existing capture worker exports the accepted RGB-D source into Geometry's short layout with the same session/observation/segment IDs and byte-identical files. A separate compatibility manifest records the original accepted capture_ref; it does not replace Inspector source identity. The adapter currently supports original frame.json 0.2 in one ARKit segment and a pinned IFC. Older frames, RGB-only or geometry-parts-only inventories and unaligned multiple segments are explicitly unsupported by this Geometry API. No hidden conversion/alignment or invented IFC is performed. S3 versions can be copied into the configured Supabase export while preserving their original provenance.
 
-Download directly from the selected storage using returned links. Never re-discover a mutable folder or substitute a newer manifest. Supabase and versioned S3 retain their distinct provenance. Numbered Geometry parts/ARKit segment support must be checked against the actual consumer; backend upload acceptance does not certify external interoperability.
+The concrete export/request is durable before uploads. Each claim copies at most four files, verifies immutable duplicate copies, and checkpoints position. Inspector pins the selected IFC bytes to a hash-based `.ifc` key. `POST /inspections` uses the persisted operation UUID as Idempotency-Key and identical canonical request bytes on retry; its returned job ID is stored separately from Inspector job ID. `GET /inspections/{remote_job_id}` verifies session, exact input keys/parameters and IFC hash. `running/completed` normalize to `processing/ready`; admission alone never establishes a verified result.
 
-`POST /v1/sessions/{id}/geometry-jobs/dispatch` only accelerates an existing pending delivery; it does not create another processing pipeline. An agent tool must reuse this same operation. Transport timeouts/429/transient failures preserve job ID, operation key and exact request; redirects are refused and retry delay is bounded by the adapter policy. Missing service configuration leaves work pending, never a fake success.
+For completion, Inspector reads `/inspections/{remote_job_id}/result`, validates compact JSON 2.0, and checks the committed result/stage manifests from the configured Storage by hash. Artifact/preview paths, sizes and hashes must be members of these manifests; preview frame IDs must belong to the submitted observations. Signed file URLs must address this exact Geometry job on the configured origin. Only requested evidence previews are downloaded, with bounded size and hash verification. Large mesh/cloud bytes are not loaded into the model.
 
-Callbacks enter the durable authenticated inbox as hints. Inspector reads/reconciles the exact job through the Geometry status API and checks source/result bindings before accepting ready/failed. Polling recovers lost callbacks. A ready admission receipt is not a verified result. [geometry_results.py](../src/ai_inspector/geometry_results.py) defines accepted result validation; [workflow.py](../src/ai_inspector/workflow.py) defines source/dispatch transitions.
+Geometry does not report complete used/excluded observation accounting, uncertainty or alignment proof. The saved result explicitly says `observation_accounting=unreported_by_geometry`; empty evidence/excluded arrays do not mean every frame was used. Job/geometry revisions are Inspector acceptance revisions (`revision_origin=inspector_acceptance`), not upstream revision claims. Geometry's algorithm tolerance (default 0.1 m) is not a project acceptance rule. Live/recorded processing and synthetic capture/model provenance remain separate fields.
+
+Expiring URLs and full review checkpoints stay in private receipt namespaces (`geometry-result-files`, `geometry-review-state:<session>`); they do not enter phone events or model input. Existing tables serve SQLite, PostgreSQL and Cloudflare; no new migration is required.
+
+### Historical saved commands
+
+The previous Geometry API, inbound source/event endpoints, service identity and bundled mock server have been removed. Previously frozen commands for that API are not converted or replayed: the worker records `geometry_contract_retired` without network IO or a new Geometry job. Command bytes, accepted source, completed results, receipts and historical event rows are retained. A command that was never frozen or sent can use the current API after its accepted source and IFC pass the current adapter requirements. No database reset or destructive migration is performed.
 
 ## Ownership and recovery
 
-Durable completions/jobs/work leases survive restart. Native API startup starts the capture worker; [worker.py](../src/ai_inspector/worker.py) provides an optional bounded/manual driver. Cloudflare uses the existing bounded process/cron. Delivery and model/remote-inspector recovery are different loops; Geometry completion does not currently start an agent continuation.
+Durable completions/jobs/work leases survive restart. Native API startup starts the capture worker; [worker.py](../src/ai_inspector/worker.py) provides an optional bounded/manual driver. Cloudflare uses the existing bounded process/cron. Delivery and model/remote-inspector recovery are different loops; Geometry completion starts a continuation only for the explicitly registered downstream review described below.
 
 Offline is not cancel. Abort invalidates Inspector's work leases and preserves data, but cannot revoke issued upload URLs or terminate an already dispatched external job. A stale worker cannot publish after lease replacement/cancellation. A later rescan creates a linked session; it does not mutate the sealed source/job.
 
-Configure Geometry base URL, Inspector public origin and distinct directional service tokens for the intended deployment. Get setting names from [.env.example](../.env.example) and current limits/mode from capabilities. Mock output has explicit analysis_origin=mock; external/unconfigured flags alone do not establish a successful reconstruction. Keep deployment/test observations in dated reports, not as timeless environment facts in this contract.
+Configure the Geometry base URL and outgoing API credential for the intended deployment. Get setting names from [.env.example](../.env.example) and current limits/mode from capabilities. Historical mock output retains its explicit analysis_origin=mock label; external/unconfigured flags alone do not establish a successful reconstruction. Keep deployment/test observations in dated reports, not as timeless environment facts in this contract.
 
 ## Downstream discrepancy review
 
-The [IFC/scan candidate review agents](ifc-discrepancy-review.md) start after candidates are supplied. Inspector reads pinned chat evidence and delegates `ifc_only`, `scan_only` and `geometry_mismatch` analysis to its configured verification service; Inspector validates/assembles JSON for Bob. Role-specific nested delegation, scoped evidence access, JSON/case guards and independent workers are implemented. Candidate detection, metric/alignment algorithms, automatic capture-file import and human report formatting remain separate. Supplied measurement reports preserve their source/method and are not independently certified by these agents. The existing source/job ownership and single Geometry dispatch remain in force; Geometry readiness alone does not establish an inspection verdict.
+The [IFC/scan candidate review agents](ifc-discrepancy-review.md) consume supplied candidate batches. Inspector now prepares those batches automatically from the accepted compact result, pins bounded evidence and continues through the existing A2A services when review was requested. This conversion is not a new detection/measurement algorithm. Supplied numbers retain unreported algorithm version/uncertainty/extent/alignment rather than invented certification. Unknown metric quality cannot confirm a numerical violation. Human report formatting and geometric accuracy validation remain separate.
+
+Set `INSPECTOR_GEOMETRY_REVIEW_INSPECTOR_ID` to a registered remote `discrepancy_inspector`; deploy both Inspector and verifier from code supporting `source.origin=geometry` and IFC IDs containing `$`. The orchestrator's `session_create` has optional `review_after_geometry` (default false), used only for an explicit inspection request. A new chat must select exactly one IFC; the session pins its bytes before capture assignment. Existing IFC-bound sessions may be reused; a capture-only session is not silently rebound to another model.
+
+For an already linked session, an operator can register review before or after Geometry completion:
+
+```text
+POST /v1/chats/{chat_id}/geometry-review
+{"schema_version":"0.1","request_id":"<UUID>","session_id":"<UUID>","task":"Inspect the captured door against IFC","acceptance_tolerance_m":null}
+```
+
+One immutable request per chat/session is allowed. Identical replay returns current state; changed content conflicts. An optional positive `acceptance_tolerance_m` (at most 1 m) is an explicit caller-provided acceptance rule; omitting it keeps acceptance unknown. It does not change Geometry's saved processing parameters. Never infer a project rule from Geometry's default tolerance.
+
+The capture queue waits without model calls, imports a bounded evidence subset, and prepares one case per batch (within existing 12-case/6-asset limits). It handles up to 120 candidates per review and accounts for all accepted batches; larger scopes fail explicitly for splitting. Unmatched/unobserved/ambiguous objects are candidates, not absence/compliance verdicts. Aggregate surface metrics remain scoped statistics. No candidates yields a qualified summary, not a compliance certificate.
+
+Each internal batch deterministically delegates through the registered Inspector → verifier chain; its accepted report is checked again by Bob's backend. Internal batch runs remain durable but do not create intermediate chat replies. A separate continuation summarizes all accepted batches once, with the complete JSON available as `geometry-review-report.json` in chat Files. Pending active user messages delay admission without changing the frozen request. A changed chat session or cancelled review cannot publish its old continuation. Missing configuration is visible and retryable; profile changes hold the saved workflow until restoration.
+
+`GET /v1/chats/{chat_id}` includes safe `geometry_reviews` status/count/file references. `POST /v1/chats/{chat_id}/geometry-review/{review_id}/cancel` fences that review's local executions and future publication; it does not claim to cancel an already running external Geometry or verifier task. Capture abort cancels its pending review wait. Native capture workers and Cloudflare process/cron drive the same queue without a browser. Unrequested Geometry jobs never trigger a model automatically.

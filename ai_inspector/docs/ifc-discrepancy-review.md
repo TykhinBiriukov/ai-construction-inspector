@@ -4,6 +4,8 @@
 
 Задание для coding agent, подготовленное по обсуждению. Термин «контракт» здесь означает правила обмена данными и ответственность компонентов.
 
+**Дополнение 02.11.2026:** Inspector backend может серверно формировать этот вход из принятого Geometry compact v2 и автоматически продолжать явно запрошенную проверку. Настройка, поддерживаемые исходники, ограничения и API — в [Geometry integration](capture-to-geometry.md#downstream-discrepancy-review). Поиск/измерения остаются ответственностью Geometry; преобразование отчёта не сертифицирует их точность. Старый ручной путь передачи candidates/assets сохранён.
+
 ## 1. Цель
 
 Организовать проверку предполагаемых несоответствий между IFC-моделью и фактической съёмкой через два отдельных агента. Inspector получает задание Bob, вызывает необходимые разрешённые tools и готовит пакет кандидатов/доказательств. Агент проверки оценивает этот пакет, определяет обоснованность каждого кандидата и возвращает структурированные решения Inspector. Inspector проверяет и собирает итоговый JSON-отчёт для Bob. Оформление отчёта для человека выполняет другой компонент.
@@ -294,11 +296,11 @@ Inspector сохраняет исходный пакет и принятый Rev
 | Bob | Существующий OrchestratorAgent; typed request / выбранный candidate JSON, remote routing и проверка принятого report |
 | Inspector | DiscrepancyInspectorService на shared harness, собственный SQLite task store/worker, inspection_evidence и review_candidates |
 | Агент проверки | VerificationAgentService на shared harness и отдельном store/worker; JSON validation/repair, без tools и дальнейшего delegation |
-| Evidence | Same-chat immutable upload refs/hash, bounded image previews/text и typed supplied measurements; доступ через отдельный scoped backend token |
+| Evidence | Same-chat immutable upload refs/hash или серверный импорт принятого Geometry result, bounded image previews/text и typed supplied measurements; доступ через отдельный scoped backend token |
 | Case outcomes | Проверка 1:1 case IDs/категорий/причин/доступных evidence, guards фрагмента/uncertainty/допуска, детерминированная сборка итогового JSON |
 | Recovery | Frozen parent/child request, identical admission retry, независимый restart, polls без model turns, deadlines/attempt limits и cancellation fencing |
-| Geometry/candidate discovery | Существующий dispatch/reconciliation сохранён; нового IFC parser, детектора, измерительного или alignment алгоритма нет |
-| Форматирование и досъёмка | Человеческий formatter и общее автоматическое Geometry/user-input continuation не реализованы этим increment |
+| Geometry/candidate discovery | Inspector-only adapter существующего /inspections API, закрепление evidence и сборка candidates из compact v2; нового IFC parser, детектора, измерительного или alignment алгоритма нет |
+| Продолжение, форматирование и досъёмка | Явно запрошенная Geometry-проверка продолжается через очередь до общего ответа Bob; человеческий formatter и общий user-input workflow остаются дальнейшей работой |
 | Live deployment/accuracy | Требуют отдельной настройки сервисов, live Meta/evidence integration и предметной приёмки |
 
 Код: [agents](../src/ai_inspector/discrepancy_agents.py), [contracts](../src/ai_inspector/discrepancy.py), [evidence adapter](../src/ai_inspector/discrepancy_evidence.py), [shared harness](../src/ai_inspector/agent_runtime.py), [A2A service](../src/ai_inspector/a2a_service.py), [Bob](../src/ai_inspector/agent.py). Local fixtures не подтверждают строительную точность, реальную SAM/Geometry/Meta доступность или deployment.

@@ -20,7 +20,7 @@ def utc_now() -> str:
 
 @dataclass(frozen=True)
 class Principal:
-    role: Literal["operator", "device", "geometry"]
+    role: Literal["operator", "device"]
     project_id: str
     device_id: str | None = None
 
@@ -55,6 +55,8 @@ class InspectorService:
         from .device_events import DeviceEvents
         self.device_events = DeviceEvents(self)
         self._geometry_results = None
+        self._geometry_engine = None
+        self._geometry_review = None
         if inspectors is None:
             from .a2a_protocol import remote_profiles
             inspectors = remote_profiles(settings.remote_agents_json)
@@ -63,6 +65,20 @@ class InspectorService:
                                       remote_transport=remote_transport, secret_resolver=secret_resolver)
         from .workspace import Workspace
         self.workspace = Workspace(self)
+
+    @property
+    def geometry_engine(self):
+        if self._geometry_engine is None:
+            from .geometry_engine_adapter import GeometryEngineAdapter
+            self._geometry_engine = GeometryEngineAdapter(self)
+        return self._geometry_engine
+
+    @property
+    def geometry_review(self):
+        if self._geometry_review is None:
+            from .geometry_review import GeometryReview
+            self._geometry_review = GeometryReview(self)
+        return self._geometry_review
 
     @property
     def geometry_results(self):
@@ -281,6 +297,11 @@ class InspectorService:
             if session["processing_state"] in ("completed", "failed"):
                 raise APIError(409, "session_terminal", "Finished sessions cannot be aborted")
             error = APIError(409, "session_cancelled", "Session cancelled by " + principal.role).body
+            for review_id, state in self.geometry_review.states(connection, session_id).items():
+                if state['status'] not in ('completed', 'failed', 'cancelled'):
+                    state.update(status='cancelled', error=None, updated_at=utc_now())
+                    connection.execute('UPDATE receipts SET response_body=? WHERE scope=? AND operation_id=?',
+                        (canonical_json(state), 'geometry-review-state:' + session_id, review_id))
             # Revoke leases atomically: an in-flight worker cannot publish a late result.
             connection.execute(
                 "UPDATE work_items SET status='cancelled', lease_until=0, lease_token=NULL "

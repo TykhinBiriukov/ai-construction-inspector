@@ -34,20 +34,17 @@ class Settings:
     localization_base_url: str = ""
     localization_service_token: str = field(default="", repr=False)
     geometry_base_url: str = ""
-    inspector_public_base_url: str = ""
     geometry_api_token: str = field(default="", repr=False)
-    geometry_service_token: str = field(default="", repr=False)
-    geometry_profile_version: str = "geometry-v1"
+    geometry_api_username: str = field(default="", repr=False)
+    geometry_review_inspector_id: str = ""
     worker_interval_s: float = 1.0
     geometry_timeout_s: float = 15.0
-    geometry_accepts_rgb_only: bool = False
     supabase_url: str = ""
     supabase_storage_bucket: str = ""
     supabase_secret_key: str = field(default="", repr=False)
     geometry_poll_interval_s: float = 2.0
     cors_origins: tuple[str, ...] = ()
     max_capture_file_bytes: int = 50 * 1024 * 1024
-    geometry_mode: str = "external"
     max_archive_bytes: int = 50 * 1024 * 1024
     max_unpacked_archive_bytes: int = 2 * 1024**3
     max_archive_entries: int = 40000
@@ -64,6 +61,9 @@ class Settings:
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig, repr=False)
 
     def __post_init__(self) -> None:
+        if (len(self.geometry_api_username) > 128 or ':' in self.geometry_api_username
+                or any(ord(c) < 33 or ord(c) > 126 for c in self.geometry_api_username)):
+            raise ValueError('Invalid Geometry API username')
         if self.drawing_photo_workflow not in ("legacy", "staged"):
             raise ValueError("INSPECTOR_DRAWING_PHOTO_WORKFLOW must be legacy or staged")
         if not math.isfinite(self.meta_timeout_s) or not 1 <= self.meta_timeout_s <= 120:
@@ -102,8 +102,6 @@ class Settings:
             raise ValueError("Worker interval and geometry timeout must be positive")
         if self.geometry_poll_interval_s <= 0 or self.max_capture_file_bytes < 1:
             raise ValueError("Geometry poll interval and capture file limit must be positive")
-        if self.geometry_mode not in ("external", "mock"):
-            raise ValueError("INSPECTOR_GEOMETRY_MODE must be external or mock")
         if min(self.max_archive_bytes, self.max_unpacked_archive_bytes, self.max_archive_entries) < 1:
             raise ValueError("Capture archive limits must be positive")
         for origin in self.cors_origins:
@@ -111,14 +109,14 @@ class Settings:
             if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
                 raise ValueError("CORS origins must be HTTP(S) origins")
         tokens = [self.operator_token, self.device_token]
-        for token in (self.geometry_api_token, self.geometry_service_token, self.localization_service_token, self.drawing_photo_service_token):
+        for token in (self.geometry_api_token, self.localization_service_token, self.drawing_photo_service_token):
             if token:
                 if not token.isascii() or token != token.strip():
                     raise ValueError("Service tokens must be ASCII without surrounding whitespace")
                 tokens.append(token)
         if len(tokens) != len(set(tokens)):
             raise ValueError("Operator, device and service tokens must differ")
-        for name in ("geometry_base_url", "inspector_public_base_url", "localization_base_url", "drawing_photo_base_url"):
+        for name in ("geometry_base_url", "localization_base_url", "drawing_photo_base_url"):
             value = getattr(self, name)
             if value:
                 parsed = urlsplit(value)
@@ -127,6 +125,10 @@ class Settings:
                         or parsed.query or parsed.fragment):
                     raise ValueError(f"{name} must be a configured HTTP(S) base URL")
                 parsed.port  # Validate port syntax even though URL construction preserves it.
+        if self.geometry_base_url:
+            parsed = urlsplit(self.geometry_base_url)
+            if parsed.scheme != 'https' and parsed.hostname not in ('localhost', '127.0.0.1', '::1'):
+                raise ValueError('Geometry requires HTTPS or loopback HTTP')
         if self.database_url:
             try:
                 parsed_db = urlsplit(self.database_url)
@@ -201,20 +203,17 @@ class Settings:
             localization_base_url=get("INSPECTOR_LOCALIZATION_BASE_URL", ""),
             localization_service_token=get("INSPECTOR_LOCALIZATION_SERVICE_TOKEN", ""),
             geometry_base_url=get("INSPECTOR_GEOMETRY_BASE_URL", ""),
-            inspector_public_base_url=get("INSPECTOR_PUBLIC_BASE_URL", ""),
             geometry_api_token=get("INSPECTOR_GEOMETRY_API_TOKEN", ""),
-            geometry_service_token=get("INSPECTOR_GEOMETRY_SERVICE_TOKEN", ""),
-            geometry_profile_version=get("INSPECTOR_GEOMETRY_PROFILE_VERSION", "geometry-v1"),
+            geometry_api_username=get("INSPECTOR_GEOMETRY_API_USERNAME", ""),
+            geometry_review_inspector_id=get("INSPECTOR_GEOMETRY_REVIEW_INSPECTOR_ID", ""),
             worker_interval_s=float(get("INSPECTOR_WORKER_INTERVAL_S", "1")),
             geometry_timeout_s=float(get("INSPECTOR_GEOMETRY_TIMEOUT_S", "15")),
-            geometry_accepts_rgb_only=get("INSPECTOR_GEOMETRY_ACCEPTS_RGB_ONLY", "false").lower() == "true",
             supabase_url=get("SUPABASE_URL", ""),
             supabase_storage_bucket=get("SUPABASE_STORAGE_BUCKET", ""),
             supabase_secret_key=get("SUPABASE_SECRET_KEY", ""),
             geometry_poll_interval_s=float(get("INSPECTOR_GEOMETRY_POLL_INTERVAL_S", "2")),
             cors_origins=tuple(value.strip().rstrip("/") for value in get("INSPECTOR_CORS_ORIGINS", "").split(",") if value.strip()),
             max_capture_file_bytes=int(get("INSPECTOR_MAX_CAPTURE_FILE_BYTES", "52428800")),
-            geometry_mode=get("INSPECTOR_GEOMETRY_MODE", "external"),
             max_archive_bytes=int(get("INSPECTOR_MAX_ARCHIVE_BYTES", "52428800")),
             max_unpacked_archive_bytes=int(get("INSPECTOR_MAX_UNPACKED_ARCHIVE_BYTES", "2147483648")),
             max_archive_entries=int(get("INSPECTOR_MAX_ARCHIVE_ENTRIES", "40000")),

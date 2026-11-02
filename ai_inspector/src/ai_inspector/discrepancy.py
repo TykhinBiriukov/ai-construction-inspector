@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from .errors import APIError
 from .storage import canonical_json
 
-ID = Annotated[str, StringConstraints(min_length=1, max_length=150, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
+ID = Annotated[str, StringConstraints(min_length=1, max_length=150, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:$-]*$")]
 Text = Annotated[str, StringConstraints(min_length=1, max_length=1000, pattern=r"\S")]
 Task = Annotated[str, StringConstraints(min_length=1, max_length=2000, pattern=r"\S")]
 Hash = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -38,7 +38,7 @@ class SourceBinding(Contract):
     model_version: ID | None = None
     model_sha256: Hash | None = None
     segmentation_sha256: Hash | None = None
-    origin: Literal["operator_supplied", "recorded", "synthetic"] = "operator_supplied"
+    origin: Literal["operator_supplied", "recorded", "synthetic", "geometry"] = "operator_supplied"
 
 
 class AssetRef(Contract):

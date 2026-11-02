@@ -67,6 +67,8 @@
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
     $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    const review=chat?.geometry_reviews?.find(r=>!['completed','cancelled'].includes(r.status));
+    if(review&&!sending&&!pending){const labels={waiting_geometry:'Waiting for Geometry. Review will continue automatically.',preparing_evidence:'Preparing captured evidence.',reviewing:'Inspector is reviewing the captured evidence.',summarizing:'Preparing the inspection response.',waiting_configuration:'Inspection is waiting for service configuration.',retrying:'Inspection will retry automatically.',failed:'Inspection needs attention.'};$('run-status').textContent=labels[review.status]||'Inspection is continuing automatically.';}
     updateActivityStatus();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
@@ -284,7 +286,7 @@
       if(runs.length) {
         $('messages').replaceChildren();
         for(const run of runs) {
-          const user=node('article','message user'); user.append(node('div','message-author','YOU'),messageText(run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
+          const user=node('article','message user'); user.append(node('div','message-author',run.continuation?'AUTOMATIC REVIEW':'YOU'),messageText(run.continuation?'Results from the saved capture inspection.':run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
           const assistant=node('article','message assistant'); assistant.id='reply-'+run.run_id; assistant.append(node('div','message-author','✳ INSPECTOR'));
           assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
           const grid=node('div','artifact-grid'),comparisons=comparisonResults(run);

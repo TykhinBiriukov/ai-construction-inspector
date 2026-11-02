@@ -1,7 +1,5 @@
 param(
-    [switch]$MockGeometry,
-    [int]$Port = 8000,
-    [int]$GeometryPort = 8001
+    [int]$Port = 8000
 )
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -13,15 +11,12 @@ if (-not (Test-Path -LiteralPath $pythonExecutable)) { throw 'Create the project
 if (-not (Test-Path -LiteralPath $tunnelExecutable)) { throw 'Install the official cloudflared binary as tools/cloudflared.exe first.' }
 New-Item -ItemType Directory -Path $localDirectory -Force | Out-Null
 if (Test-Path -LiteralPath $processFile) { throw 'A remote-test process record exists. Run scripts/stop-remote-test.ps1 before starting again.' }
-foreach ($candidatePort in @($Port) + $(if ($MockGeometry) { @($GeometryPort) } else { @() })) {
+foreach ($candidatePort in @($Port)) {
     $portProbe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $candidatePort)
     try { $portProbe.Start() } catch { throw "Port $candidatePort is already in use; no tunnel was started." } finally { $portProbe.Stop() }
 }
 $previousDirectory = Get-Location
 $processRecords = @()
-$savedEnvironment = @{}
-$runtimeNames = @('INSPECTOR_PUBLIC_BASE_URL','INSPECTOR_GEOMETRY_BASE_URL','INSPECTOR_GEOMETRY_MODE','INSPECTOR_GEOMETRY_ACCEPTS_RGB_ONLY')
-foreach ($name in $runtimeNames) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 function Start-ProjectHelper([string]$Name, [string]$Executable, [string[]]$HelperArguments) {
     $process = Start-Process -FilePath $Executable -ArgumentList $HelperArguments -WorkingDirectory $workspaceRoot -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $localDirectory "$Name.stdout.log") -RedirectStandardError (Join-Path $localDirectory "$Name.stderr.log") -PassThru
@@ -46,13 +41,6 @@ try {
         Start-Sleep -Milliseconds 500
     }
     if (-not $publicUrl) { throw 'No external HTTPS address was returned by the tunnel.' }
-    $env:INSPECTOR_PUBLIC_BASE_URL = $publicUrl
-    if ($MockGeometry) {
-        $env:INSPECTOR_GEOMETRY_BASE_URL = "http://127.0.0.1:$GeometryPort"
-        $env:INSPECTOR_GEOMETRY_MODE = 'mock'
-        $env:INSPECTOR_GEOMETRY_ACCEPTS_RGB_ONLY = 'true'
-        $null = Start-ProjectHelper 'geometry-mock' $pythonExecutable @('-m','ai_inspector.mock_geometry','--host','127.0.0.1','--port',"$GeometryPort")
-    }
     $server = Start-ProjectHelper 'server' $pythonExecutable @('-m','uvicorn','ai_inspector.main:app','--host','127.0.0.1','--port',"$Port",'--ws-max-size','65536')
     $ready = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
@@ -65,7 +53,6 @@ try {
     }
     if (-not $ready) { throw 'Backend did not become ready.' }
     $configArguments = @('scripts/prepare_remote_config.py','--public-url',$publicUrl)
-    if ($MockGeometry) { $configArguments += '--mock-geometry' }
     & $pythonExecutable @configArguments
     if ($LASTEXITCODE -ne 0) { throw 'Could not write connection data.' }
     Write-Output "Docs: $publicUrl/docs"
@@ -75,6 +62,5 @@ try {
     if (Test-Path -LiteralPath $processFile) { Remove-Item -LiteralPath $processFile }
     throw
 } finally {
-    foreach ($name in $runtimeNames) { [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process') }
     Set-Location -LiteralPath $previousDirectory
 }

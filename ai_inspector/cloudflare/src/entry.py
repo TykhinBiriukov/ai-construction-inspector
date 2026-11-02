@@ -1,6 +1,7 @@
 """Cloudflare entrypoint: persisted Inspector activity attempts and timing v3."""
 from contextvars import ContextVar
 from pathlib import Path
+import httpx
 from workers import WorkerEntrypoint, DurableObject, Response, asgi
 from ai_inspector.api import create_app
 from ai_inspector.config import Settings
@@ -47,15 +48,15 @@ class InspectorRuntime(DurableObject):
             supabase_url=env.SUPABASE_URL,
             supabase_storage_bucket=env.SUPABASE_STORAGE_BUCKET,
             supabase_secret_key=env.SUPABASE_SECRET_KEY,
-            inspector_public_base_url=getattr(env,'INSPECTOR_PUBLIC_BASE_URL',''),
             drawing_photo_workflow=getattr(env,'INSPECTOR_DRAWING_PHOTO_WORKFLOW','legacy'),
             drawing_photo_base_url=getattr(env,'INSPECTOR_DRAWING_PHOTO_BASE_URL',''),
             drawing_photo_service_token=getattr(env,'INSPECTOR_DRAWING_PHOTO_SERVICE_TOKEN',''),
             localization_base_url=getattr(env,'INSPECTOR_LOCALIZATION_BASE_URL',''),
             localization_service_token=getattr(env,'INSPECTOR_LOCALIZATION_SERVICE_TOKEN',''),
             geometry_base_url=getattr(env,'INSPECTOR_GEOMETRY_BASE_URL',''),
+            geometry_review_inspector_id=getattr(env,'INSPECTOR_GEOMETRY_REVIEW_INSPECTOR_ID',''),
             geometry_api_token=getattr(env,'INSPECTOR_GEOMETRY_API_TOKEN',''),
-            geometry_service_token=getattr(env,'INSPECTOR_GEOMETRY_SERVICE_TOKEN',''),
+            geometry_api_username=getattr(env,'INSPECTOR_GEOMETRY_API_USERNAME','') or '',
             remote_agents_json=getattr(env,'INSPECTOR_REMOTE_AGENTS_JSON','[]') or '[]',
         )
         service = InspectorService(settings,
@@ -63,6 +64,14 @@ class InspectorRuntime(DurableObject):
             model_client=MetaModelClient(settings, transport=WorkerModelTransport()),
             remote_transport=WorkerModelTransport(), secret_resolver=lambda name: getattr(env, name, None))
         service.localization_transport = WorkerModelTransport()
+        service.geometry_transport = WorkerModelTransport()
+        # Supabase and Geometry share the bounded Fetch transport on Workers;
+        # native socket transports cannot perform this IO in Python/WASM.
+        storage_client = httpx.Client(transport=WorkerModelTransport(), timeout=30)
+        from ai_inspector.supabase_captures import SupabaseCaptureSourceStore
+        service.capture._supabase_source_store = SupabaseCaptureSourceStore(settings, storage_client)
+        service.session_folders.client = storage_client
+        service.bim_store.remote.http = storage_client
         service.agent.telemetry = WorkerTelemetry(settings.observability, WorkerModelTransport())
         return service
 

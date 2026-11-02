@@ -5,8 +5,6 @@ import logging
 import random
 import threading
 import time
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from uuid import uuid4
 
 import httpx
@@ -178,6 +176,8 @@ class CaptureWorkflow:
                 self._dispatch(work, client)
             elif work["kind"] == "geometry-poll":
                 self.service.geometry_results.poll(work, client)
+            elif work["kind"] == "geometry-review":
+                self.service.geometry_review.process(work, client)
             else:
                 raise APIError(500, "unknown_work_type", "Unsupported queued operation")
         except APIError as error:
@@ -242,7 +242,7 @@ class CaptureWorkflow:
             operation_key = str(uuid4())
             job = {"job_id": job_id, "status": "queued", "geometry_revision": None,
                    "dispatch_status": "pending", "dispatch_error": None,
-                   "processing_profile_version": self.settings.geometry_profile_version}
+                   "processing_profile_version": "geometry-engine-inspections-v1"}
             connection.execute(
                 "INSERT INTO geometry_jobs VALUES (?, ?, ?, NULL, ?)",
                 (job_id, session["session_id"], operation_key, canonical_json(job)),
@@ -261,116 +261,62 @@ class CaptureWorkflow:
             self._finish(connection, work)
 
     def _command(self, work: dict) -> dict:
-        if not self.settings.geometry_base_url:
-            raise APIError(503, "geometry_not_configured", "Generator address is not configured", retryable=True)
-        if not self.settings.inspector_public_base_url:
-            raise APIError(503, "inspector_url_not_configured", "Inspector service URL is not configured", retryable=True)
-        if not self.settings.geometry_api_token or not self.settings.geometry_service_token:
-            raise APIError(503, "geometry_credentials_not_configured", "Generator service identities are not configured", retryable=True)
         with self.database.transaction() as connection:
             row = connection.execute("SELECT * FROM geometry_jobs WHERE job_id=?", (work["operation_id"],)).fetchone()
             if row["command_body"] is not None:
-                return json.loads(row["command_body"])
+                command = json.loads(row["command_body"])
+                self.service.geometry_engine.require_current_command(command)
+                return command
+            if not self.settings.geometry_base_url:
+                raise APIError(503, "geometry_not_configured", "Geometry Service address is not configured", retryable=True)
+            if not self.settings.geometry_api_token:
+                raise APIError(503, "geometry_credentials_not_configured", "Geometry Service credential is not configured", retryable=True)
             session = self.service._load(connection, "sessions", work["session_id"])
-            source_row = connection.execute(
+            source = connection.execute(
                 "SELECT inventory FROM capture_completions WHERE session_id=? AND completion_id=?",
                 (session["session_id"], session["completion"]["completion_id"]),
             ).fetchone()
-            inventory = json.loads(source_row["inventory"])
-            if (not self.settings.geometry_accepts_rgb_only
-                    and not any(item["name"] == "depth.f32" for item in inventory["files"])):
-                raise APIError(503, "geometry_depth_required", "Generator RGB-only support has not been enabled", retryable=True)
-            capture_ref = session["source"]["capture_ref"]
-            command = {
-                "schema_version": "0.1", "job_id": row["job_id"], "operation_key": row["operation_key"],
-                "session_id": session["session_id"], "inspection_id": session["inspection_id"],
-                "project_id": session["project_id"], "room_id": session["room_id"],
-                "model_version": session["model_version"],
-                "processing_profile_version": json.loads(row["data"])["processing_profile_version"],
-                "source_ref": {
-                    "url": f"{self.settings.inspector_public_base_url.rstrip('/')}/internal/v1/sessions/{session['session_id']}/capture-source",
-                    "manifest_sha256": capture_ref["manifest_sha256"],
-                },
-            }
-            if "manifest_version_id" in capture_ref:
-                command["source_ref"]["manifest_version_id"] = capture_ref["manifest_version_id"]
-            else:
-                command["source_ref"].update(format="supabase_capture_v1", snapshot_id=capture_ref["snapshot_id"])
+            inspection = self.service._load(connection, "inspections", session["inspection_id"])
+            command = self.service.geometry_engine.plan(session, json.loads(source["inventory"]), inspection,
+                                                        row["job_id"], row["operation_key"])
             connection.execute("UPDATE geometry_jobs SET command_body=? WHERE job_id=?", (canonical_json(command), row["job_id"]))
             return command
 
     def _dispatch(self, work: dict, client: httpx.Client | None) -> None:
-        with self.database.transaction() as connection:
+        with self.database.connection() as connection:
             if not self._owns_lease(connection, work):
                 return
-            current = self.service._load(connection, "sessions", work["session_id"])
-            if (current["capture_state"] != "sealed" or current["processing_state"] == "cancelled"
-                    or not current["geometry_job"] or current["geometry_job"]["job_id"] != work["operation_id"]):
+            session = self.service._load(connection, "sessions", work["session_id"])
+            if (session["capture_state"] != "sealed" or session["processing_state"] in ("completed", "failed", "cancelled")
+                    or not session.get("geometry_job") or session["geometry_job"]["job_id"] != work["operation_id"]):
                 self._finish(connection, work)
                 return
         command = self._command(work)
-        owns_client = client is None
-        client = client or httpx.Client(timeout=self.settings.geometry_timeout_s, follow_redirects=False)
-        try:
-            response = client.put(
-                f"{self.settings.geometry_base_url.rstrip('/')}/internal/v1/jobs/{command['job_id']}",
-                content=canonical_json(command).encode("utf-8"),
-                headers={"Authorization": f"Bearer {self.settings.geometry_api_token}", "Content-Type": "application/json"},
-                timeout=self.settings.geometry_timeout_s, follow_redirects=False,
-            )
-        except httpx.TransportError:
-            raise APIError(503, "geometry_unavailable", "Generator request will be retried with the same job ID", retryable=True) from None
-        finally:
-            if owns_client:
-                client.close()
-        if response.status_code not in (200, 201):
-            retryable = response.status_code in (401, 403, 408, 425, 429) or response.status_code >= 500
-            details = {"status_code": response.status_code}
-            retry_after = response.headers.get("Retry-After")
-            if retry_after and retryable:
-                try:
-                    delay = float(retry_after)
-                except ValueError:
-                    try:
-                        delay = (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds()
-                    except (ValueError, TypeError, OverflowError):
-                        delay = 0
-                details["retry_after_s"] = max(0, min(delay, 3600))
-            raise APIError(503 if retryable else 502, "geometry_request_rejected", "Generator did not accept the job", retryable=retryable, details=details)
-        try:
-            receipt = response.json()
-            if (not isinstance(receipt, dict) or receipt.get("job_id") != command["job_id"]
-                    or receipt.get("status") not in ("queued", "fetching", "processing", "ready", "failed", "cancelled")):
-                raise ValueError
-            for key in ("session_id", "project_id"):
-                if key in receipt and receipt[key] != command[key]:
-                    raise ValueError
-        except (ValueError, TypeError):
-            raise APIError(503, "invalid_geometry_receipt", "Generator receipt could not be verified", retryable=True) from None
+        if not self.service.geometry_engine.export_next(session, command, work):
+            return
+        with self.database.connection() as connection:
+            if not self._owns_lease(connection, work):
+                return
+        receipt = self.service.geometry_engine.submit(command, client)
         with self.database.transaction() as connection:
             if not self._owns_lease(connection, work):
                 return
             session = self.service._load(connection, "sessions", work["session_id"])
-            job = session["geometry_job"]
-            if (job is None or job["job_id"] != command["job_id"] or session["capture_state"] != "sealed"
-                    or session["processing_state"] == "cancelled"):
+            if session["capture_state"] != "sealed" or session["processing_state"] in ("completed", "failed", "cancelled"):
                 self._finish(connection, work)
                 return
-            remote_status = receipt["status"]
-            # A submission receipt does not validate geometry output. Ready results
-            # will be reconciled by the later result-consumption integration.
-            local_status = "queued" if remote_status in ("ready", "failed", "cancelled") else remote_status
-            job.update(status=local_status, remote_status=remote_status, dispatch_status="delivered", dispatch_error=None)
-            session["processing_state"] = "building_geometry" if remote_status in ("fetching", "processing") else "queued_geometry"
+            job = session["geometry_job"]
+            job.update(remote_job_id=receipt["job_id"], adapter="inspections_v1", dispatch_status="delivered",
+                       dispatch_error=None, status="queued", revision=0)
             connection.execute("UPDATE geometry_jobs SET data=? WHERE job_id=?", (canonical_json(job), command["job_id"]))
             self._save_session(connection, session)
             self._finish(connection, work)
-            connection.execute(
-                "INSERT OR IGNORE INTO work_items(work_id, session_id, kind, operation_id) VALUES (?, ?, 'geometry-poll', ?)",
-                (f"poll:{command['job_id']}", session["session_id"], command["job_id"]),
-            )
+            connection.execute("INSERT OR IGNORE INTO work_items(work_id,session_id,kind,operation_id) VALUES (?,?,'geometry-poll',?)",
+                               ("poll:" + command["job_id"], work["session_id"], command["job_id"]))
 
     def _record_error(self, work: dict, error: APIError) -> None:
+        if work['kind'] == 'geometry-review':
+            return self.service.geometry_review.record_error(work, error)
         with self.database.transaction() as connection:
             if not self._owns_lease(connection, work):
                 return
@@ -381,7 +327,7 @@ class CaptureWorkflow:
                     self._finish(connection, work)
                     return
             elif (not session["geometry_job"] or session["geometry_job"]["job_id"] != work["operation_id"]
-                    or session["capture_state"] != "sealed" or session["processing_state"] == "cancelled"):
+                    or session["capture_state"] != "sealed" or session["processing_state"] in ("completed", "cancelled")):
                 self._finish(connection, work)
                 return
             if error.body["retryable"]:
@@ -414,30 +360,6 @@ class CaptureWorkflow:
                     session.update(processing_state="failed", error=error.body)
                 connection.execute("UPDATE geometry_jobs SET data=? WHERE job_id=?", (canonical_json(job), work["operation_id"]))
             self._save_session(connection, session)
-
-    def source_access(self, principal: Principal, session_id: str, *, after: int = 0, limit: int = 100, files_only: bool = False) -> dict:
-        require_role(principal, "geometry")
-        with self.database.connection() as connection:
-            session = self.service._load(connection, "sessions", session_id)
-            self.service._check_access(principal, session)
-            if session["capture_state"] != "sealed" or not session["source"] or session["source"]["status"] != "accepted" or not session["geometry_job"]:
-                raise APIError(409, "source_not_accepted", "This session has no accepted source for a geometry job")
-            row = connection.execute(
-                "SELECT inventory FROM capture_completions WHERE session_id=? AND completion_id=?",
-                (session_id, session["completion"]["completion_id"]),
-            ).fetchone()
-            inventory = json.loads(row["inventory"])
-        capture_ref = session["source"]["capture_ref"]
-        page = inventory["files"][after:after + limit] if files_only else []
-        access = self.store_for(session).download_access(capture_ref, page)
-        if files_only:
-            position = after + len(page)
-            return {"items": access["items"], "next_cursor": str(position) if position < len(inventory["files"]) else None}
-        return {
-            "schema_version": "0.1", "session_id": session_id, "job_id": session["geometry_job"]["job_id"],
-            **capture_ref, "manifest_url": access["manifest_url"], "expires_at": access["expires_at"],
-            "files_url": f"{self.settings.inspector_public_base_url.rstrip('/')}/internal/v1/sessions/{session_id}/capture-source/files",
-        }
 
     def run(self, stop: threading.Event) -> None:
         with httpx.Client(timeout=self.settings.geometry_timeout_s, follow_redirects=False) as client:

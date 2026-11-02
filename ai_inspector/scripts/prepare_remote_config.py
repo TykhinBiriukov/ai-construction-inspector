@@ -15,13 +15,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ensure-tokens", action="store_true")
     parser.add_argument("--public-url")
-    parser.add_argument("--mock-geometry", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     env_file = root / ".env"
     if args.ensure_tokens:
         values = dotenv_values(env_file, interpolate=False)
-        for key in ("INSPECTOR_OPERATOR_TOKEN", "INSPECTOR_DEVICE_TOKEN", "INSPECTOR_GEOMETRY_API_TOKEN", "INSPECTOR_GEOMETRY_SERVICE_TOKEN"):
+        for key in ("INSPECTOR_OPERATOR_TOKEN", "INSPECTOR_DEVICE_TOKEN", "INSPECTOR_GEOMETRY_API_TOKEN"):
             if not values.get(key):
                 set_key(env_file, key, token_urlsafe(32))
         print("Server identity settings are ready; credentials were not printed.")
@@ -33,7 +32,7 @@ def main():
         settings = Settings.from_env(env_file)
         folder = root / ".local"
         folder.mkdir(exist_ok=True)
-        mode = "mock" if args.mock_geometry else "external" if settings.geometry_base_url else "unconfigured"
+        mode = "external" if settings.geometry_base_url else "unconfigured"
         device = {
             "inspector_base_url": url,
             "device_websocket_url": url.replace("https://", "wss://", 1) + f"/v1/devices/{settings.device_id}/events/ws",
