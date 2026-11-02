@@ -1,4 +1,4 @@
-"""Main inspector: durable conversation, tool routing and specialist delegation."""
+"""Bob, the main orchestrator: conversation, tools and inspector delegation."""
 
 import json
 import hmac
@@ -72,7 +72,18 @@ TOOLS.extend(drawing_photo.TOOLS)
 TOOLS[0]['function']['parameters']['properties'] = {'review_after_geometry': {
     'type': 'boolean', 'description': 'True only when the user requests an IFC/scan inspection after capture. Requires a selected IFC or an existing IFC-bound session.'}}
 
-SYSTEM_PROMPT = """You are the main AI Construction Inspector: the orchestrator, running on Meta/Muse Spark.
+ORCHESTRATOR_IDENTITY = """You are Bob, the main orchestrator of AI Construction Inspector, running on Meta/Muse Spark.
+Your direct subordinate agents are inspectors, each responsible for a specific inspection domain.
+An inspector may have its own subordinate agents: Geometry Verifier reports to Geometry Inspector,
+not directly to you, and is not an inspector. Geometry Engine is a computation service.
+Interpret any older 'main inspector' wording in the following guidance as Bob, the main orchestrator.
+This hierarchy is internal. Present yourself to the user as one AI Inspector.
+Do not introduce yourself as Bob or expose internal inspector/verifier names, agent levels,
+delegations or handoffs in user replies. Describe the inspection work, progress, findings,
+limitations and missing evidence as the work of AI Inspector, without inventing verification.
+"""
+
+SYSTEM_PROMPT = ORCHESTRATOR_IDENTITY + """
 Own the conversation with the user: understand the request, clarify ambiguity,
 choose a supplied tool or a registered specialist inspector, and explain the result.
 Use direct tools for capture/session/device operations. For inspection analysis,
@@ -781,6 +792,8 @@ class OrchestratorAgent:
             run["project_id"] = chat["project_id"]
             prompt = self.telemetry.resolve_prompt(run, "inspector/orchestrator", SYSTEM_PROMPT,
                                                   fetch=bool(run.get("prompt_management_version")))
+            if not prompt.startswith(ORCHESTRATOR_IDENTITY):
+                prompt = ORCHESTRATOR_IDENTITY + "\n" + prompt
             if run.get("inspection_request"):
                 prompt += "\nThis run has a validated typed inspection_request. For its analysis use the registered discrepancy_inspector. Only Inspector calls the verifier; do not invent cases or measurements."
             if run.get('geometry_continuation', {}).get('summary'):
@@ -813,5 +826,5 @@ class OrchestratorAgent:
         return self.public_run(run)
 
 
-# Keep existing Python integrations working; the service now constructs the main inspector.
+# Keep existing Python integrations working; the service constructs Bob, the orchestrator.
 ChatAgent = OrchestratorAgent

@@ -1,8 +1,24 @@
-# Main inspector → tools and specialist inspectors
+# Bob → domain inspectors → their subordinate agents
 
-The main agent is `OrchestratorAgent` (`ChatAgent` remains a compatibility alias). It talks to the user, selects predefined tools or a registered inspector, and explains accepted results. The shared Meta Model API adapter uses `muse-spark-1.3`; configured credentials do not establish live account access. Native HTTP schemas are generated at `/docs` and `/openapi.json`; wire/model definitions live in the linked code below.
+**Bob** is the main orchestrator, implemented by `OrchestratorAgent` (`ChatAgent` remains a compatibility alias). He talks to the user, selects predefined tools or a registered inspector, and explains accepted results. The shared Meta Model API adapter uses `muse-spark-1.3`; configured credentials do not establish live account access. Native HTTP schemas are generated at `/docs` and `/openapi.json`; wire/model definitions live in the linked code below.
 
-## Main inspector and specialist registration
+## Agent hierarchy and inspector registration
+
+The user interacts with one **AI Inspector**. Chat identity, progress/activity labels and replies use this single product name and describe work such as checking geometry or reviewing evidence. Internal agent names and handoffs are not part of the user conversation.
+
+Internal names describe responsibility and delegation level:
+
+| Level | Role | Responsibility |
+|---|---|---|
+| 1 | Bob — main orchestrator | User dialogue, task routing, tools and explanation of accepted results |
+| 2 | Domain inspectors, such as Geometry Inspector | Own the inspection task in their domain; report to Bob |
+| 3 | An inspector's subordinate agents, such as Geometry Verifier | Perform a narrower task for their parent inspector; they are not Bob's inspectors |
+
+Geometry Inspector owns the geometry/BIM comparison inspection workflow. Geometry Verifier is its verification sub-agent, with no tools or further delegation in the implemented flow. Geometry Engine is the numerical computation service used by the backend workflow; backend session/source/job ownership remains unchanged. A service invoked through a predefined tool does not automatically become a registered inspector or gain agent permissions.
+
+`InspectorProfile`, `RemoteInspector`, `InspectorAgentService`, `inspector_id` and the A2A `metadata.inspector` envelope are shared technical names retained for compatibility, including the verifier's profile. They do not classify Geometry Verifier as a level-2 inspector. Internal role names do not rename persisted IDs, APIs, prompt keys or frozen requests. Technical history, evidence bindings and service discovery retain their actual identities; the user-facing presentation remains AI Inspector.
+
+The internal role hierarchy and public identity as AI Inspector are code-owned guidance, also prepended when a managed prompt still uses older terminology. Already saved messages/pending model requests retain their original text on replay. This naming clarification does not change specialist profile instructions/versions, permissions or delegation paths.
 
 The [IFC/scan discrepancy review contract](ifc-discrepancy-review.md) is implemented by two independent native A2A services: Geometry Inspector reads pinned same-chat evidence, calls its one configured Geometry Verifier, and deterministically assembles the accepted JSON report for Bob. Geometry Verifier has no tools or further delegation. JSON/case/evidence/measurement bindings are validated before completion and again before Bob accepts the report. Default profiles are version 3, with explicit Geometry compact 2.0 interpretation: sign/units, nulls, processing versus acceptance tolerance, quality, partial surface statistics and related image views. The [evidence mapping](capture-to-geometry.md#compact-result-20--agent-evidence) preserves these facts without signed URLs. Factories, exact v1 schemas, private configuration and limits are in the linked guide. Native Settings defaults to an empty registry; the [checked-in Cloudflare deployment config](../cloudflare/wrangler.jsonc) registers Geometry Inspector. VM service deployment is managed separately as described in the linked guide. Code defaults, deployment registrations and live cards must be checked separately. Human report formatting and candidate discovery remain separate.
 

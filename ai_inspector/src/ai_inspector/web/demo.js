@@ -66,9 +66,9 @@
     $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
     $('send').textContent=sending ? 'Working…' : 'Send ↑';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
-    $('run-status').textContent=sending ? 'Inspector is working. Tool results appear in Inspector activity.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
+    $('run-status').textContent=sending ? 'AI Inspector is working. Progress appears in Work process.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     const review=chat?.geometry_reviews?.find(r=>!['completed','cancelled'].includes(r.status));
-    if(review&&!sending&&!pending){const labels={waiting_geometry:'Waiting for Geometry. Review will continue automatically.',preparing_evidence:'Preparing captured evidence.',reviewing:'Inspector is reviewing the captured evidence.',summarizing:'Preparing the inspection response.',waiting_configuration:'Inspection is waiting for service configuration.',retrying:'Inspection will retry automatically.',failed:'Inspection needs attention.'};$('run-status').textContent=labels[review.status]||'Inspection is continuing automatically.';}
+    if(review&&!sending&&!pending){const labels={waiting_geometry:'Processing captured geometry. Review will continue automatically.',preparing_evidence:'Preparing captured evidence.',reviewing:'Reviewing the captured evidence.',summarizing:'Preparing the inspection response.',waiting_configuration:'Inspection is waiting for service configuration.',retrying:'Inspection will retry automatically.',failed:'Inspection needs attention.'};$('run-status').textContent=labels[review.status]||'Inspection is continuing automatically.';}
     updateActivityStatus();
     for(const button of $('suggestions').querySelectorAll('button')) button.disabled=sending || !!pending;
   }
@@ -80,7 +80,7 @@
       const button=node('button','',`◌  ${session.room_id}`); button.append(node('small','',`${session.capture_state} · ${session.processing_state}`));
       button.addEventListener('click',()=>showTask(session)); $('tasks').append(button);
     }
-    if(!scopedSessions.length) $('tasks').append(node('p','muted','No capture tasks yet. Ask Inspector to create one.'));
+    if(!scopedSessions.length) $('tasks').append(node('p','muted','No capture tasks yet. Ask AI Inspector to create one.'));
     $('device-state').textContent=device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',device.online);
     $('device-name').textContent=device.device_id;
     if(selected) { const session=scopedSessions.find(s=>s.session_id===selected); if(session) showTask(session); }
@@ -179,12 +179,12 @@
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
   const comparisonPhaseLabels={drawing_checklist:'Reading the drawing',checklist_reuse:'Using saved checklist',photo_inspection:'Checking the photo',review:'Reviewing the findings'};
-  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Specialist inspection'};
+  const toolLabels={device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Reviewing inspection evidence'};
   let activitySync=0,activitySignature='',activityExpanded=new Map();
   function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
   function updateActivityStatus(){
     const last=chat?.runs?.at(-1),event=last?.activity_events?.at(-1),live=isLiveEvent(last||{},event),active=live||!!last?.auto_resume;
-    let text=last?'Response ready':'Inspector is ready';
+    let text=last?'Response ready':'AI Inspector is ready';
     if(last?.status==='retryable')text=last.auto_resume?'Analyzing your files':'Action needed';
     else if(last?.status==='failed')text='Request failed';
     else if(event?.status==='running')text=live?(event.kind==='tool'?toolLabels[event.name]||'Working on your request':'Preparing response'):'Waiting for server update';
@@ -237,7 +237,7 @@
     const body=node('div','action-body');
     const comparison=['drawing_photo_compare','drawing_photo_result'].includes(event.name);
     const result=event.status==='failed'?'This step could not be completed. See the response for what to do next.':
-      ['running','waiting'].includes(event.status)?(comparison?'The drawing/photo specialist is working on your files.':'This step is in progress.'):
+      ['running','waiting'].includes(event.status)?(comparison?'The drawing/photo comparison is in progress.':'This step is in progress.'):
       event.kind==='model'?'Step completed.':comparison?(tool?.result?.error?'The comparison could not be completed. See the response for details.':'Comparison results received.'):'Step completed.';
     body.append(node('p','',result));
     if(comparison&&run.comparison_progress?.operation_id===event.operation_id){
@@ -263,10 +263,10 @@
     $('activity-feed').hidden=!events.length;$('activity-graph').hidden=!events.length;
     if(!runs.length){$('activity').append(node('p','process-empty','Actions will appear here when you send a request.'));return;}
     if(events.length){
-      const agent=node('span','graph-agent','Inspector');$('activity-graph').append(agent);
+      const agent=node('span','graph-agent','AI Inspector');$('activity-graph').append(agent);
       const tools=[...new Set(events.filter(e=>e.kind==='tool').map(e=>e.name))];
       const branches=node('div','graph-branches');
-      for(const name of tools){const event=events.filter(e=>e.name===name).at(-1);const branch=node('div',`graph-branch${event.status==='running'?' graph-active':''}`);branch.append(node('i','graph-link'),node('span','graph-tool',toolLabels[name]||'Specialist task'));branches.append(branch);}
+      for(const name of tools){const event=events.filter(e=>e.name===name).at(-1);const branch=node('div',`graph-branch${event.status==='running'?' graph-active':''}`);branch.append(node('i','graph-link'),node('span','graph-tool',toolLabels[name]||'Inspection task'));branches.append(branch);}
       if(!tools.length)branches.append(node('span','graph-no-tools','Preparing your response'));$('activity-graph').append(branches);
       for(const event of events.slice(-4))$('activity-feed').append(actionCard(last,event,true));
     }
@@ -287,7 +287,7 @@
         $('messages').replaceChildren();
         for(const run of runs) {
           const user=node('article','message user'); user.append(node('div','message-author',run.continuation?'AUTOMATIC REVIEW':'YOU'),messageText(run.continuation?'Results from the saved capture inspection.':run.text)); if(run.document_selection)user.append(node('small','selected-chip',run.document_selection.label)); $('messages').append(user);
-          const assistant=node('article','message assistant'); assistant.id='reply-'+run.run_id; assistant.append(node('div','message-author','✳ INSPECTOR'));
+          const assistant=node('article','message assistant'); assistant.id='reply-'+run.run_id; assistant.append(node('div','message-author','✳ AI INSPECTOR'));
           assistant.append(messageText(run.display_reply??run.reply??run.error?.message??(run.status==='running'?'Working on your request…':'Request saved. Awaiting a response.')));
           const grid=node('div','artifact-grid'),comparisons=comparisonResults(run);
           for(const item of run.artifacts||[]) {

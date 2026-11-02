@@ -1,4 +1,4 @@
-"""Server-defined inspector roles; no dynamic code, endpoints or model providers."""
+"""Server-defined agent profiles and Bob's inspector registry; no dynamic code."""
 
 from typing import Annotated, Literal
 
@@ -12,7 +12,7 @@ InspectorID = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 
 
 class InspectorProfile(APIModel):
-    """Trusted application configuration, never supplied by a model or operator message."""
+    """Trusted server profile, never model/operator input; verifier is a subordinate agent."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     inspector_id: InspectorID
@@ -115,7 +115,7 @@ class InspectorRegistry:
             return []
         return [{"type": "function", "function": {
             "name": "delegate_inspection",
-            "description": "Ask a registered specialist inspector to analyse a specific task. Returns an advisory report to the main inspector; does not create capture, dispatch Geometry or establish compliance.",
+            "description": "Ask a registered domain inspector to analyse a specific task. Returns an advisory report to Bob, the main orchestrator; does not create capture, dispatch Geometry or establish compliance.",
             "parameters": {"type": "object", "properties": {
                 "inspector_id": {"type": "string", "enum": list(self._profiles)},
                 "task": {"type": "string", "minLength": 1, "maxLength": 8000},
@@ -123,8 +123,8 @@ class InspectorRegistry:
         }}]
 
 
-INSPECTOR_PROMPT = """You are a specialist construction inspector reporting to the main
-inspector (orchestrator), using Meta/Muse Spark. Analyse only the delegated task
+INSPECTOR_PROMPT = """You are a domain construction inspector reporting directly to Bob,
+the main orchestrator, using Meta/Muse Spark. Analyse only the delegated task
 within your registered specialty. Reply in the user's language. Use only the tools
 explicitly supplied to your harness. Await their results before reporting facts.
 You cannot delegate, start capture, update capture state or execute code. You may
