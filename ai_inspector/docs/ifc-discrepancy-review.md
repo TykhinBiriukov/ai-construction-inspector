@@ -375,3 +375,29 @@ Geometry Inspector вызывает только inspection_evidence(asset_id) �
 Публичные имена двух агентов — **Geometry Inspector** и **Geometry Verifier**. Geometry Service остаётся отдельным вычислительным API. Служебные IDs/kind `discrepancy_inspector` и `discrepancy_verifier`, имена Python-классов/factories и переменных окружения сохранены: переименование не меняет маршрутизацию и идентификаторы задач. Карточки A2A показывают новые имена при прежних skill IDs.
 
 Стандартные профили теперь имеют version `2` из-за обновления названий в instructions. При первом запуске использовать version `2` в обеих регистрациях, как в примерах выше. Для уже начатых задач сохранить их прежний профиль/версию до завершения: смена регистрации не переписывает замороженные задачи и может удержать их до восстановления сохранённой конфигурации. Предметные JSON-схемы остаются версии `1.0`.
+
+
+### Google Cloud deployment — 2 November 2026
+
+Geometry Inspector and Geometry Verifier are hosted as separate containers on
+the Geometry Engine VM, with separate persistent SQLite task volumes:
+
+- Geometry Inspector: `https://35.205.36.182.sslip.io/geometry-inspector`
+- Geometry Verifier: `https://35.205.36.182.sslip.io/geometry-verifier`
+
+Append `/.well-known/agent-card.json`, `/contracts` or `/docs` for discovery and
+schemas. Task endpoints require the caller's dedicated Bearer token plus
+`A2A-Version: 1.0` and `A2A-Extensions: urn:ai-inspector:delegation:v1`. Credentials
+are server-only and distinct for Bob→Inspector, Inspector→Verifier and the
+Inspector→Bob evidence tool. Both profiles use version `2`, project `demo-building`.
+
+The Cloudflare deployment registry includes only Geometry Inspector, with the
+`inspection_evidence` tool grant. `INSPECTOR_TASK_TOKEN` and `INSPECTOR_TOOL_TOKEN`
+are Workers Secrets; the verifier token is held only by the two specialist
+services. Do not put credentials in this guide or the registry.
+
+The VM polls `feat/ai-inspector-development` every two minutes for these agents;
+Geometry Engine separately follows `geometry-engine`. Deployment configuration
+is managed on the VM, outside this branch. The IP-based hostname is provisional:
+check it after a VM stop/start. Hosting does not certify reconstruction accuracy
+or establish a complete live inspection run.
