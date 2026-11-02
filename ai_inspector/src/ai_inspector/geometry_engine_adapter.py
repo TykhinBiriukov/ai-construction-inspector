@@ -401,8 +401,14 @@ class GeometryEngineAdapter:
                     for key in ('rgb_url', 'mask_url', 'overlay_url'):
                         if photo[key]:
                             entry = self.file_entry(command, remote_id, photo[key], manifest, indexes)
+                            if key == 'rgb_url' and (entry['stage'] != 'input'
+                                    or entry['path'] != f"input/frames/{photo['frame_id']}/rgb.jpg"):
+                                raise invalid()
                             owners = photos.get(photo[key], {}).get('object_ids', [])
-                            photos[photo[key]] = entry | {'object_ids': list(dict.fromkeys(owners + [obj['id']]))}
+                            refs = photos.get(photo[key], {}).get('photo_refs', [])
+                            ref = {'object_id': obj['id'], 'frame_id': photo['frame_id'], 'role': key.removesuffix('_url')}
+                            photos[photo[key]] = entry | {'object_ids': list(dict.fromkeys(owners + [obj['id']])),
+                                'photo_refs': refs if ref in refs else refs + [ref]}
             result = {'job_id': command['job_id'], 'remote_job_id': remote_id, 'session_id': command['session_id'],
                 'project_id': command['project_id'], 'manifest_sha256': command['manifest_sha256'],
                 'model_version': session['model_version'], 'model_sha256': command['model_sha256'],

@@ -44,6 +44,25 @@ Geometry does not report complete used/excluded observation accounting, uncertai
 
 Expiring URLs and full review checkpoints stay in private receipt namespaces (`geometry-result-files`, `geometry-review-state:<session>`); they do not enter phone events or model input. Existing tables serve SQLite, PostgreSQL and Cloudflare; no new migration is required.
 
+### Compact result 2.0 → agent evidence
+
+The three input fields `session_id`, `capture_manifest_path` and `ifc_object_key` identify a Geometry request, not a completed result. Inspector generates the keys from its pinned source/IFC; a caller's example `reference.ifc` path is not a reason to replace the saved hash-based IFC key. Status/source/result-manifest checks above are still required before agent review. A downloaded JSON attachment alone does not establish these bindings or permission to fetch its URLs.
+
+New reviews pin evidence projection version 2. Existing reviews without this version retain the previous candidate ordering, evidence bytes and case/request IDs on retry.
+
+| Geometry field | Agent interpretation |
+|---|---|
+| `units`, `difference_convention` | Preserve meters and `scan_minus_ifc`; a negative dimension difference reports a smaller scan value |
+| `tolerance` | Preserve as Geometry's processing parameter; project acceptance remains the separate optional caller rule |
+| `summary`, `job_id`, `session_id` | Preserve upstream counts/identity in each reference alongside Inspector's source binding; review case counts also include surfaces |
+| `objects[].dimensions`, `displacement` | Preserve raw values and supplied metric measurements; null stays unknown, with no invented zero, uncertainty, full extent or alignment |
+| `match_status`, `quality` | Preserve correspondence and all flags/issues. Unmatched/ambiguous/unobserved/unavailable and possible duplicate fragments are evidence for review, not automatic defects |
+| `surfaces[]` | Review every returned surface, including `observed_within_tolerance`; p95, area fraction and compared area describe the observed subset, while `whole_element_verified=false` precludes a whole-element claim |
+| `photos[]` | Privately bind object/frame/role to committed file hashes. Import RGB with its overlay (mask fallback), then another frame, within the six-asset budget. Reference JSON maps imported asset IDs to frame IDs/roles; unimported frame IDs remain in the source snapshot |
+| `artifacts` | Supply verified metadata only; IFC/point-cloud/mesh bytes are not claimed to have been read by the model |
+
+RGB evidence must address its declared submitted frame's committed `input/frames/<frame_id>/rgb.jpg`. Older accepted photo receipts remain usable, with an explicitly unknown role/frame when that association was not saved. Signed links remain private, including during refresh. The complete sanitized compact result is retained under `geometry` in the final review JSON, even if a verifier cites no measurements; Bob's bounded summary includes upstream counts, surface coverage flags and the distinction between processing and acceptance tolerance.
+
 ### Historical saved commands
 
 The previous Geometry API, inbound source/event endpoints, service identity and bundled mock server have been removed. Previously frozen commands for that API are not converted or replayed: the worker records `geometry_contract_retired` without network IO or a new Geometry job. Command bytes, accepted source, completed results, receipts and historical event rows are retained. A command that was never frozen or sent can use the current API after its accepted source and IFC pass the current adapter requirements. No database reset or destructive migration is performed.
