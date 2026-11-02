@@ -52,23 +52,7 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write(f'web={str(web).lower()}\nbackend={str(backend).lower()}\n')
           PYCODE
-      - uses: astral-sh/setup-uv@v7
-        if: steps.changes.outputs.backend == 'true'
-        with:
-          version: '0.13.6'
-          python-version: '3.14'
-      - name: Deploy Python runtime first
-        if: steps.changes.outputs.backend == 'true'
-        working-directory: ai_inspector/cloudflare
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_SEND_METRICS: 'false'
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
-          npm install --no-save --package-lock=false wrangler@4.154.0
-          uv sync --locked
-          ./deploy.sh
+      # Native Python backend deploys through inspector-backend-update.timer on GCP.
       - name: Build document viewer
         if: steps.changes.outputs.web == 'true'
         working-directory: ai_inspector/viewer

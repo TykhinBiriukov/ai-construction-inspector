@@ -31,5 +31,8 @@
     "crons": [
       "* * * * *"
     ]
+  },
+  "vars": {
+    "INSPECTOR_BACKEND_ORIGIN": "https://35.205.36.182.sslip.io/inspector-backend"
   }
 }

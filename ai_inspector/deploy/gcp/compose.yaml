@@ -1,0 +1,14 @@
+services:
+  backend:
+    image: inspector-backend:${INSPECTOR_REVISION}
+    restart: unless-stopped
+    env_file: /opt/inspector-backend/secrets/runtime.env
+    environment:
+      INSPECTOR_REVISION: ${INSPECTOR_REVISION}
+    ports: ['127.0.0.1:8200:8200']
+    volumes: ['backend-cache:/data']
+    mem_limit: 1g
+    cpus: 0.75
+    stop_grace_period: 40s
+volumes:
+  backend-cache:
