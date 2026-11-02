@@ -1,7 +1,7 @@
 import os
 import re
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
@@ -37,6 +37,9 @@ class Settings:
     geometry_api_token: str = field(default="", repr=False)
     geometry_api_username: str = field(default="", repr=False)
     geometry_review_inspector_id: str = ""
+    geometry_supabase_url: str = ""
+    geometry_supabase_storage_bucket: str = ""
+    geometry_supabase_secret_key: str = field(default="", repr=False)
     worker_interval_s: float = 1.0
     geometry_timeout_s: float = 15.0
     supabase_url: str = ""
@@ -159,6 +162,21 @@ class Settings:
                     or any(ord(character) < 33 for character in self.supabase_secret_key)):
                 raise ValueError("Invalid SUPABASE_SECRET_KEY format")
 
+        geometry_storage = (self.geometry_supabase_url, self.geometry_supabase_storage_bucket, self.geometry_supabase_secret_key)
+        if any(geometry_storage):
+            if not all(geometry_storage):
+                raise ValueError("Set INSPECTOR_GEOMETRY_SUPABASE_URL, INSPECTOR_GEOMETRY_SUPABASE_STORAGE_BUCKET and INSPECTOR_GEOMETRY_SUPABASE_SECRET_KEY together")
+            # Reuse all origin/bucket/key validation; clear overrides to avoid recursion.
+            self.geometry_storage_settings()
+
+    def geometry_storage_settings(self):
+        if not self.geometry_supabase_url:
+            return self
+        return replace(self, supabase_url=self.geometry_supabase_url,
+                       supabase_storage_bucket=self.geometry_supabase_storage_bucket,
+                       supabase_secret_key=self.geometry_supabase_secret_key,
+                       geometry_supabase_url="", geometry_supabase_storage_bucket="", geometry_supabase_secret_key="")
+
     @property
     def supabase_enabled(self) -> bool:
         return bool(self.supabase_url and self.supabase_storage_bucket and self.supabase_secret_key)
@@ -206,6 +224,9 @@ class Settings:
             geometry_api_token=get("INSPECTOR_GEOMETRY_API_TOKEN", ""),
             geometry_api_username=get("INSPECTOR_GEOMETRY_API_USERNAME", ""),
             geometry_review_inspector_id=get("INSPECTOR_GEOMETRY_REVIEW_INSPECTOR_ID", ""),
+            geometry_supabase_url=get("INSPECTOR_GEOMETRY_SUPABASE_URL", ""),
+            geometry_supabase_storage_bucket=get("INSPECTOR_GEOMETRY_SUPABASE_STORAGE_BUCKET", ""),
+            geometry_supabase_secret_key=get("INSPECTOR_GEOMETRY_SUPABASE_SECRET_KEY", ""),
             worker_interval_s=float(get("INSPECTOR_WORKER_INTERVAL_S", "1")),
             geometry_timeout_s=float(get("INSPECTOR_GEOMETRY_TIMEOUT_S", "15")),
             supabase_url=get("SUPABASE_URL", ""),
