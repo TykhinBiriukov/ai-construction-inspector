@@ -5,7 +5,7 @@ import Combine
 @MainActor
 final class PushService: ObservableObject {
     static let shared = PushService()
-    @Published private(set) var status = "Локальные уведомления · Inspector ещё не подключён"
+    @Published private(set) var status = "Local notifications · Inspector is not connected yet"
     @Published private(set) var pendingSessionID: String?
     @Published private(set) var pendingIsDemo = false
     private var scheduling = Set<String>()
@@ -28,21 +28,21 @@ final class PushService: ObservableObject {
     func enable() async {
         do {
             let allowed = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-            guard allowed else { status = "Уведомления отключены в настройках iPhone"; return }
+            guard allowed else { status = "Notifications are disabled in iPhone Settings"; return }
             if enabledInBuild {
                 UIApplication.shared.registerForRemoteNotifications()
-                status = "Регистрируем устройство в APNs…"
+                status = "Registering this device with APNs…"
             } else {
-                status = "Локальные уведомления разрешены. Новые задания получаем только при открытом приложении."
+                status = "Local notifications enabled. New assignments are received only while the app is open."
             }
-        } catch { status = "Не удалось запросить уведомления. Повторите позже." }
+        } catch { status = "Could not request notifications. Please try again later." }
     }
 
     func refresh() async {
         guard enabledInBuild else { return }
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
-            status = "Уведомления не разрешены"; return
+            status = "Notifications are not allowed"; return
         }
         UIApplication.shared.registerForRemoteNotifications()
     }
@@ -59,11 +59,11 @@ final class PushService: ObservableObject {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
-            status = "Сначала разрешите уведомления"; return
+            status = "Enable notifications first"; return
         }
         let content = UNMutableNotificationContent()
-        content.title = isDemo ? "AI Inspector · ТЕСТ" : "AI Inspector"
-        content.body = isDemo ? "Тестовое задание. Нажмите, чтобы открыть приложение." : "Вам назначена новая съёмка. Откройте задание."
+        content.title = isDemo ? "AI Inspector · TEST" : "AI Inspector"
+        content.body = isDemo ? "Test assignment. Tap to open the app." : "You have a new capture assignment. Open it to get started."
         content.sound = .default
         content.userInfo = ["schema_version": "0.1", "type": "capture.assigned",
                             "event_id": UUID().uuidString.lowercased(), "session_id": sessionID, "local_demo": isDemo]
@@ -72,8 +72,8 @@ final class PushService: ObservableObject {
             try await center.add(UNNotificationRequest(identifier: key, content: content, trigger: trigger))
             // Persist after successful scheduling. Stable request IDs also replace crash-time retries.
             if !isDemo { delivered.append(key); UserDefaults.standard.set(delivered, forKey: "push.notifiedAssignments") }
-            status = isDemo ? "Тестовое уведомление появится через 3 секунды; это не ответ Inspector." : "Уведомление о назначении создано на телефоне"
-        } catch { status = "Не удалось показать уведомление. Назначение остаётся доступно в приложении." }
+            status = isDemo ? "A test notification will appear in 3 seconds. This is not an Inspector response." : "Assignment notification created on this phone"
+        } catch { status = "Could not display the notification. The assignment is still available in the app." }
     }
 
     func testLocalNotification() async {
@@ -88,22 +88,22 @@ final class PushService: ObservableObject {
 
     func syncToken() async {
         guard !uploading, let token = deviceToken else { return }
-        guard let registerToken else { status = "APNs готов; подключение к Inspector ещё не настроено"; return }
+        guard let registerToken else { status = "APNs is ready; the Inspector connection is not configured yet"; return }
         guard let environment = Bundle.main.object(forInfoDictionaryKey: "AIInspectorAPNSEnvironment") as? String,
               ["development", "production"].contains(environment), let topic = Bundle.main.bundleIdentifier else {
-            status = "Не настроено окружение APNs"; return
+            status = "APNs environment is not configured"; return
         }
         uploading = true
         defer { uploading = false }
         do {
             try await registerToken(PushRegistration(token: token, environment: environment, topic: topic))
-            status = "Устройство зарегистрировано для уведомлений"
-        } catch { status = "Не удалось зарегистрировать push в Inspector. Повторим при открытии приложения." }
+            status = "Device registered for notifications"
+        } catch { status = "Could not register push notifications with Inspector. We will retry when you open the app." }
         // If APNs rotated the token during the request, send the newer token too.
         if deviceToken != token { Task { await self.syncToken() } }
     }
 
-    func failed() { status = "APNs недоступен: проверьте подпись Push Notifications и сеть." }
+    func failed() { status = "APNs is unavailable: check Push Notifications signing and your connection." }
 
     func receive(_ push: CapturePush) {
         guard push.eventID != lastEventID else { return }
@@ -112,7 +112,7 @@ final class PushService: ObservableObject {
         pendingIsDemo = push.isDemo
         UserDefaults.standard.set(push.isDemo, forKey: "push.pendingIsDemo")
         UserDefaults.standard.set(push.sessionID, forKey: "push.pendingSession")
-        status = push.isDemo ? "Открыто тестовое уведомление. Живого задания нет." : "Получено назначение. Требуется проверка сессии через Inspector."
+        status = push.isDemo ? "Test notification opened. There is no live assignment." : "Assignment received. The session needs to be verified with Inspector."
         // Never replace local capture IDs or start the camera from an unverified push.
     }
 

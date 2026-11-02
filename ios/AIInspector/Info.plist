@@ -6,6 +6,8 @@
 	<string>$(INSPECTOR_PUSH_ENABLED)</string>
 	<key>AIInspectorAPNSEnvironment</key>
 	<string>$(APNS_ENVIRONMENT)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>AI Inspector</string>
 	<key>CFBundleExecutable</key>
@@ -25,7 +27,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>AI Inspector сохраняет фото и LiDAR глубину помещения для инспекции.</string>
+	<string>AI Inspector saves room photos and LiDAR depth data for inspection.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -40,7 +42,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Подключение к вашему Mac для локального теста BIM-привязки и передачи LiDAR-снимков.</string>
+	<string>Connect to your Mac to test BIM alignment locally and transfer LiDAR captures.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

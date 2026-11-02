@@ -28,7 +28,7 @@ struct CaptureMapButton: View {
                             .frame(width: 112, height: 92)
                         Label("BIM", systemImage: "arrow.up.left.and.arrow.down.right").font(.caption2)
                     }.padding(8).background(InspectorStyle.paper.opacity(0.95), in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(.plain).accessibilityLabel("Открыть BIM и покрытие")
+                }.buttonStyle(.plain).accessibilityLabel("Open BIM and coverage")
             }
         }
     }
@@ -65,7 +65,7 @@ struct RoomMiniMap: View {
                     arrow.closeSubpath(); context.fill(arrow, with: .color(InspectorStyle.ink))
                 } else { context.fill(Path(ellipseIn: CGRect(x: p.x-3, y: p.y-3, width: 6, height: 6)), with: .color(InspectorStyle.ink)) }
             }
-        }.clipped().accessibilityLabel("План комнаты; положение телефона показывается только при актуальной привязке")
+        }.clipped().accessibilityLabel("Room plan; phone position is shown only while alignment is current")
     }
 }
 
@@ -78,9 +78,9 @@ struct BIMViewer: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if localization.choosingEntry, let doors = localization.state?.room.doors {
-                        Text("С какой двери начнём?").font(.system(size: 28, design: .serif))
+                        Text("Which door will you start from?").font(.system(size: 28, design: .serif))
                         ForEach(doors) { door in
-                            Button(door.label + (door.name.isEmpty ? "" : " · " + door.name)) {
+                            Button(EnglishInterface.doorLabel(door.label) + (door.name.isEmpty ? "" : " · " + door.name)) {
                                 Task { await localization.chooseEntry(door.id) }
                             }.buttonStyle(.bordered).disabled(localization.entryBusy)
                         }
@@ -89,14 +89,14 @@ struct BIMViewer: View {
                         if let state = localization.state {
                             LabRoom3DPanel(state: state, meshes: localization.meshes,
                                 live: capture.running && time.date.timeIntervalSince(localization.receivedAt) < 2)
-                        } else { ContentUnavailableView("Модель ещё не загружена", systemImage: "cube") }
+                        } else { ContentUnavailableView("Model not loaded yet", systemImage: "cube") }
                     }
                     Text(localization.status).font(.footnote).foregroundStyle(.secondary)
-                    Button("Вернуться к камере") { dismiss() }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
+                    Button("Back to camera") { dismiss() }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
                 }.padding(20)
             }.background(InspectorStyle.paper)
-                .navigationTitle("BIM и покрытие").navigationBarTitleDisplayMode(.inline)
-                .toolbar { Button("Готово") { dismiss() } }
+                .navigationTitle("BIM and coverage").navigationBarTitleDisplayMode(.inline)
+                .toolbar { Button("Done") { dismiss() } }
         }.tint(InspectorStyle.ink).presentationDetents([.large])
     }
 }
@@ -112,25 +112,25 @@ struct LabRoom3DPanel: View {
     @State private var cutaway = true
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Picker("Вид комнаты", selection: $plan) {
-                Text("План").tag(true); Text("3D").tag(false)
+            Picker("Room view", selection: $plan) {
+                Text("Plan").tag(true); Text("3D").tag(false)
             }.pickerStyle(.segmented)
             LabRoom3D(state: state, meshes: meshes, live: live, reset: reset,
                       plan: plan, showCoverage: showCoverage, showPhotos: showPhotos, cutaway: cutaway)
                 .frame(height: 380).clipShape(RoundedRectangle(cornerRadius: 16))
-                .accessibilityLabel("BIM-модель с подтверждённым покрытием съёмки")
+                .accessibilityLabel("BIM model with verified capture coverage")
             HStack(spacing: 16) {
-                Label { Text("Отснято") } icon: { Circle().fill(InspectorStyle.sage).frame(width: 10, height: 10) }
-                Label { Text("Нет данных") } icon: { Circle().fill(.gray.opacity(0.35)).frame(width: 10, height: 10) }
+                Label { Text("Captured") } icon: { Circle().fill(InspectorStyle.sage).frame(width: 10, height: 10) }
+                Label { Text("No data") } icon: { Circle().fill(.gray.opacity(0.35)).frame(width: 10, height: 10) }
                 Spacer()
-                Button { reset += 1 } label: { Image(systemName: "arrow.counterclockwise") }.accessibilityLabel("Сбросить ракурс")
+                Button { reset += 1 } label: { Image(systemName: "arrow.counterclockwise") }.accessibilityLabel("Reset view")
             }.font(.caption)
-            Text("Покрытие съёмкой, не оценка качества").font(.caption).foregroundStyle(.secondary)
+            Text("Capture coverage, not a quality assessment").font(.caption).foregroundStyle(.secondary)
             Divider()
-            Toggle("Покрытие", isOn: $showCoverage)
-            Toggle("Точки фото", isOn: $showPhotos)
-            Toggle("Открытый вид комнаты", isOn: $cutaway)
-            Text(live && state.latest_pose != nil ? "Зелёный указатель — телефон и направление камеры." : "Положение телефона не подтверждено или устарело.")
+            Toggle("Coverage", isOn: $showCoverage)
+            Toggle("Photo locations", isOn: $showPhotos)
+            Toggle("Cutaway view", isOn: $cutaway)
+            Text(live && state.latest_pose != nil ? "The green marker shows the phone and camera direction." : "Phone position is unconfirmed or outdated.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -227,7 +227,7 @@ struct LabRoom3D: UIViewRepresentable {
             if let doors = state.room.doors {
                 for door in doors where door.low.count == 3 && door.high.count == 3 {
                     let selected = door.id == state.room.entry_element_id && state.room.entry_confirmed != false
-                    let label = SCNText(string: (selected ? "Вход · " : "") + door.label, extrusionDepth: 0.001)
+                    let label = SCNText(string: (selected ? "Entry · " : "") + EnglishInterface.doorLabel(door.label), extrusionDepth: 0.001)
                     label.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
                     label.materials = [material(UIColor(selected ? InspectorStyle.ink : InspectorStyle.sage))]
                     let text = SCNNode(geometry: label); text.scale = SCNVector3(0.018,0.018,0.018)

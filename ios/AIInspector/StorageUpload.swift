@@ -33,14 +33,14 @@ final class SignedStorageTransport: NSObject, URLSessionTaskDelegate, @unchecked
               url.user == nil, url.password == nil, url.fragment == nil,
               url.path == "/storage/v1/object/upload/sign/inspection-captures/" + plan.object_key,
               plan.method == "PUT", !plan.headers.keys.contains(where: { ["authorization", "apikey", "host"].contains($0.lowercased()) }),
-              bytes.count == plan.byte_length, StoredFile(name: "", data: bytes).sha256 == plan.sha256 else { throw CaptureError.invalid("Неверный подписанный план Supabase") }
+              bytes.count == plan.byte_length, StoredFile(name: "", data: bytes).sha256 == plan.sha256 else { throw CaptureError.invalid("Invalid signed Supabase upload plan") }
         var req = URLRequest(url: url); req.httpMethod = "PUT"; req.timeoutInterval = 60
         for (name, value) in plan.headers { req.setValue(value, forHTTPHeaderField: name) }
         let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         let (_, response) = try await session.upload(for: req, from: bytes)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw CaptureError.invalid("Supabase не подтвердил загрузку. Повтор запросит свежий план и проверит существующий файл.")
+            throw CaptureError.invalid("Supabase did not confirm the upload. Retrying will request a fresh plan and check the existing file.")
         }
     }
 }

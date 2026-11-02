@@ -14,6 +14,7 @@ struct AIInspectorApp: App {
     var body: some Scene {
         WindowGroup {
             AssignmentWaitingView().tint(InspectorStyle.ink).preferredColorScheme(.light)
+                .environment(\.locale, Locale(identifier: "en"))
         }
     }
 }
@@ -43,11 +44,11 @@ private struct AssignmentWaitingView: View {
                             Text("inspector").font(.system(size: 32, weight: .semibold, design: .serif))
                         }.foregroundStyle(InspectorStyle.ink)
                         Spacer()
-                        Text("Готовы к съёмке").font(.system(size: 34, design: .serif))
+                        Text("Ready to capture").font(.system(size: 34, design: .serif))
                         VStack(alignment: .leading, spacing: 10) {
-                            Label("Ожидаем задание", systemImage: "antenna.radiowaves.left.and.right")
+                            Label("Waiting for an assignment", systemImage: "antenna.radiowaves.left.and.right")
                                 .font(.headline)
-                            Text("Когда Inspector назначит комнату, задание появится здесь.")
+                            Text("Your assignment will appear here when Inspector assigns a room.")
                                 .foregroundStyle(.secondary)
                         }
                         Divider()
@@ -56,15 +57,15 @@ private struct AssignmentWaitingView: View {
                             connection.setForeground(false)
                             standalone = StandaloneCapture.assignment()
                         } label: {
-                            HStack { Label("Свободная съёмка", systemImage: "camera"); Spacer(); Image(systemName: "arrow.up.right") }
+                            HStack { Label("Free capture", systemImage: "camera"); Spacer(); Image(systemName: "arrow.up.right") }
                                 .padding(12).frame(maxWidth: .infinity)
                         }.buttonStyle(.borderedProminent)
-                        Text("Фото и метаданные без задания и привязки к BIM.")
+                        Text("Photos and metadata without an assignment or BIM alignment.")
                             .font(.footnote).foregroundStyle(.secondary)
                         Spacer()
                         Text(connection.status).font(.caption).foregroundStyle(.secondary)
                     }.padding(24).background(InspectorStyle.paper)
-                        .toolbar { Button { showStorage = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Настройки") }
+                        .toolbar { Button { showStorage = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Settings") }
                         .toolbarBackground(InspectorStyle.paper, for: .navigationBar)
                 }
             }
@@ -98,13 +99,13 @@ struct InspectorView: View {
                     VStack(spacing: 24) {
                         Spacer()
                         Image(systemName: "arrow.up.circle").font(.system(size: 48, weight: .ultraLight))
-                        Text("Сохраняем съёмку").font(.system(size: 30, design: .serif))
+                        Text("Saving capture").font(.system(size: 30, design: .serif))
                         Text(connection.status).font(.callout).multilineTextAlignment(.center)
                         if let progress = connection.uploadProgress { ProgressView(value: progress) }
                         else if connection.busy { ProgressView() }
-                        Button("Повторить отправку") { finish() }.buttonStyle(.borderedProminent).disabled(connection.busy)
-                        Button("Посмотреть фото") { showEvidence = true }
-                        Text("Оригиналы остаются на телефоне").font(.caption).foregroundStyle(.secondary)
+                        Button("Retry upload") { finish() }.buttonStyle(.borderedProminent).disabled(connection.busy)
+                        Button("View photos") { showEvidence = true }
+                        Text("Originals remain on this phone").font(.caption).foregroundStyle(.secondary)
                         Spacer()
                     }.padding(24).frame(maxWidth: .infinity)
                 }
@@ -113,25 +114,25 @@ struct InspectorView: View {
             .navigationTitle(model.assignment.room_id).navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(InspectorStyle.paper, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { showExit = true } label: { Image(systemName: "xmark") }.accessibilityLabel("Выйти из задания").disabled(model.busy || connection.busy) }
+                ToolbarItem(placement: .topBarLeading) { Button { showExit = true } label: { Image(systemName: "xmark") }.accessibilityLabel("Exit assignment").disabled(model.busy || connection.busy) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Фото", systemImage: "photo.on.rectangle") { showEvidence = true }
-                        Button("Настройки", systemImage: "gearshape") { showSettings = true }
-                        Button("Скопировать ID", systemImage: "doc.on.doc") { UIPasteboard.general.string = model.assignment.id }
-                        Button("Выйти из задания", systemImage: "xmark.circle", role: .destructive) { showExit = true }
+                        Button("Photos", systemImage: "photo.on.rectangle") { showEvidence = true }
+                        Button("Settings", systemImage: "gearshape") { showSettings = true }
+                        Button("Copy ID", systemImage: "doc.on.doc") { UIPasteboard.general.string = model.assignment.id }
+                        Button("Exit assignment", systemImage: "xmark.circle", role: .destructive) { showExit = true }
                     } label: { Image(systemName: "ellipsis") }.disabled(model.busy || connection.busy)
                 }
             }
-            .confirmationDialog("Завершить съёмку?", isPresented: $showFinish, titleVisibility: .visible) {
-                Button("Завершить и отправить") { finish() }
-            } message: { Text("Будут отправлены все сохранённые фото и метаданные. После этого набор нельзя дополнить.") }
-            .confirmationDialog("Выйти из задания?", isPresented: $showExit, titleVisibility: .visible) {
-                Button("Выйти и отменить задание", role: .destructive) {
+            .confirmationDialog("Finish capture?", isPresented: $showFinish, titleVisibility: .visible) {
+                Button("Finish and upload") { finish() }
+            } message: { Text("All saved photos and metadata will be uploaded. You cannot add to this capture afterwards.") }
+            .confirmationDialog("Exit assignment?", isPresented: $showExit, titleVisibility: .visible) {
+                Button("Exit and cancel assignment", role: .destructive) {
                     model.pause()
                     Task { if let error = await connection.cancelActive() { model.error = error } }
                 }
-            } message: { Text("Задание будет отменено в Inspector. Локальные фото останутся на телефоне. Для отмены нужна связь с сервером.") }
+            } message: { Text("The assignment will be cancelled in Inspector. Local photos will remain on this phone. Cancellation requires a server connection.") }
             .task { await model.load(); model.frozen = connection.frozen }
             .onDisappear { model.pause() }
             .onChange(of: connection.frozen) { _, value in model.frozen = value; if value { model.pause() } }
@@ -139,7 +140,7 @@ struct InspectorView: View {
             .sheet(isPresented: $showModel) { BIMViewer(localization: model.localization, capture: model.capture) }
             .sheet(isPresented: $showEvidence) { EvidenceView(model: model) }
             .sheet(isPresented: $showSettings) { StorageConnectionView() }
-            .alert("Не удалось выполнить действие", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+            .alert("Could not complete the action", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
                 Button("OK") { model.error = nil }
             } message: { Text(model.error ?? "") }
         }
@@ -165,7 +166,7 @@ private struct CapturePanel: View {
                 .foregroundStyle(.white.opacity(0.65)).allowsHitTesting(false)
             VStack(spacing: 12) {
                 HStack(alignment: .top) {
-                    Label(model.synthetic ? "Синтетическое демо" : (capture.supportsDepth ? "Фото + LiDAR" : "Фото · без глубины"),
+                    Label(model.synthetic ? "Synthetic demo" : (capture.supportsDepth ? "Photo + LiDAR" : "Photo · no depth"),
                           systemImage: model.synthetic ? "cube" : "camera")
                         .font(.caption.weight(.medium)).padding(10).background(.regularMaterial, in: Capsule())
                     Spacer()
@@ -176,7 +177,7 @@ private struct CapturePanel: View {
                 Spacer()
                 if !model.synthetic && !capture.running {
                     Button { Task { await model.startCamera() } } label: {
-                        Label(model.busy ? "Подготовка…" : "Включить камеру", systemImage: "camera")
+                        Label(model.busy ? "Preparing…" : "Turn on camera", systemImage: "camera")
                             .padding(8)
                     }.buttonStyle(.borderedProminent).disabled(model.busy || model.manifest == nil)
                     Spacer()
@@ -188,7 +189,7 @@ private struct CapturePanel: View {
                     HStack {
                         Text(capture.status).font(.caption).lineLimit(2)
                         Spacer()
-                        Button("Пауза") { model.pause() }.font(.caption.bold()).disabled(model.busy)
+                        Button("Pause") { model.pause() }.font(.caption.bold()).disabled(model.busy)
                     }.padding(12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
                 }
             }.padding(16)
@@ -204,9 +205,9 @@ private struct CaptureGuidance: View {
             TimelineView(.periodic(from: .now, by: 0.5)) { _ in
                 VStack(alignment: .leading, spacing: 8) {
                     if localization.choosingEntry {
-                        Button { showModel = true } label: { Label("Выберите входную дверь", systemImage: "door.left.hand.open") }
+                        Button { showModel = true } label: { Label("Select the entry door", systemImage: "door.left.hand.open") }
                     } else {
-                        Text(localization.instruction?.text ?? localization.status).font(.subheadline)
+                        Text(EnglishInterface.serviceText(localization.instruction?.text ?? localization.status)).font(.subheadline)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -224,7 +225,7 @@ private struct CaptureControls: View {
             HStack {
                 Button { showEvidence = true } label: {
                     Image(systemName: "photo.on.rectangle").font(.title2).frame(width: 56, height: 56)
-                }.accessibilityLabel("Посмотреть фото")
+                }.accessibilityLabel("View photos")
                 Spacer()
                 Button {
                     model.instructionID = nil
@@ -236,13 +237,13 @@ private struct CaptureControls: View {
                         if model.busy { ProgressView().tint(.white) }
                         else { Image(systemName: "camera.fill").foregroundStyle(.white) }
                     }
-                }.accessibilityLabel(model.synthetic ? "Сохранить синтетическое наблюдение" : "Сделать фото")
+                }.accessibilityLabel(model.synthetic ? "Save synthetic observation" : "Take photo")
                     .disabled(model.busy || model.frozen || model.manifest == nil || (!model.synthetic && model.segment == nil))
                 Spacer()
-                Text("\(model.observations.count) фото").font(.subheadline.monospacedDigit()).frame(minWidth: 56)
+                Text("\(model.observations.count) photos").font(.subheadline.monospacedDigit()).frame(minWidth: 56)
             }
             Divider()
-            Button("Завершить", action: finish).frame(maxWidth: .infinity, minHeight: 36)
+            Button("Finish", action: finish).frame(maxWidth: .infinity, minHeight: 36)
                 .disabled(model.busy || model.observations.isEmpty)
         }.padding(.horizontal, 24).padding(.vertical, 12).background(InspectorStyle.paper)
     }
@@ -256,25 +257,25 @@ private struct EvidenceView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Локальные оригиналы сохраняются после загрузки. Статус отправки и приёма Inspector показан на экране сессии.")
+                    Text("Local originals are kept after upload. Upload and Inspector acceptance status are shown on the session screen.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if model.observations.isEmpty {
-                    ContentUnavailableView("Пока нет наблюдений", systemImage: "camera", description: Text("Сохраните первый снимок на основном экране."))
+                    ContentUnavailableView("No observations yet", systemImage: "camera", description: Text("Take your first photo on the capture screen."))
                 }
                 ForEach(model.observations.reversed()) { frame in
                     NavigationLink {
                         ObservationDetail(frame: frame, folder: model.observationURL(frame))
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
-                            Label(frame.capture_origin == "synthetic" ? "Тестовое наблюдение" : (frame.depth == nil ? "Фото без глубины" : "Снимок RGB-D"), systemImage: "photo")
-                            Text(frame.saved_at.formatted(date: .abbreviated, time: .standard)).font(.caption).foregroundStyle(.secondary)
-                            Text("\(frame.rgb_size[0]) × \(frame.rgb_size[1]) · " + (frame.depth_size.map { "depth \($0[0]) × \($0[1])" } ?? "без глубины"))
+                            Label(frame.capture_origin == "synthetic" ? "Test observation" : (frame.depth == nil ? "Photo without depth" : "RGB-D capture"), systemImage: "photo")
+                            Text(frame.saved_at.formatted(.dateTime.year().month(.abbreviated).day().hour().minute().second().locale(Locale(identifier: "en")))).font(.caption).foregroundStyle(.secondary)
+                            Text("\(frame.rgb_size[0]) × \(frame.rgb_size[1]) · " + (frame.depth_size.map { "depth \($0[0]) × \($0[1])" } ?? "no depth"))
                                 .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }.padding(.vertical, 4)
                     }
                 }
-            }.navigationTitle("Наблюдения").toolbar { Button("Готово") { dismiss() } }
+            }.navigationTitle("Observations").toolbar { Button("Done") { dismiss() } }
         }
     }
 }
@@ -287,19 +288,19 @@ private struct ObservationDetail: View {
             if let image = UIImage(contentsOfFile: folder.appendingPathComponent("rgb.jpg").path) {
                 Image(uiImage: image).resizable().scaledToFit()
             }
-            LabeledContent("Источник", value: frame.capture_origin)
-            LabeledContent("Depth", value: frame.depth == nil ? "Отсутствует" : frame.depth_source)
-            LabeledContent("Единицы", value: frame.depth_unit ?? "—")
-            LabeledContent("Сегмент", value: String(frame.segment_id.prefix(8)))
-            LabeledContent("Confidence", value: frame.confidence == nil ? "Отсутствует" : "Сохранена")
-            if let instruction = frame.instruction_id { LabeledContent("Задание", value: instruction) }
-            Section("Экспорт исходных файлов") {
+            LabeledContent("Source", value: frame.capture_origin)
+            LabeledContent("Depth", value: frame.depth == nil ? "Not available" : frame.depth_source)
+            LabeledContent("Units", value: frame.depth_unit ?? "—")
+            LabeledContent("Segment", value: String(frame.segment_id.prefix(8)))
+            LabeledContent("Confidence", value: frame.confidence == nil ? "Not available" : "Saved")
+            if let instruction = frame.instruction_id { LabeledContent("Assignment", value: instruction) }
+            Section("Export original files") {
                 ForEach(["frame.json", "rgb.jpg"] + (frame.depth == nil ? [] : ["depth.f32"]) + (frame.confidence == nil ? [] : ["confidence.u8"]), id: \.self) { name in
                     ShareLink(item: folder.appendingPathComponent(name)) { Label(name, systemImage: "square.and.arrow.up") }
                 }
             }
             Text(frame.id).font(.caption.monospaced()).textSelection(.enabled)
-        }.navigationTitle("Наблюдение").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle("Observation").navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -332,9 +333,9 @@ private struct StandaloneCaptureView: View {
                         VStack(alignment: .leading, spacing: 24) {
                             Image(systemName: upload.manifestKey == nil ? "arrow.up.circle" : "checkmark.circle")
                                 .font(.system(size: 50, weight: .ultraLight)).foregroundStyle(InspectorStyle.ink)
-                            Text(upload.manifestKey == nil ? "Сохраняем съёмку" : "Съёмка сохранена")
+                            Text(upload.manifestKey == nil ? "Saving capture" : "Capture saved")
                                 .font(.system(size: 34, design: .serif))
-                            Text("\(model.observations.count) фото и метаданные").foregroundStyle(.secondary)
+                            Text("\(model.observations.count) photos and metadata").foregroundStyle(.secondary)
                             Button { showEvidence = true } label: {
                                 HStack(spacing: 8) {
                                     ForEach(Array(model.observations.suffix(3))) { frame in
@@ -343,72 +344,72 @@ private struct StandaloneCaptureView: View {
                                         }
                                     }
                                 }
-                            }.accessibilityLabel("Посмотреть фото")
+                            }.accessibilityLabel("View photos")
                             if let key = upload.manifestKey {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("ID сессии").font(.subheadline).foregroundStyle(.secondary)
+                                    Text("Session ID").font(.subheadline).foregroundStyle(.secondary)
                                     Text(model.assignment.id).font(.body.monospaced()).textSelection(.enabled)
                                     Button {
                                         UIPasteboard.general.string = model.assignment.id; copiedSessionID = true
                                     } label: {
-                                        Label(copiedSessionID ? "ID скопирован" : "Скопировать ID", systemImage: copiedSessionID ? "checkmark" : "doc.on.doc")
+                                        Label(copiedSessionID ? "ID copied" : "Copy ID", systemImage: copiedSessionID ? "checkmark" : "doc.on.doc")
                                             .frame(maxWidth: .infinity).padding(8)
                                     }.buttonStyle(.borderedProminent)
                                 }
-                                DisclosureGroup("Путь в Supabase") {
+                                DisclosureGroup("Supabase path") {
                                     Text("inspection-captures / " + key).font(.caption.monospaced()).textSelection(.enabled)
-                                    ShareLink(item: key) { Label("Поделиться путём", systemImage: "square.and.arrow.up") }
+                                    ShareLink(item: key) { Label("Share path", systemImage: "square.and.arrow.up") }
                                 }
-                                Text("Оригиналы остались на телефоне").font(.footnote).foregroundStyle(.secondary)
-                                Button("Новая съёмка") {
+                                Text("Originals remain on this phone").font(.footnote).foregroundStyle(.secondary)
+                                Button("New capture") {
                                     UserDefaults.standard.removeObject(forKey: StandaloneCapture.sessionKey); close()
                                 }.buttonStyle(.borderedProminent)
-                                Button("На главную") { close() }
+                                Button("Back to home") { close() }
                             } else {
                                 Text(upload.status).font(.callout)
                                 if upload.busy { ProgressView(value: upload.progress) }
-                                Button("Повторить загрузку") { Task { await upload.upload(model) } }
+                                Button("Retry upload") { Task { await upload.upload(model) } }
                                     .buttonStyle(.borderedProminent).disabled(upload.busy)
                             }
                         }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }.background(InspectorStyle.paper)
-            .navigationTitle("Свободная съёмка").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Free capture").navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(InspectorStyle.paper, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { model.pause(); close() } label: { Image(systemName: "xmark") }.accessibilityLabel("Закрыть, сохранив фото").disabled(upload.busy || model.busy) }
+                ToolbarItem(placement: .topBarLeading) { Button { model.pause(); close() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close and keep photos").disabled(upload.busy || model.busy) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Настройки", systemImage: "gearshape") { showSettings = true }
-                        Button("Сбросить и начать заново", systemImage: "arrow.counterclockwise", role: .destructive) { showReset = true }
+                        Button("Settings", systemImage: "gearshape") { showSettings = true }
+                        Button("Reset and start over", systemImage: "arrow.counterclockwise", role: .destructive) { showReset = true }
                     } label: { Image(systemName: "ellipsis") }
-                        .accessibilityLabel("Действия со съёмкой").disabled(upload.busy || model.busy)
+                        .accessibilityLabel("Capture actions").disabled(upload.busy || model.busy)
                 }
             }
-            .confirmationDialog("Завершить съёмку?", isPresented: $showFinish, titleVisibility: .visible) {
-                Button("Сохранить в Supabase") { Task { await upload.upload(model) } }
-                Button("Посмотреть фото") { showEvidence = true }
-                Button("Сбросить и начать заново", role: .destructive) { showReset = true }
-            } message: { Text("После начала загрузки набор фиксируется. Оригиналы сохранятся на телефоне.") }
-            .alert("Удалить текущую съёмку?", isPresented: $showReset) {
-                Button("Удалить и начать заново", role: .destructive) {
+            .confirmationDialog("Finish capture?", isPresented: $showFinish, titleVisibility: .visible) {
+                Button("Save to Supabase") { Task { await upload.upload(model) } }
+                Button("View photos") { showEvidence = true }
+                Button("Reset and start over", role: .destructive) { showReset = true }
+            } message: { Text("The capture is locked when uploading starts. Originals remain on this phone.") }
+            .alert("Delete this capture?", isPresented: $showReset) {
+                Button("Delete and start over", role: .destructive) {
                     do {
                         try model.discardStandaloneCapture()
                         UserDefaults.standard.removeObject(forKey: StandaloneCapture.sessionKey)
                         restart()
                     } catch { model.error = error.localizedDescription }
                 }
-                Button("Отмена", role: .cancel) {}
+                Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Все фото и метаданные этой сессии на телефоне будут удалены без отправки. Откроется пустая сессия с новым ID. Уже загруженные в Supabase файлы не удаляются.")
+                Text("All photos and metadata for this session on this phone will be deleted without uploading. A new empty session will open with a new ID. Files already uploaded to Supabase will not be deleted.")
             }
             .task { await model.load(); upload.restore(model) }
             .onDisappear { model.pause() }
             .onChange(of: scenePhase) { _, phase in if phase != .active { model.pause() } }
             .sheet(isPresented: $showEvidence) { EvidenceView(model: model) }
             .sheet(isPresented: $showSettings) { StorageConnectionView() }
-            .alert("Не удалось выполнить действие", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+            .alert("Could not complete the action", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
                 Button("OK") { model.error = nil }
             } message: { Text(model.error ?? "") }
         }

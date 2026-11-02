@@ -9,7 +9,7 @@ struct GeometryMesh: Sendable {
         guard !vertices.isEmpty, !triangles.isEmpty, vertices.count <= Int(Int32.max),
               vertices.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.z.isFinite }),
               triangles.allSatisfy({ face in [face.x, face.y, face.z].allSatisfy { $0 >= 0 && Int($0) < vertices.count } }) else {
-            throw CaptureError.invalid("Сетка ARKit отсутствует или повреждена")
+            throw CaptureError.invalid("ARKit mesh is missing or corrupted")
         }
         var bytes = Data("ply\nformat binary_little_endian 1.0\nelement vertex \(vertices.count)\nproperty float x\nproperty float y\nproperty float z\nelement face \(triangles.count)\nproperty list uchar int vertex_indices\nend_header\n".utf8)
         for vertex in vertices { for value in [vertex.x, vertex.y, vertex.z] { bytes.appendLE(value.bitPattern) } }
@@ -42,17 +42,17 @@ enum CaptureZIP {
         return crc ^ 0xffffffff
     }
     static func write(files: [(String, URL)], to output: URL) throws {
-        guard files.count < 65535, Set(files.map { $0.0 }).count == files.count else { throw CaptureError.invalid("Слишком много файлов ZIP или повтор пути") }
+        guard files.count < 65535, Set(files.map { $0.0 }).count == files.count else { throw CaptureError.invalid("Too many ZIP files or duplicate paths") }
         let temp = output.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString.lowercased()).zip")
         FileManager.default.createFile(atPath: temp.path, contents: nil)
         defer { try? FileManager.default.removeItem(at: temp) }
         let handle = try FileHandle(forWritingTo: temp); defer { try? handle.close() }
         var directory = Data()
         for (name, file) in files {
-            guard !name.hasPrefix("/"), !name.split(separator: "/").contains(".."), name.utf8.count < 65535 else { throw CaptureError.invalid("Недопустимый путь ZIP") }
+            guard !name.hasPrefix("/"), !name.split(separator: "/").contains(".."), name.utf8.count < 65535 else { throw CaptureError.invalid("Invalid ZIP path") }
             let bytes = try Data(contentsOf: file, options: .mappedIfSafe)
             let offset = try handle.offset()
-            guard bytes.count < Int(UInt32.max), offset < UInt64(UInt32.max) else { throw CaptureError.invalid("ZIP больше поддерживаемого размера") }
+            guard bytes.count < Int(UInt32.max), offset < UInt64(UInt32.max) else { throw CaptureError.invalid("ZIP exceeds the supported size") }
             let path = Data(name.utf8), crc = crc32(bytes), size = UInt32(bytes.count)
             var local = Data(); local.appendLE(UInt32(0x04034b50)); local.appendLE(UInt16(20))
             for value: UInt16 in [0x0800, 0, 0, 0x0021] { local.appendLE(value) }
@@ -65,7 +65,7 @@ enum CaptureZIP {
             directory.appendLE(UInt32(0)); directory.appendLE(UInt32(offset)); directory.append(path)
         }
         let offset = try handle.offset()
-        guard offset + UInt64(directory.count) + 22 < UInt64(UInt32.max) else { throw CaptureError.invalid("ZIP больше поддерживаемого размера") }
+        guard offset + UInt64(directory.count) + 22 < UInt64(UInt32.max) else { throw CaptureError.invalid("ZIP exceeds the supported size") }
         try handle.write(contentsOf: directory)
         var end = Data(); end.appendLE(UInt32(0x06054b50)); end.appendLE(UInt16(0)); end.appendLE(UInt16(0))
         end.appendLE(UInt16(files.count)); end.appendLE(UInt16(files.count)); end.appendLE(UInt32(directory.count)); end.appendLE(UInt32(offset)); end.appendLE(UInt16(0))
@@ -77,7 +77,7 @@ enum CaptureZIP {
 
 enum GeometryExport {
     static func sanitizedDepth(_ bytes: Data) throws -> Data {
-        guard bytes.count % 4 == 0 else { throw CaptureError.invalid("Неполный Float32 в depth") }
+        guard bytes.count % 4 == 0 else { throw CaptureError.invalid("Incomplete Float32 depth value") }
         var result = Data(capacity: bytes.count)
         bytes.withUnsafeBytes { raw in
             for offset in stride(from: 0, to: bytes.count, by: 4) {
@@ -88,15 +88,15 @@ enum GeometryExport {
         return result
     }
     static func export(sessionID: String, store: ObservationStore, mesh: Data?, meshSegment: String, projectID: String? = nil, selectedFrameIDs: Set<String>? = nil, outputName: String? = nil) throws -> URL {
-        guard sessionID.range(of: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", options: .regularExpression) != nil else { throw CaptureError.invalid("Неверный ID Geometry capture") }
+        guard sessionID.range(of: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", options: .regularExpression) != nil else { throw CaptureError.invalid("Invalid Geometry capture ID") }
         let frames = try store.observations(sessionID).filter { selectedFrameIDs == nil || selectedFrameIDs!.contains($0.id) }.sorted { $0.timestamp_s < $1.timestamp_s }
         guard !frames.isEmpty, Set(frames.map(\.segment_id)) == [meshSegment], frames.allSatisfy({ $0.capture_origin == "device" }) else {
-            throw CaptureError.invalid("Geometry ZIP требует реальные кадры и mesh из одной непрерывной AR-сессии")
+            throw CaptureError.invalid("Geometry ZIP requires real frames and a mesh from one uninterrupted AR session")
         }
         if let mesh {
-            guard mesh.starts(with: Data("ply\nformat binary_little_endian 1.0\n".utf8)) else { throw CaptureError.invalid("Нет mesh ARKit") }
+            guard mesh.starts(with: Data("ply\nformat binary_little_endian 1.0\n".utf8)) else { throw CaptureError.invalid("ARKit mesh is missing") }
         } else if frames.contains(where: { $0.depth != nil }) {
-            throw CaptureError.invalid("Для LiDAR-кадров отсутствует mesh.ply сегмента " + meshSegment)
+            throw CaptureError.invalid("LiDAR frames are missing mesh.ply for segment " + meshSegment)
         }
         let staging = store.folder(sessionID).appendingPathComponent(".geometry-\(UUID().uuidString.lowercased())")
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
@@ -110,22 +110,22 @@ enum GeometryExport {
         func json(_ value: Any) throws -> Data { try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .prettyPrinted]) }
         if let mesh { try add("mesh.ply", mesh) }
         for frame in frames {
-            guard frame.tracking_state == "normal", frame.K_rgb.flatMap({ $0 }).allSatisfy(\.isFinite), frame.T_world_camera.flatMap({ $0 }).allSatisfy(\.isFinite), frame.timestamp_s.isFinite else { throw CaptureError.invalid("Неверные метаданные Geometry кадра") }
+            guard frame.tracking_state == "normal", frame.K_rgb.flatMap({ $0 }).allSatisfy(\.isFinite), frame.T_world_camera.flatMap({ $0 }).allSatisfy(\.isFinite), frame.timestamp_s.isFinite else { throw CaptureError.invalid("Invalid Geometry frame metadata") }
             let id = frame.frame_id, prefix = "frames/" + frame.frame_id + "/"
             let source = store.folder(sessionID).appendingPathComponent("observations/" + frame.id)
             let rgb = try Data(contentsOf: source.appendingPathComponent(frame.rgb.name))
             guard let image = CGImageSourceCreateWithData(rgb as CFData, nil), let properties = CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any],
                   properties[kCGImagePropertyPixelWidth] as? Int == frame.rgb_size[0], properties[kCGImagePropertyPixelHeight] as? Int == frame.rgb_size[1],
-                  (properties[kCGImagePropertyOrientation] as? Int ?? 1) == 1 else { throw CaptureError.invalid("Размер/ориентация JPEG не соответствует intrinsics") }
+                  (properties[kCGImagePropertyOrientation] as? Int ?? 1) == 1 else { throw CaptureError.invalid("JPEG dimensions or orientation do not match the camera intrinsics") }
             try add(prefix + "rgb.jpg", rgb)
             var depth: Any = NSNull(), confidence: Any = NSNull()
             if let file = frame.depth, let size = frame.depth_size {
-                guard frame.depth_source == "sceneDepth", file.byte_length == size[0] * size[1] * 4 else { throw CaptureError.invalid("Неверный depth для Geometry") }
+                guard frame.depth_source == "sceneDepth", file.byte_length == size[0] * size[1] * 4 else { throw CaptureError.invalid("Invalid depth data for Geometry") }
                 try add(prefix + "depth.bin", Data(contentsOf: source.appendingPathComponent(file.name)))
                 depth = ["path": "depth.bin", "width": size[0], "height": size[1], "dtype": "float32", "byte_order": "little", "unit": "meter", "source": "sceneDepth"] as [String: Any]
                 if let file = frame.confidence {
                     let bytes = try Data(contentsOf: source.appendingPathComponent(file.name))
-                    guard bytes.count == size[0] * size[1], bytes.allSatisfy({ $0 <= 2 }) else { throw CaptureError.invalid("Неверный confidence") }
+                    guard bytes.count == size[0] * size[1], bytes.allSatisfy({ $0 <= 2 }) else { throw CaptureError.invalid("Invalid confidence data") }
                     try add(prefix + "confidence.bin", bytes)
                     confidence = ["path": "confidence.bin", "width": size[0], "height": size[1], "dtype": "uint8"] as [String: Any]
                 }
@@ -153,23 +153,23 @@ enum InspectorArchive {
     }
     static func build(pending: PendingCompletion, store: ObservationStore, keyPrefix: String) throws -> Result {
         guard !keyPrefix.isEmpty, keyPrefix.hasSuffix("/"), !keyPrefix.hasPrefix("/"), !keyPrefix.contains("://"),
-              !keyPrefix.split(separator: "/").contains("..") else { throw CaptureError.invalid("Неверный префикс хранилища Inspector") }
+              !keyPrefix.split(separator: "/").contains("..") else { throw CaptureError.invalid("Invalid Inspector storage prefix") }
         var manifest = pending.manifest
         guard UUID(uuidString: manifest.session_id) != nil, UUID(uuidString: pending.completion_id) != nil,
               !manifest.observations.isEmpty, manifest.observation_count == manifest.observations.count,
               Set(manifest.observations.map(\.observation_id)).count == manifest.observations.count else {
-            throw CaptureError.invalid("Неверный inventory ZIP")
+            throw CaptureError.invalid("Invalid ZIP inventory")
         }
         var entries: [(String, URL)] = []
         for (oi, observation) in manifest.observations.enumerated() {
             guard UUID(uuidString: observation.observation_id) != nil,
-                  Set(observation.files.map(\.name)).isSuperset(of: ["frame.json", "rgb.jpg"]) else { throw CaptureError.invalid("Неполное наблюдение ZIP") }
+                  Set(observation.files.map(\.name)).isSuperset(of: ["frame.json", "rgb.jpg"]) else { throw CaptureError.invalid("Incomplete observation in ZIP") }
             for (fi, file) in observation.files.enumerated() {
-                guard ["frame.json", "rgb.jpg", "depth.f32", "confidence.u8"].contains(file.name) else { throw CaptureError.invalid("Неизвестный файл ZIP") }
+                guard ["frame.json", "rgb.jpg", "depth.f32", "confidence.u8"].contains(file.name) else { throw CaptureError.invalid("Unknown ZIP file") }
                 let relative = "observations/" + observation.observation_id + "/" + file.name
                 let source = store.folder(manifest.session_id).appendingPathComponent(relative)
                 let bytes = try Data(contentsOf: source, options: .mappedIfSafe)
-                guard bytes.count == file.byte_length, StoredFile(name: "", data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("Повреждён файл перед архивацией") }
+                guard bytes.count == file.byte_length, StoredFile(name: "", data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("File corrupted before archiving") }
                 manifest.observations[oi].files[fi].object_key = keyPrefix + relative
                 entries.append((relative, source))
             }
@@ -208,10 +208,10 @@ enum GeometryPartsExport {
         var parts: [Part]
     }
     static func build(assignment: InspectorAssignment, pending: PendingCompletion, store: ObservationStore, maxBytes: Int) throws -> Index {
-        guard maxBytes > 0, pending.manifest.session_id == assignment.id else { throw CaptureError.invalid("Неверный лимит или сессия архивов") }
+        guard maxBytes > 0, pending.manifest.session_id == assignment.id else { throw CaptureError.invalid("Invalid archive size limit or session") }
         let allowed = Set(pending.manifest.observations.map(\.observation_id))
         let frames = try store.observations(assignment.id).filter { allowed.contains($0.id) }
-        guard frames.count == allowed.count, !frames.isEmpty else { throw CaptureError.invalid("Неполный набор кадров для ZIP") }
+        guard frames.count == allowed.count, !frames.isEmpty else { throw CaptureError.invalid("Incomplete frame set for ZIP") }
         let folder = store.folder(assignment.id).appendingPathComponent("geometry-parts/" + pending.completion_id)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var parts: [Part] = []
@@ -219,14 +219,14 @@ enum GeometryPartsExport {
             let group = frames.filter { $0.segment_id == segment }.sorted { $0.timestamp_s < $1.timestamp_s }
             let meshURL = store.folder(assignment.id).appendingPathComponent("mesh/" + segment + ".ply")
             let mesh = FileManager.default.fileExists(atPath: meshURL.path) ? try Data(contentsOf: meshURL) : nil
-            if group.contains(where: { $0.depth != nil }) && mesh == nil { throw CaptureError.invalid("Не найден mesh.ply для сегмента " + segment) }
+            if group.contains(where: { $0.depth != nil }) && mesh == nil { throw CaptureError.invalid("mesh.ply not found for segment " + segment) }
             func pack(_ selected: [FrameMetadata]) throws {
                 let temporary = try GeometryExport.export(sessionID: assignment.id, store: store, mesh: mesh, meshSegment: segment,
                     projectID: assignment.project_id, selectedFrameIDs: Set(selected.map(\.id)), outputName: ".geometry-candidate.zip")
                 defer { try? FileManager.default.removeItem(at: temporary) }
                 let size = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
                 if size > maxBytes {
-                    guard selected.count > 1 else { throw CaptureError.invalid("Mesh и один кадр превышают лимит ZIP. Данные сохранены; требуется отдельная передача mesh или другой лимит.") }
+                    guard selected.count > 1 else { throw CaptureError.invalid("The mesh and one frame exceed the ZIP size limit. Data is saved; send the mesh separately or increase the limit.") }
                     let midpoint = selected.count / 2
                     try pack(Array(selected[..<midpoint])); try pack(Array(selected[midpoint...])); return
                 }

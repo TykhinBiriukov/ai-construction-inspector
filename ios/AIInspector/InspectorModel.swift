@@ -8,7 +8,7 @@ final class InspectorModel: ObservableObject {
     @Published var observations: [FrameMetadata] = []
     @Published var busy = false
     @Published var error: String?
-    @Published var notice = "Оркестратор не подключён. Данные сохраняются на телефоне."
+    @Published var notice = "Inspector is not connected. Data is saved on this phone."
     @Published var instruction: String?
     @Published var instructionID: String?
     @Published var geometryZIP: URL?
@@ -67,7 +67,7 @@ final class InspectorModel: ObservableObject {
     }
 
     private func newSegment() throws {
-        guard var session = manifest else { throw CaptureError.invalid("Сессия не открыта") }
+        guard var session = manifest else { throw CaptureError.invalid("Session is not open") }
         let id = UUID().uuidString.lowercased()
         session.segment_ids.append(id)
         try store.save(session)
@@ -84,14 +84,14 @@ final class InspectorModel: ObservableObject {
             try newSegment()
             if let segment, !standalone {
                 if assignment.model_version != "unbound", !capture.supportsDepth {
-                    throw CaptureError.invalid("Для локализации по BIM нужен LiDAR. Обычная съёмка доступна в задании без BIM.")
+                    throw CaptureError.invalid("BIM localization requires LiDAR. Use an assignment without BIM for photo capture.")
                 }
                 try await localization.start(assignment: assignment, segment: segment, store: store)
             }
             try await capture.start()
             if let segment, !localization.enabled, !standalone {
                 do { try await InspectorConnection.shared.registerSpatialSegment(segment) }
-                catch { notice = "Локализация не подключилась: \(error.localizedDescription). Можно сохранять фото." }
+                catch { notice = "Localization could not connect: \(error.localizedDescription). You can still save photos." }
             }
         } catch {
             segment = nil; localization.stop(); capture.stop()
@@ -113,9 +113,9 @@ final class InspectorModel: ObservableObject {
         busy = true
         defer { busy = false }
         do {
-            if localization.choosingEntry { throw CaptureError.invalid("Сначала выберите входную дверь на плане") }
+            if localization.choosingEntry { throw CaptureError.invalid("Select the entry door on the plan first") }
             if synthetic && segment == nil { if !standalone { try await InspectorConnection.shared.startCapture() }; try newSegment() }
-            guard let session = manifest, let segment else { throw CaptureError.invalid("Сначала включите камеру") }
+            guard let session = manifest, let segment else { throw CaptureError.invalid("Turn on the camera first") }
             let spatialInstruction = standalone ? nil : localization.enabled ? localization.instruction : InspectorConnection.shared.liveInstruction(segment: segment)
             let store = store, instruction = spatialInstruction?.instruction_id ?? instructionID
             let frame: FrameMetadata
@@ -138,7 +138,7 @@ final class InspectorModel: ObservableObject {
             }
             persistMeshIfAvailable()
 
-            notice = "Наблюдение сохранено на телефоне. Завершите съёмку для отправки."
+            notice = "Observation saved on this phone. Finish capture to upload it."
         } catch { self.error = error.localizedDescription }
     }
 
@@ -151,7 +151,7 @@ final class InspectorModel: ObservableObject {
             try bytes.write(to: folder.appendingPathComponent(segment + ".ply"), options: .atomic)
         } catch {
             try? FileManager.default.removeItem(at: store.folder(manifest.session_id).appendingPathComponent("mesh/" + segment + ".ply"))
-            notice = "Mesh ещё не готов: ZIP Geometry недоступен. Фото можно сохранить."
+            notice = "Mesh is not ready yet: Geometry ZIP is unavailable. You can still save photos."
         }
     }
     func exportGeometry() async {
@@ -162,20 +162,20 @@ final class InspectorModel: ObservableObject {
         capture.stop(); segment = nil
         do {
             let segments = Set(observations.map(\.segment_id))
-            guard segments.count == 1, let meshSegment = segments.first else { throw CaptureError.invalid("Для Geometry ZIP снимите кадры за один запуск камеры, без сбросов ARKit") }
+            guard segments.count == 1, let meshSegment = segments.first else { throw CaptureError.invalid("For a Geometry ZIP, capture all frames in one camera session without restarting ARKit") }
             let store = store, projectID = assignment.project_id
             let mesh = try Data(contentsOf: store.folder(manifest.session_id).appendingPathComponent("mesh/" + meshSegment + ".ply"))
             geometryZIP = try await Task.detached {
                 try GeometryExport.export(sessionID: manifest.session_id, store: store, mesh: mesh, meshSegment: meshSegment, projectID: projectID)
             }.value
-            notice = "ZIP готов локально. Он пока не передаётся Inspector."
+            notice = "ZIP saved locally. It has not been sent to Inspector."
         } catch { self.error = error.localizedDescription }
     }
 
     /// Called only after explicit UI confirmation; normal assigned sessions cannot use this action.
     func discardStandaloneCapture() throws {
         guard standalone, !busy, UUID(uuidString: assignment.id) != nil else {
-            throw CaptureError.invalid("Нельзя сбросить съёмку во время операции")
+            throw CaptureError.invalid("Cannot reset capture while an operation is in progress")
         }
         pause()
         let folder = store.folder(assignment.id)
@@ -192,13 +192,14 @@ final class InspectorModel: ObservableObject {
 final class StandaloneCapture: ObservableObject {
     @Published var busy = false
     @Published var progress = 0.0
-    @Published var status = "Фото и метаданные сохраняются без задания и локализации."
+    @Published var status = "Save photos and metadata without an assignment or localization."
     @Published var manifestKey: String?
     static let sessionKey = "standalone.capture.session"
 
     static func assignment() -> InspectorAssignment {
         let id = UserDefaults.standard.string(forKey: sessionKey) ?? UUID().uuidString.lowercased()
         UserDefaults.standard.set(id, forKey: sessionKey)
+        // Persisted legacy room identifier: changing it would prevent existing captures from reopening.
         return InspectorAssignment(session_id: id, inspection_id: "standalone", project_id: "standalone",
             room_id: "Тестовая съёмка", model_version: "unbound", model_is_synthetic: false,
             policy_version: "standalone_v1", device_id: InspectorConnection.defaultDevice,
@@ -208,8 +209,8 @@ final class StandaloneCapture: ObservableObject {
         let folder = model.store.folder(model.assignment.id)
         model.frozen = FileManager.default.fileExists(atPath: folder.appendingPathComponent("standalone-pending.json").path)
         manifestKey = try? String(contentsOf: folder.appendingPathComponent("standalone-uploaded.txt"), encoding: .utf8)
-        if manifestKey != nil { status = "Фото и метаданные проверены и сохранены в Supabase." }
-        else if model.frozen { status = "Набор зафиксирован. Можно повторить отправку." }
+        if manifestKey != nil { status = "Photos and metadata verified and saved to Supabase." }
+        else if model.frozen { status = "Capture is locked. You can retry the upload." }
     }
     func upload(_ model: InspectorModel) async {
         guard !busy, !model.busy else { return }
@@ -234,10 +235,10 @@ final class StandaloneCapture: ObservableObject {
                 let observation = pending.manifest.observations[oi]
                 for fi in observation.files.indices {
                     let file = observation.files[fi]
-                    status = "Загрузка файлов: \(done + 1) / \(total)"
+                    status = "Uploading files: \(done + 1) / \(total)"
                     let bytes = try Data(contentsOf: folder.appendingPathComponent("observations/" + observation.observation_id + "/" + file.name))
                     guard bytes.count == file.byte_length, StoredFile(name: file.name, data: bytes).sha256 == file.sha256 else {
-                        throw CaptureError.invalid("Локальный файл изменился после фиксации набора")
+                        throw CaptureError.invalid("A local file changed after the capture was locked")
                     }
                     let media = file.name.hasSuffix("json") ? "application/json" : file.name.hasSuffix("jpg") ? "image/jpeg" : "application/octet-stream"
                     let key = try await InspectorConnection.shared.uploadStandalone(sessionID: model.assignment.id,
@@ -255,7 +256,7 @@ final class StandaloneCapture: ObservableObject {
                                      byte_length: info.byte_length, sha256: info.sha256), bytes: bytes, completionID: pending.completion_id)
             try key.write(to: folder.appendingPathComponent("standalone-uploaded.txt"), atomically: true, encoding: .utf8)
             manifestKey = key; progress = 1
-            status = "Фото и метаданные проверены и сохранены в Supabase."
-        } catch { model.error = error.localizedDescription; status = "Отправка не завершена. Оригиналы сохранены; повторите загрузку." }
+            status = "Photos and metadata verified and saved to Supabase."
+        } catch { model.error = error.localizedDescription; status = "Upload incomplete. Originals are saved; please retry." }
     }
 }

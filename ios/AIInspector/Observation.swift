@@ -153,13 +153,13 @@ struct ObservationStore: Sendable {
 
     func openAssigned(id: String, room: String, model: String, modelIsSynthetic: Bool,
                       origin: String, device: String, os: String) throws -> SessionManifest {
-        guard UUID(uuidString: id) != nil else { throw CaptureError.invalid("Неверный ID сессии") }
+        guard UUID(uuidString: id) != nil else { throw CaptureError.invalid("Invalid session ID") }
         let url = folder(id).appendingPathComponent("manifest.json")
         if FileManager.default.fileExists(atPath: url.path) {
             let existing = try Self.decoder.decode(SessionManifest.self, from: Data(contentsOf: url))
             guard existing.session_id == id, existing.room_id == room, existing.model_version == model,
                   existing.model_is_synthetic == modelIsSynthetic, existing.capture_origin == origin else {
-                throw CaptureError.invalid("Контекст существующей сессии изменился")
+                throw CaptureError.invalid("The saved session context has changed")
             }
             return existing
         }
@@ -187,12 +187,12 @@ struct ObservationStore: Sendable {
         return try folders.filter { !$0.lastPathComponent.hasPrefix(".") }.map {
             let frame = try Self.decoder.decode(FrameMetadata.self, from: Data(contentsOf: $0.appendingPathComponent("frame.json")))
             guard frame.session_id == sessionID, frame.id == $0.lastPathComponent,
-                  UUID(uuidString: frame.id) != nil else { throw CaptureError.invalid("Неверный ID сохранённого наблюдения") }
+                  UUID(uuidString: frame.id) != nil else { throw CaptureError.invalid("Invalid saved observation ID") }
             for file in [frame.rgb] + (frame.depth.map { [$0] } ?? []) + (frame.confidence.map { [$0] } ?? []) {
-                guard ["rgb.jpg", "depth.f32", "confidence.u8"].contains(file.name) else { throw CaptureError.invalid("Неверное имя файла") }
+                guard ["rgb.jpg", "depth.f32", "confidence.u8"].contains(file.name) else { throw CaptureError.invalid("Invalid filename") }
                 let bytes = try Data(contentsOf: $0.appendingPathComponent(file.name))
                 guard StoredFile(name: file.name, data: bytes).sha256 == file.sha256,
-                      bytes.count == file.byte_length else { throw CaptureError.invalid("Повреждено наблюдение \(frame.id)") }
+                      bytes.count == file.byte_length else { throw CaptureError.invalid("Observation \(frame.id) is corrupted") }
             }
             return frame
         }.sorted { $0.saved_at < $1.saved_at }
@@ -200,23 +200,23 @@ struct ObservationStore: Sendable {
 
     func record(_ payload: CapturePayload, session: SessionManifest, segment: String, instruction: String?) throws -> FrameMetadata {
         guard session.segment_ids.contains(segment), session.capture_origin == payload.origin else {
-            throw CaptureError.invalid("Неверный сегмент или источник наблюдения")
+            throw CaptureError.invalid("Invalid observation segment or source")
         }
         guard payload.rgbSize.count == 2,
               payload.rgbSize.allSatisfy({ $0 > 0 && $0 < 16384 }),
               !payload.rgb.isEmpty,
               payload.intrinsics.count == 3, payload.intrinsics.allSatisfy({ $0.count == 3 && $0.allSatisfy(\.isFinite) }),
               payload.pose.count == 4, payload.pose.allSatisfy({ $0.count == 4 && $0.allSatisfy(\.isFinite) }),
-              payload.timestamp.isFinite else { throw CaptureError.invalid("Неполные данные кадра") }
+              payload.timestamp.isFinite else { throw CaptureError.invalid("Incomplete frame data") }
         if let depth = payload.depth {
             guard let size = payload.depthSize, size.count == 2,
                   size.allSatisfy({ $0 > 0 && $0 < 16384 }),
                   depth.count == size[0] * size[1] * 4,
                   payload.confidence == nil || payload.confidence?.count == size[0] * size[1]
-            else { throw CaptureError.invalid("Неверные данные глубины") }
+            else { throw CaptureError.invalid("Invalid depth data") }
         } else {
             guard payload.depthSize == nil, payload.confidence == nil else {
-                throw CaptureError.invalid("Метаданные глубины без карты глубины")
+                throw CaptureError.invalid("Depth metadata has no depth map")
             }
         }
         let id = UUID().uuidString.lowercased()

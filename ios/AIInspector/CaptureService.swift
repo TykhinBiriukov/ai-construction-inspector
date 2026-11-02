@@ -12,7 +12,7 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
     let supportsMesh = ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
     private var meshAnchors: [UUID: GeometryMesh] = [:]
     private var meshError: String?
-    @Published var status = "Камера остановлена"
+    @Published var status = "Camera stopped"
     @Published var running = false
     var onPose: ((ARFrame) -> Void)?
     var onInterruption: (() -> Void)?
@@ -26,12 +26,12 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
 
     func start() async throws {
         guard ARWorldTrackingConfiguration.isSupported else {
-            throw CaptureError.invalid("AR-съёмка недоступна на этом устройстве.")
+            throw CaptureError.invalid("AR capture is not available on this device.")
         }
         let allowed = await AVCaptureDevice.requestAccess(for: .video)
-        guard allowed else { throw CaptureError.invalid("Разрешите доступ к камере в Настройках → AI Inspector.") }
+        guard allowed else { throw CaptureError.invalid("Allow camera access in Settings → AI Inspector.") }
         guard UIApplication.shared.applicationState == .active else {
-            throw CaptureError.invalid("Вернитесь в приложение и включите камеру снова")
+            throw CaptureError.invalid("Return to the app and turn on the camera again")
         }
         let config = ARWorldTrackingConfiguration()
         config.worldAlignment = .gravity
@@ -41,26 +41,26 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
         segmentStartedAt = ProcessInfo.processInfo.systemUptime
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
         running = true
-        status = "Наведите камеру на помещение"
+        status = "Point the camera at the room"
     }
 
     func stop() {
         session.pause()
         segmentStartedAt = nil
         running = false
-        status = "Камера остановлена"
+        status = "Camera stopped"
     }
 
     func snapshot() throws -> ARFrame {
-        guard running, let frame = session.currentFrame else { throw CaptureError.invalid("Сначала включите камеру") }
+        guard running, let frame = session.currentFrame else { throw CaptureError.invalid("Turn on the camera first") }
         guard let started = segmentStartedAt, frame.timestamp >= started,
               ProcessInfo.processInfo.systemUptime - frame.timestamp < 1 else {
-            throw CaptureError.invalid("Ожидаем свежий кадр нового сегмента")
+            throw CaptureError.invalid("Waiting for a fresh frame in the new segment")
         }
         guard case .normal = frame.camera.trackingState else {
-            throw CaptureError.invalid("Положение камеры ещё не определено. Медленно поводите телефоном.")
+            throw CaptureError.invalid("Camera position is not ready yet. Move the phone slowly.")
         }
-        guard !supportsDepth || frame.sceneDepth != nil else { throw CaptureError.invalid("Карта глубины ещё не готова") }
+        guard !supportsDepth || frame.sceneDepth != nil else { throw CaptureError.invalid("Depth map is not ready yet") }
         return frame
     }
 
@@ -74,7 +74,7 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
     nonisolated func sessionWasInterrupted(_ session: ARSession) {
         Task { @MainActor in
             self.stop()
-            self.status = "Съёмка прервана. Включите камеру для нового сегмента."
+            self.status = "Capture interrupted. Turn on the camera to start a new segment."
             self.onInterruption?()
         }
     }
@@ -105,7 +105,7 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
                 guard source.format == .float3, source.stride >= 12, source.offset >= 0,
                       source.count > 0, source.offset + (source.count - 1) * source.stride + 12 <= source.buffer.length,
                       faces.indexCountPerPrimitive == 3, [2, 4].contains(faces.bytesPerIndex),
-                      faces.count * 3 * faces.bytesPerIndex <= faces.buffer.length else { throw CaptureError.invalid("Неверный буфер ARMeshAnchor") }
+                      faces.count * 3 * faces.bytesPerIndex <= faces.buffer.length else { throw CaptureError.invalid("Invalid ARMeshAnchor buffer") }
                 // Copy synchronously on the delegate queue; never retain mutable Metal buffers.
                 var vertices: [SIMD3<Float>] = []
                 for index in 0..<source.count {
@@ -120,7 +120,7 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
                     for corner in 0..<3 {
                         let raw = faces.buffer.contents().advanced(by: (face * 3 + corner) * faces.bytesPerIndex)
                         let value = faces.bytesPerIndex == 4 ? raw.loadUnaligned(as: UInt32.self) : UInt32(raw.loadUnaligned(as: UInt16.self))
-                        guard value < source.count, value <= Int32.max else { throw CaptureError.invalid("Неверный индекс ARMeshAnchor") }
+                        guard value < source.count, value <= Int32.max else { throw CaptureError.invalid("Invalid ARMeshAnchor index") }
                         indices.append(Int32(value))
                     }
                     triangles.append(SIMD3(indices[0], indices[1], indices[2]))
@@ -130,11 +130,11 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
     func meshSnapshot() throws -> GeometryMesh {
-        guard supportsMesh else { throw CaptureError.invalid("Geometry ZIP требует iPhone с LiDAR и поддержкой ARKit mesh") }
+        guard supportsMesh else { throw CaptureError.invalid("Geometry ZIP requires an iPhone with LiDAR and ARKit mesh support") }
         if let meshError { throw CaptureError.invalid(meshError) }
         var vertices: [SIMD3<Float>] = [], triangles: [SIMD3<Int32>] = []
         for key in meshAnchors.keys.sorted(by: { $0.uuidString < $1.uuidString }) {
-            guard let mesh = meshAnchors[key], vertices.count + mesh.vertices.count <= Int(Int32.max) else { throw CaptureError.invalid("Слишком большая сетка") }
+            guard let mesh = meshAnchors[key], vertices.count + mesh.vertices.count <= Int(Int32.max) else { throw CaptureError.invalid("Mesh is too large") }
             let offset = Int32(vertices.count)
             vertices.append(contentsOf: mesh.vertices)
             triangles.append(contentsOf: mesh.triangles.map { $0 &+ SIMD3(repeating: offset) })
@@ -150,14 +150,14 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
         let context = CIContext()
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
               let rgb = context.jpegRepresentation(of: image, colorSpace: space, options: [:]) else {
-            throw CaptureError.invalid("Не удалось сохранить RGB")
+            throw CaptureError.invalid("Could not save RGB image")
         }
         let depth = try scene.map { try packed($0.depthMap, format: kCVPixelFormatType_DepthFloat32, bytesPerPixel: 4) }
         var confidence: Data?
         if let scene, let map = scene.confidenceMap {
             guard CVPixelBufferGetWidth(map) == CVPixelBufferGetWidth(scene.depthMap),
                   CVPixelBufferGetHeight(map) == CVPixelBufferGetHeight(scene.depthMap) else {
-                throw CaptureError.invalid("Размер confidence не соответствует depth")
+                throw CaptureError.invalid("Confidence dimensions do not match depth")
             }
             confidence = try packed(map, format: kCVPixelFormatType_OneComponent8, bytesPerPixel: 1)
         }
@@ -174,14 +174,14 @@ final class CaptureService: NSObject, ObservableObject, ARSessionDelegate {
     nonisolated static func packed(_ buffer: CVPixelBuffer, format: OSType, bytesPerPixel: Int) throws -> Data {
         guard CVPixelBufferGetPixelFormatType(buffer) == format,
               !CVPixelBufferIsPlanar(buffer), CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else {
-            throw CaptureError.invalid("Неподдерживаемый формат depth/confidence")
+            throw CaptureError.invalid("Unsupported depth or confidence format")
         }
         defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddress(buffer) else { throw CaptureError.invalid("Пустой буфер") }
+        guard let base = CVPixelBufferGetBaseAddress(buffer) else { throw CaptureError.invalid("Empty buffer") }
         let rowBytes = CVPixelBufferGetWidth(buffer) * bytesPerPixel
         let stride = CVPixelBufferGetBytesPerRow(buffer)
         let height = CVPixelBufferGetHeight(buffer)
-        guard stride >= rowBytes else { throw CaptureError.invalid("Неверный шаг строки") }
+        guard stride >= rowBytes else { throw CaptureError.invalid("Invalid row stride") }
         var data = Data(capacity: rowBytes * height)
         for row in 0..<height { data.append(base.advanced(by: row * stride).assumingMemoryBound(to: UInt8.self), count: rowBytes) }
         return data
@@ -207,7 +207,7 @@ enum SyntheticCapture {
             ("SYNTHETIC · PLANE 2 m" as NSString).draw(at: CGPoint(x: 32, y: 220), withAttributes: [
                 .font: UIFont.boldSystemFont(ofSize: 30), .foregroundColor: UIColor.darkGray])
         }
-        guard let rgb = image.jpegData(compressionQuality: 0.95) else { throw CaptureError.invalid("Ошибка тестового JPEG") }
+        guard let rgb = image.jpegData(compressionQuality: 0.95) else { throw CaptureError.invalid("Test JPEG encoding failed") }
         var depth = Data()
         for _ in 0..<(64 * 48) {
             var value = Float(2).bitPattern.littleEndian

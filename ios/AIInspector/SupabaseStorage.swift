@@ -9,15 +9,15 @@ enum InspectorCredential {
     static func read(scope: String) throws -> String {
         var q = query(scope); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?; let result = SecItemCopyMatching(q as CFDictionary, &item)
-        guard result == errSecSuccess, let data = item as? Data, let token = String(data: data, encoding: .utf8), !token.isEmpty else { throw CaptureError.invalid("Введите device token Inspector в настройках") }
+        guard result == errSecSuccess, let data = item as? Data, let token = String(data: data, encoding: .utf8), !token.isEmpty else { throw CaptureError.invalid("Enter the Inspector device token in Settings") }
         return token
     }
     static func save(_ token: String, scope: String) throws {
         let attrs: [String: Any] = [kSecValueData as String: Data(token.utf8), kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
         let result = SecItemUpdate(query(scope) as CFDictionary, attrs as CFDictionary)
         if result == errSecItemNotFound {
-            guard SecItemAdd(query(scope).merging(attrs) { _, new in new } as CFDictionary, nil) == errSecSuccess else { throw CaptureError.invalid("Не удалось сохранить device token") }
-        } else if result != errSecSuccess { throw CaptureError.invalid("Не удалось обновить device token") }
+            guard SecItemAdd(query(scope).merging(attrs) { _, new in new } as CFDictionary, nil) == errSecSuccess else { throw CaptureError.invalid("Could not save the device token") }
+        } else if result != errSecSuccess { throw CaptureError.invalid("Could not update the device token") }
     }
 }
 final class StorageHTTP: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
@@ -35,25 +35,25 @@ struct StorageConnectionView: View {
         NavigationStack {
             Form {
                 Section("Inspector") {
-                    TextField("HTTPS-адрес", text: $endpoint).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    TextField("HTTPS URL", text: $endpoint).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                     TextField("device_id", text: $deviceID).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField("Device token", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Text("Если токен уже сохранён, оставьте поле пустым.").font(.caption)
-                    Button("Сохранить и подключиться") {
+                    Text("Leave this field blank if a token is already saved.").font(.caption)
+                    Button("Save and connect") {
                         do { try connection.configure(endpoint: endpoint, device: deviceID, token: token); token = ""; error = nil }
                         catch { self.error = error.localizedDescription }
                     }
                     Text(connection.status).font(.footnote)
                     if let error { Text(error).foregroundStyle(.red) }
                 }
-                Text("Фото загружаются прямо в Supabase по временным ссылкам Inspector. Вход Supabase не нужен. Device token хранится в Keychain.").font(.footnote)
-                Section("Локализация по BIM") {
-                    NavigationLink("Настройки Localization Service") { LocalizationSettingsView() }
+                Text("Photos upload directly to Supabase using temporary Inspector links. No Supabase sign-in is needed. The device token is stored in Keychain.").font(.footnote)
+                Section("BIM localization") {
+                    NavigationLink("Localization Service settings") { LocalizationSettingsView() }
                         .disabled(connection.active != nil)
-                    if connection.active != nil { Text("Настройки доступны после завершения текущей сессии.").font(.caption) }
+                    if connection.active != nil { Text("Settings are available after the current session ends.").font(.caption) }
                 }
-                Button("Разрешить уведомления") { Task { await PushService.shared.enable() } }
-            }.navigationTitle("Подключение").toolbar { Button("Готово") { dismiss() } }
+                Button("Enable notifications") { Task { await PushService.shared.enable() } }
+            }.navigationTitle("Connection").toolbar { Button("Done") { dismiss() } }
         }
     }
 }

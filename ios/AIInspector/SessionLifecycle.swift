@@ -31,7 +31,7 @@ struct InspectorAssignment: Codable, Equatable, Identifiable, Sendable {
               (capture_origin == "device" && input_mode == "live_capture") ||
                 (capture_origin == "synthetic" && input_mode == "synthetic_fixture"),
               ["assigned", "capturing", "submitted", "sealed", "cancelled"].contains(capture_state)
-        else { throw CaptureError.invalid("Inspector вернул неподдерживаемое назначение") }
+        else { throw CaptureError.invalid("Inspector returned an unsupported assignment") }
     }
     func sameContext(as other: Self) -> Bool {
         session_id == other.session_id && inspection_id == other.inspection_id && project_id == other.project_id &&
@@ -159,11 +159,11 @@ func freezeCapture(assignment: InspectorAssignment, store: ObservationStore) thr
     let folder = store.folder(assignment.id)
     let local = try ObservationStore.decoder.decode(SessionManifest.self, from: Data(contentsOf: folder.appendingPathComponent("manifest.json")))
     guard local.session_id == assignment.id, local.room_id == assignment.room_id, local.model_version == assignment.model_version,
-          local.model_is_synthetic == assignment.model_is_synthetic, local.capture_origin == assignment.capture_origin else { throw CaptureError.invalid("Набор не соответствует назначению") }
+          local.model_is_synthetic == assignment.model_is_synthetic, local.capture_origin == assignment.capture_origin else { throw CaptureError.invalid("Capture does not match the assignment") }
     let frames = try store.observations(assignment.id)
-    guard !frames.isEmpty else { throw CaptureError.invalid("Сначала сохраните хотя бы одно наблюдение") }
+    guard !frames.isEmpty else { throw CaptureError.invalid("Save at least one observation first") }
     let observations = try frames.map { frame -> CaptureInventoryItem in
-        guard frame.session_id == assignment.id, UUID(uuidString: frame.id) != nil, local.segment_ids.contains(frame.segment_id) else { throw CaptureError.invalid("Неверная принадлежность кадра") }
+        guard frame.session_id == assignment.id, UUID(uuidString: frame.id) != nil, local.segment_ids.contains(frame.segment_id) else { throw CaptureError.invalid("Frame does not belong to this session") }
         let metadata = try Data(contentsOf: folder.appendingPathComponent("observations/" + frame.id + "/frame.json"))
         let files = [frame.rgb] + (frame.depth.map { [$0] } ?? []) + (frame.confidence.map { [$0] } ?? []) + [StoredFile(name: "frame.json", data: metadata)]
         return CaptureInventoryItem(observation_id: frame.id, segment_id: frame.segment_id, files: files.map {

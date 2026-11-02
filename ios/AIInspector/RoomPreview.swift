@@ -31,10 +31,10 @@ struct RoomPreview: View {
             var doorway = Path()
             doorway.addLines([point(52,-50), point(52,-137), point(100,-114), point(100,-27)])
             context.stroke(doorway, with: .color(.blue), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-            context.draw(Text("Схема · simulator").font(.caption).foregroundStyle(.secondary), at: point(0,110))
+            context.draw(Text("Diagram · simulator").font(.caption).foregroundStyle(.secondary), at: point(0,110))
         }
         .background(Color(red: 0.91, green: 0.93, blue: 0.96))
-        .accessibilityLabel("Схематический вид тестовой комнаты. 3D-превью доступно на устройстве.")
+        .accessibilityLabel("Schematic test room. A 3D preview is available on a physical device.")
     }
 }
 #else

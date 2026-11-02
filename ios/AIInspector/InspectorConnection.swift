@@ -8,13 +8,13 @@ final class InspectorConnection: ObservableObject {
     static let defaultEndpoint = "https://inspector.campuscompile.eu"
     static let defaultDevice = "iphone-1"
     @Published private(set) var active: InspectorAssignment?
-    @Published private(set) var status = "Inspector не настроен"
+    @Published private(set) var status = "Inspector is not configured"
     @Published private(set) var uploadProgress: Double?
     @Published private(set) var busy = false
     @Published private(set) var frozen = false
     @Published private(set) var geometryMode = "unknown"
     @Published private(set) var spatial: SpatialSnapshot?
-    @Published private(set) var spatialStatus = "Онлайн-локализация не подключена"
+    @Published private(set) var spatialStatus = "Live localization is not connected"
     @Published private(set) var localizationEnabled = false
     @Published private(set) var spatialFresh = false
     private var liveCapability: LiveLocalizationCapability?
@@ -49,10 +49,10 @@ final class InspectorConnection: ObservableObject {
     private var nextCompletionAttempt = Date.distantPast
 
     func configure(endpoint: String, device: String, token: String) throws {
-        guard !busy, active == nil || (endpoint == base?.absoluteString && device == self.device) else { throw CaptureError.invalid("Нельзя менять сервер во время активной сессии") }
+        guard !busy, active == nil || (endpoint == base?.absoluteString && device == self.device) else { throw CaptureError.invalid("Cannot change servers during an active session") }
         let endpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: endpoint), url.scheme == "https", url.host != nil, url.path.isEmpty, url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
-              device.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else { throw CaptureError.invalid("Нужны HTTPS-адрес сервера и device_id") }
+              device.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else { throw CaptureError.invalid("Enter an HTTPS server URL and device_id") }
         if !token.isEmpty { try InspectorCredential.save(token, scope: endpoint + "|" + device) }
         UserDefaults.standard.set(endpoint, forKey: "inspector.endpoint"); UserDefaults.standard.set(device, forKey: "inspector.device")
         setForeground(true)
@@ -85,11 +85,11 @@ final class InspectorConnection: ObservableObject {
         let endpoint = UserDefaults.standard.string(forKey: "inspector.endpoint") ?? Self.defaultEndpoint
         let id = UserDefaults.standard.string(forKey: "inspector.device") ?? Self.defaultDevice
         guard let url = URL(string: endpoint), url.scheme == "https", url.host != nil, url.path.isEmpty, url.user == nil, url.password == nil, url.query == nil,
-              id.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else { throw CaptureError.invalid("Настройте Inspector") }
+              id.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else { throw CaptureError.invalid("Configure Inspector") }
         let newScope = endpoint + "|" + id
         _ = try InspectorCredential.read(scope: newScope)
         guard newScope != scope else { return }
-        guard active == nil else { throw CaptureError.invalid("Восстановите настройки активной сессии") }
+        guard active == nil else { throw CaptureError.invalid("Restore the active session's connection settings") }
         let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("inspector-signed-v1")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = folder.appendingPathComponent(StoredFile(name: "", data: Data(newScope.utf8)).sha256 + ".json")
@@ -99,11 +99,11 @@ final class InspectorConnection: ObservableObject {
         active = journal.active; frozen = journal.pending != nil || (active.map { !$0.canCapture } ?? false)
     }
     private func save() throws {
-        guard let journalURL else { throw CaptureError.invalid("Нет журнала сессии") }
+        guard let journalURL else { throw CaptureError.invalid("Session journal is missing") }
         try ObservationStore.encoder.encode(journal).write(to: journalURL, options: .atomic)
     }
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
-        guard let base else { throw CaptureError.invalid("Нет сервера") }
+        guard let base else { throw CaptureError.invalid("Server is not configured") }
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!
         let pieces = path.split(separator: "?", maxSplits: 1); components.path = "/" + pieces[0]
         if pieces.count == 2 { components.percentEncodedQuery = String(pieces[1]) }
@@ -142,7 +142,7 @@ final class InspectorConnection: ObservableObject {
                   item.sha256 == StoredFile(name: object.name, data: bytes).sha256,
                   item.media_type == object.media_type, item.object_key.hasPrefix("standalone/"),
                   item.object_key.contains("/" + sessionID + "/") else {
-                throw CaptureError.invalid("Неверный план тестовой загрузки")
+                throw CaptureError.invalid("Invalid standalone upload plan")
             }
             return item
         }
@@ -151,9 +151,9 @@ final class InspectorConnection: ObservableObject {
             try await storage.put(bytes: bytes, plan: item)
             let verified = try await plan()
             guard verified.status == "already_uploaded", verified.object_key == item.object_key else {
-                throw CaptureError.invalid("Файл отправлен, но проверка Supabase ещё не завершена. Повторите отправку.")
+                throw CaptureError.invalid("File uploaded, but Supabase verification is not complete yet. Please retry.")
             }
-        } else if item.status != "already_uploaded" { throw CaptureError.invalid("Неверный статус загрузки") }
+        } else if item.status != "already_uploaded" { throw CaptureError.invalid("Invalid upload status") }
         return item.object_key
     }
 
@@ -168,7 +168,7 @@ final class InspectorConnection: ObservableObject {
         let bytes = try await request("v1/sessions/\(assignment.id)/localization", method: "POST", body: Data("{}".utf8))
         let access = try JSONDecoder().decode(LocalizationAccess.self, from: bytes)
         guard sameUUID(access.session_id, assignment.id), access.model_version == assignment.model_version else {
-            throw CaptureError.invalid("Inspector выдал локализацию для другого задания")
+            throw CaptureError.invalid("Inspector returned localization for a different assignment")
         }
         return access
     }
@@ -191,10 +191,10 @@ final class InspectorConnection: ObservableObject {
                 let latest = try JSONDecoder().decode(InspectorAssignment.self, from: await request("v1/sessions/\(current.id)"))
                 guard active?.id == current.id, !busy else { return false }
                 try latest.validate(device: device)
-                guard latest.sameContext(as: current), latest.revision >= current.revision else { throw CaptureError.invalid("Изменился закреплённый контекст") }
-                if latest.capture_state == "cancelled" { try close(current.id); status = "Сессия отменена Inspector" }
+                guard latest.sameContext(as: current), latest.revision >= current.revision else { throw CaptureError.invalid("The assigned context has changed") }
+                if latest.capture_state == "cancelled" { try close(current.id); status = "Session cancelled by Inspector" }
                 else if journal.pending != nil { await finish(store: Self.store) }
-                else if latest.capture_state == "sealed" { try close(current.id); status = "Набор принят; обработка выполняется на сервере" }
+                else if latest.capture_state == "sealed" { try close(current.id); status = "Capture accepted; processing continues on the server" }
                 else { journal.active = latest; try save(); active = latest; frozen = !latest.canCapture }
             } else {
                 var cursor: String?; var seen = Set<String>(); var chosen: InspectorAssignment?
@@ -207,7 +207,7 @@ final class InspectorConnection: ObservableObject {
                         if chosen == nil && item.capture_state == "assigned" && !journal.closedSessionIDs.contains(item.id) { chosen = item }
                     }
                     cursor = page.next_cursor
-                    if let cursor, !seen.insert(cursor).inserted { throw CaptureError.invalid("Повтор курсора Inspector") }
+                    if let cursor, !seen.insert(cursor).inserted { throw CaptureError.invalid("Repeated Inspector pagination cursor") }
                 } while cursor != nil
                 guard foreground, !localLabActive else { return false }
                 if let chosen { journal.active = chosen; try save(); active = chosen; await PushService.shared.notifyAssignment(sessionID: chosen.id) }
@@ -216,7 +216,7 @@ final class InspectorConnection: ObservableObject {
             connectSocket()
             await refreshSpatial()
             Task { await self.sendEarlyEvidence() }
-            if journal.pending == nil { status = active == nil ? "Ожидаем задание от Inspector" : "Сессия подключена" }
+            if journal.pending == nil { status = active == nil ? "Waiting for an Inspector assignment" : "Session connected" }
             failures = 0; return true
         } catch { failures += 1; status = error.localizedDescription; return false }
     }
@@ -226,11 +226,11 @@ final class InspectorConnection: ObservableObject {
         let body = try JSONSerialization.data(withJSONObject: ["schema_version": "0.1", "operation_id": id], options: .sortedKeys)
         let data = try await request("v1/sessions/\(assignment.id)/acknowledgements", method: "POST", body: body)
         let receipt = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard sameUUID(receipt?["session_id"] as? String, assignment.id), sameUUID(receipt?["operation_id"] as? String, id) else { throw CaptureError.invalid("Неверная квитанция получения") }
+        guard sameUUID(receipt?["session_id"] as? String, assignment.id), sameUUID(receipt?["operation_id"] as? String, id) else { throw CaptureError.invalid("Invalid acknowledgement receipt") }
         journal.acknowledged.append(assignment.id); try save()
     }
     func startCapture() async throws {
-        guard let active else { throw CaptureError.invalid("Нет задания") }
+        guard let active else { throw CaptureError.invalid("No assignment") }
         try await acknowledge(active)
         if journal.startedSessionIDs.contains(active.id) { return }
         if journal.startBodies[active.id] == nil {
@@ -244,7 +244,7 @@ final class InspectorConnection: ObservableObject {
         let data = try await request("v1/sessions/\(active.id)/capture-start", method: "POST", body: body)
         let receipt = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard sameUUID(receipt?["session_id"] as? String, active.id), sameUUID(receipt?["operation_id"] as? String, expected["operation_id"] as? String),
-              receipt?["capture_state"] as? String == "capturing" else { throw CaptureError.invalid("Неверная квитанция начала") }
+              receipt?["capture_state"] as? String == "capturing" else { throw CaptureError.invalid("Invalid capture-start receipt") }
         journal.startedSessionIDs.append(active.id); try save()
     }
     private func connectSocket() {
@@ -283,7 +283,7 @@ final class InspectorConnection: ObservableObject {
 
     private func upload(bytes: Data, object: UploadObject, logicalID: String, manifest: Bool, archive: Bool = false, geometryPart: Bool = false) async throws -> String {
         guard let current = active, var pending = journal.pending, let assignmentStorage = current.storage,
-              assignmentStorage.provider == "supabase", assignmentStorage.bucket == "inspection-captures" else { throw CaptureError.invalid("Inspector не настроил Supabase storage") }
+              assignmentStorage.provider == "supabase", assignmentStorage.bucket == "inspection-captures" else { throw CaptureError.invalid("Inspector has not configured Supabase storage") }
         let requestID = pending.requestIDs[logicalID] ?? UUID().uuidString.lowercased()
         pending.requestIDs[logicalID] = requestID; journal.pending = pending; try save()
         var payload = try JSONSerialization.jsonObject(with: JSONEncoder().encode(object)) as! [String: Any]
@@ -294,9 +294,9 @@ final class InspectorConnection: ObservableObject {
         guard response.format == "supabase_upload_plan_v1", sameUUID(response.request_id, requestID), sameUUID(response.session_id, current.id),
               response.items.count == 1, let item = response.items.first, item.name == object.name, ((item.observation_id == nil && object.observation_id == nil) || sameUUID(item.observation_id, object.observation_id)),
               item.sha256 == object.sha256, item.byte_length == object.byte_length, item.media_type == object.media_type,
-              item.object_key.hasPrefix(assignmentStorage.key_prefix), !item.object_key.split(separator: "/").contains("..") else { throw CaptureError.invalid("План не соответствует файлу") }
+              item.object_key.hasPrefix(assignmentStorage.key_prefix), !item.object_key.split(separator: "/").contains("..") else { throw CaptureError.invalid("Upload plan does not match the file") }
         if item.status == "upload_required" { try await storage.put(bytes: bytes, plan: item) }
-        else if item.status != "already_uploaded" { throw CaptureError.invalid("Неизвестный статус upload plan") }
+        else if item.status != "already_uploaded" { throw CaptureError.invalid("Unknown upload plan status") }
         return item.object_key
     }
     func finish(store: ObservationStore, retryRejected: Bool = false) async {
@@ -319,9 +319,9 @@ final class InspectorConnection: ObservableObject {
                     let caps = try JSONSerialization.jsonObject(with: data) as? [String:Any]
                     guard (caps?["capture_formats"] as? [String])?.contains("supabase_geometry_parts_v1") == true,
                           let limit = caps?["max_archive_bytes"] as? Int, limit > 65536 else {
-                        throw CaptureError.invalid("Inspector ещё не поддерживает несколько Geometry ZIP. Наблюдения сохранены; обновите сервер.")
+                        throw CaptureError.invalid("Inspector does not support multiple Geometry ZIPs yet. Observations are saved; update the server.")
                     }
-                    status = "Подготовка архивов…"
+                    status = "Preparing archives…"
                     let index = try await Task.detached {
                         try GeometryPartsExport.build(assignment: current, pending: frozenSet, store: store, maxBytes: min(limit - 65536, 15 * 1024 * 1024))
                     }.value
@@ -330,17 +330,17 @@ final class InspectorConnection: ObservableObject {
                 if journal.pending?.manifestBytes == nil {
                     for (i, part) in journal.pending!.geometryParts!.parts.enumerated() {
                         if !part.object_key.isEmpty { continue }
-                        status = "Загрузка архивов в хранилище…"
+                        status = "Uploading archives…"
                         let url = store.folder(current.id).appendingPathComponent("geometry-parts/\(frozenSet.completion_id)/\(part.name)")
                         let bytes = try Data(contentsOf: url, options: .mappedIfSafe)
-                        guard bytes.count == part.byte_length, StoredFile(name: part.name, data: bytes).sha256 == part.sha256 else { throw CaptureError.invalid("ZIP изменён после подготовки") }
+                        guard bytes.count == part.byte_length, StoredFile(name: part.name, data: bytes).sha256 == part.sha256 else { throw CaptureError.invalid("ZIP changed after preparation") }
                         let key = try await upload(bytes: bytes, object: UploadObject(observation_id: nil, name: part.name, media_type: "application/zip", byte_length: part.byte_length, sha256: part.sha256), logicalID: part.name, manifest: false, geometryPart: true)
                         journal.pending?.geometryParts?.parts[i].object_key = key; try save(); updateUploadProgress()
                     }
                     let indexBytes = try ObservationStore.encoder.encode(journal.pending!.geometryParts!)
                     journal.pending?.manifestBytes = indexBytes; try save()
                 }
-                uploadProgress = nil; status = "Сохранение списка архивов…"
+                uploadProgress = nil; status = "Saving the archive index…"
                 if journal.pending?.request == nil {
                     let bytes = journal.pending!.manifestBytes!, info = StoredFile(name: "capture-manifest.json", data: journal.pending!.manifestBytes!)
                     let key = try await upload(bytes: bytes, object: UploadObject(observation_id: nil, name: info.name, media_type: "application/json", byte_length: info.byte_length, sha256: info.sha256), logicalID: "manifest", manifest: true)
@@ -350,8 +350,8 @@ final class InspectorConnection: ObservableObject {
                 }
             } else if frozenSet.transportFormat == "zip" {
                 if frozenSet.archiveInfo == nil {
-                    status = "Подготовка ZIP с наблюдениями…"
-                    guard let keyPrefix = current.storage?.key_prefix else { throw CaptureError.invalid("Нет префикса хранилища Inspector") }
+                    status = "Preparing the observation ZIP…"
+                    guard let keyPrefix = current.storage?.key_prefix else { throw CaptureError.invalid("Inspector storage prefix is missing") }
                     let result = try await Task.detached {
                         try InspectorArchive.build(pending: frozenSet, store: store, keyPrefix: keyPrefix)
                     }.value
@@ -360,14 +360,14 @@ final class InspectorConnection: ObservableObject {
                     journal.pending?.archiveInfo = result.info
                     try save()
                 }
-                guard let info = journal.pending?.archiveInfo else { throw CaptureError.invalid("Не подготовлен ZIP") }
+                guard let info = journal.pending?.archiveInfo else { throw CaptureError.invalid("ZIP has not been prepared") }
                 let file = InspectorArchive.url(sessionID: current.id, completionID: frozenSet.completion_id, store: store)
                 let bytes = try Data(contentsOf: file, options: .mappedIfSafe)
                 guard bytes.count == info.byte_length, StoredFile(name: "", data: bytes).sha256 == info.sha256 else {
-                    throw CaptureError.invalid("ZIP изменён или повреждён. Повторная отправка остановлена.")
+                    throw CaptureError.invalid("ZIP changed or is corrupted. Retry stopped.")
                 }
                 if journal.pending?.request == nil {
-                    status = "Загрузка ZIP в Supabase…"
+                    status = "Uploading ZIP to Supabase…"
                     let key = try await upload(bytes: bytes, object: UploadObject(observation_id: nil, name: "capture.zip",
                         media_type: "application/zip", byte_length: info.byte_length, sha256: info.sha256), logicalID: "archive", manifest: false, archive: true)
                     journal.pending?.request = CaptureCompletion(completion_id: frozenSet.completion_id,
@@ -382,8 +382,8 @@ final class InspectorConnection: ObservableObject {
                         // A saved server key means PUT finished; preserve progress across retries.
                         if !file.object_key.isEmpty { continue }
                         let bytes = try Data(contentsOf: store.folder(current.id).appendingPathComponent("observations/" + observation.observation_id + "/" + file.name))
-                        guard bytes.count == file.byte_length, StoredFile(name: "", data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("Локальный файл повреждён") }
-                        status = "Загрузка файлов в хранилище…"
+                        guard bytes.count == file.byte_length, StoredFile(name: "", data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("Local file is corrupted") }
+                        status = "Uploading files…"
                         let object = UploadObject(observation_id: observation.observation_id, name: file.name,
                             media_type: file.name == "rgb.jpg" ? "image/jpeg" : (file.name == "frame.json" ? "application/json" : "application/octet-stream"), byte_length: file.byte_length, sha256: file.sha256)
                         let key = try await upload(bytes: bytes, object: object, logicalID: observation.observation_id + "/" + file.name, manifest: false)
@@ -395,7 +395,7 @@ final class InspectorConnection: ObservableObject {
                 journal.pending?.manifestBytes = manifestBytes; try save()
             }
             uploadProgress = nil
-            status = "Отправка манифеста набора…"
+            status = "Uploading the capture manifest…"
             let bytes = journal.pending!.manifestBytes!, info = StoredFile(name: "capture-manifest.json", data: journal.pending!.manifestBytes!)
             if journal.pending?.request == nil {
                 let key = try await upload(bytes: bytes, object: UploadObject(observation_id: nil, name: info.name, media_type: "application/json", byte_length: info.byte_length, sha256: info.sha256), logicalID: "manifest", manifest: true)
@@ -406,14 +406,14 @@ final class InspectorConnection: ObservableObject {
             }
             }
             uploadProgress = nil
-            status = "Inspector проверяет набор…"
+            status = "Inspector is verifying the capture…"
             let pending = journal.pending!
             let data = try await request("v1/sessions/\(current.id)/complete", method: "POST", body: ObservationStore.encoder.encode(pending.request!))
             let receipt = try JSONDecoder().decode(CompletionResponse.self, from: data)
-            guard sameUUID(receipt.session_id, current.id), sameUUID(receipt.completion.completion_id, pending.completion_id) else { throw CaptureError.invalid("Неверная квитанция завершения") }
-            if receipt.completion.status == "accepted" { try close(current.id); status = "Набор принят Inspector" }
-            else if receipt.completion.status == "rejected" { journal.completionRejected = true; try save(); status = "Inspector отклонил набор. Файлы сохранены; можно повторить отправку." }
-            else { status = "Файлы отправлены. Inspector проверяет набор." }
+            guard sameUUID(receipt.session_id, current.id), sameUUID(receipt.completion.completion_id, pending.completion_id) else { throw CaptureError.invalid("Invalid completion receipt") }
+            if receipt.completion.status == "accepted" { try close(current.id); status = "Capture accepted by Inspector" }
+            else if receipt.completion.status == "rejected" { journal.completionRejected = true; try save(); status = "Inspector rejected the capture. Files are saved; you can retry the upload." }
+            else { status = "Files uploaded. Inspector is verifying the capture." }
         } catch {
             completionFailures += 1
             nextCompletionAttempt = Date().addingTimeInterval(Double(min(60, 2 << min(completionFailures, 5))))
@@ -425,18 +425,18 @@ final class InspectorConnection: ObservableObject {
         uploadProgress = pending.fileUploadFraction
     }
     func cancelActive() async -> String? {
-        guard !busy, let current = active else { return "Дождитесь завершения текущей операции" }
+        guard !busy, let current = active else { return "Wait for the current operation to finish" }
         busy = true; defer { busy = false }
         do {
             let data = try await request("v1/sessions/\(current.id)/abort", method: "POST")
             let cancelled = try JSONDecoder().decode(InspectorAssignment.self, from: data)
             guard sameUUID(cancelled.id, current.id), cancelled.capture_state == "cancelled" else {
-                throw CaptureError.invalid("Inspector ещё не подтвердил отмену")
+                throw CaptureError.invalid("Inspector has not confirmed cancellation yet")
             }
             try close(current.id)
-            status = "Задание отменено. Фото сохранены на телефоне."
+            status = "Assignment cancelled. Photos remain on this phone."
             return nil
-        } catch { return "Не удалось отменить задание: " + error.localizedDescription }
+        } catch { return "Could not cancel the assignment: " + error.localizedDescription }
     }
 
     private func close(_ id: String) throws {
@@ -459,7 +459,7 @@ extension InspectorConnection {
         let data = try await request("v1/sessions/\(current.id)/spatial-segments", method: "POST", body: body)
         let receipt = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard sameUUID(receipt?["session_id"] as? String, current.id), sameUUID(receipt?["segment_id"] as? String, segment) else {
-            throw CaptureError.invalid("Неверное подтверждение сегмента локализации")
+            throw CaptureError.invalid("Invalid localization segment acknowledgement")
         }
         guard desiredSpatialSegment == segment, active?.id == current.id else { return }
         registeredSpatialSegment = segment
@@ -479,12 +479,12 @@ extension InspectorConnection {
             try snapshot.validate(session: current.id, model: current.model_version, room: current.room_id,
                                   previous: spatial?.session_id == current.id ? spatial : nil)
             spatial = snapshot; spatialReceived = Date(); spatialFresh = true
-            spatialStatus = ["awaiting_camera":"Откройте камеру", "localizing":"Определяем положение в BIM",
-                             "relocalizing":"Восстанавливаем привязку", "inspecting":"Съёмка под управлением Inspector",
-                             "blocked":"Локализация требует внимания", "finished":"Съёмка завершена"][snapshot.guidance.phase] ?? ""
+            spatialStatus = ["awaiting_camera":"Open the camera", "localizing":"Finding your position in BIM",
+                             "relocalizing":"Restoring alignment", "inspecting":"Capture guided by Inspector",
+                             "blocked":"Localization needs attention", "finished":"Capture complete"][snapshot.guidance.phase] ?? ""
         } catch {
             spatialFresh = false
-            spatialStatus = "Локализация недоступна. Фото сохраняются локально."
+            spatialStatus = "Localization is unavailable. Photos are saved locally."
         }
     }
     func liveInstruction(segment: String?) -> SpatialInstruction? {
@@ -536,7 +536,7 @@ extension InspectorConnection {
                     var refs: [CaptureFileReference] = []
                     for file in entry.files {
                         let bytes = try Data(contentsOf: Self.store.folder(current.id).appendingPathComponent("observations/\(entry.observationID)/\(file.name)"))
-                        guard bytes.count == file.byte_length, StoredFile(name: file.name, data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("Изменились байты раннего наблюдения") }
+                        guard bytes.count == file.byte_length, StoredFile(name: file.name, data: bytes).sha256 == file.sha256 else { throw CaptureError.invalid("Early observation bytes have changed") }
                         let mime = file.name == "rgb.jpg" ? "image/jpeg" : (file.name == "frame.json" ? "application/json" : "application/octet-stream")
                         let id = entry.uploadRequestIDs[file.name]!
                         let object = UploadObject(observation_id: entry.observationID, name: file.name, media_type: mime, byte_length: file.byte_length, sha256: file.sha256)
@@ -546,9 +546,9 @@ extension InspectorConnection {
                         guard plan.format == "supabase_upload_plan_v1", sameUUID(plan.session_id, current.id), sameUUID(plan.request_id, id),
                               plan.items.count == 1, let item = plan.items.first, sameUUID(item.observation_id, entry.observationID),
                               item.name == file.name, item.byte_length == file.byte_length, item.sha256 == file.sha256, item.media_type == mime,
-                              item.object_key == prefix + "observations/\(entry.observationID)/\(file.name)" else { throw CaptureError.invalid("Неверный план ранней загрузки") }
+                              item.object_key == prefix + "observations/\(entry.observationID)/\(file.name)" else { throw CaptureError.invalid("Invalid early upload plan") }
                         if item.status == "upload_required" { try await storage.put(bytes: bytes, plan: item) }
-                        else if item.status != "already_uploaded" { throw CaptureError.invalid("Неверный статус ранней загрузки") }
+                        else if item.status != "already_uploaded" { throw CaptureError.invalid("Invalid early upload status") }
                         refs.append(CaptureFileReference(name: file.name, object_key: item.object_key, byte_length: file.byte_length, sha256: file.sha256))
                     }
                     let referenceObjects = try JSONSerialization.jsonObject(with: JSONEncoder().encode(refs))
@@ -561,10 +561,10 @@ extension InspectorConnection {
                 let receipt = try JSONSerialization.jsonObject(with: bytes) as? [String: Any]
                 guard receipt?["protocol"] as? String == "live_bim_v1", sameUUID(receipt?["session_id"] as? String, current.id), sameUUID(receipt?["batch_id"] as? String, entry.batchID),
                       ["validating", "queued", "processing", "completed"].contains(receipt?["status"] as? String ?? "") else {
-                    throw CaptureError.invalid("Неверная квитанция ранних наблюдений")
+                    throw CaptureError.invalid("Invalid early observation receipt")
                 }
                 entry.submitted = true; journal.earlyEvidence?[index] = entry; try save()
             }
-        } catch { spatialStatus = "Ранние данные не отправлены: \(error.localizedDescription). Повтор автоматически; оригиналы сохранены." }
+        } catch { spatialStatus = "Early data was not sent: \(error.localizedDescription). Retrying automatically; originals are saved." }
     }
 }

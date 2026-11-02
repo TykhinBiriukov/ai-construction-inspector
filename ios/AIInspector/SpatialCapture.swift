@@ -45,21 +45,21 @@ struct SpatialSnapshot: Decodable {
         guard `protocol` == "live_bim_v1", sameUUID(session_id, session), revision >= 0,
               owners[guidance.phase] == guidance.owner, guidance.control_revision >= 0,
               context == nil || (context?.model_version == model && context?.room_id == room) else {
-            throw CaptureError.invalid("Неверный контекст локализации")
+            throw CaptureError.invalid("Invalid localization context")
         }
         if let previous {
             guard revision >= previous.revision, guidance.control_revision >= previous.guidance.control_revision else {
-                throw CaptureError.invalid("Устаревшее состояние локализации")
+                throw CaptureError.invalid("Outdated localization state")
             }
         }
         let activeInstructions = instructions.filter { $0.status == "active" }
-        guard activeInstructions.count <= 1 else { throw CaptureError.invalid("Несколько активных инструкций") }
+        guard activeInstructions.count <= 1 else { throw CaptureError.invalid("Multiple active instructions") }
         if let id = guidance.active_instruction_id {
             let matches = instructions.filter { sameUUID($0.instruction_id, id) && $0.status == "active" }
             guard matches.count == 1, let item = matches.first, item.source == guidance.owner,
                   item.control_revision == guidance.control_revision, sameUUID(item.session_id, session),
                   !item.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw CaptureError.invalid("Конфликт источников инструкций")
+                throw CaptureError.invalid("Conflicting instruction sources")
             }
         }
     }
@@ -107,4 +107,35 @@ func bimPoseMatrix(_ rows: [[Double]]) -> simd_float4x4? {
     let rotation = simd_float3x3(columns: (SIMD3(columns[0].x,columns[0].y,columns[0].z), SIMD3(columns[1].x,columns[1].y,columns[1].z), SIMD3(columns[2].x,columns[2].y,columns[2].z)))
     guard abs(simd_determinant(rotation)-1) < 0.001 else { return nil }
     return result
+}
+
+/// Display-only translations for fixed messages from older Localization Service versions.
+/// Never rewrite server instructions, persisted context, IFC names or operator-authored content.
+enum EnglishInterface {
+    static let serviceMessages: [String: String] = [
+        "BIM не подготовлена для локализации.": "The BIM model is not ready for localization.",
+        "Наведите камеру на входную дверь. Покажите проём, пол и соседний угол.": "Point the camera at the entry door. Include the doorway, floor and adjacent corner.",
+        "Алгоритм привязки ещё не подключён. Наблюдения сохранены для теста.": "The alignment algorithm is not connected yet. Observations have been saved for testing.",
+        "Не удалось подтвердить привязку.": "Could not confirm alignment.",
+        "Положение потеряно. Снова покажите дверь и соседний угол.": "Tracking lost. Show the door and adjacent corner again.",
+        "Слишком много неверных кодов. Подождите минуту.": "Too many incorrect codes. Wait a minute before trying again.",
+        "Неверный код подключения": "Incorrect connection code",
+        "Не удалось обработать данные; оригиналы сохранены, повторите запрос.": "Could not process the data. Originals are saved; please retry.",
+        "Дверь целиком по центру кадра, немного стены вокруг и пол.": "Centre the entire door in the frame, including some surrounding wall and floor.",
+        "Снимите дверь вместе с ближайшим углом комнаты.": "Capture the door together with the nearest room corner.",
+        "Сместитесь примерно на полметра в сторону; снимите ту же дверь и угол.": "Move about half a metre sideways and capture the same door and corner.",
+        "Широкий ракурс: пол и обе стены, образующие угол.": "Use a wide view showing the floor and both walls forming the corner.",
+        "Недостаточно достоверной глубины. Подойдите ближе и снимите пол и угол.": "Not enough reliable depth data. Move closer and capture the floor and corner.",
+        "Покажите больше пола у двери: не удаётся определить уровень пола.": "Show more floor near the door so the floor level can be determined.",
+        "Нужны две стены у угла. Снимите угол вместе с полом.": "Both walls at the corner are needed. Capture the corner together with the floor.",
+        "Привязка не подтверждена. Проверьте: первая фотография направлена в центр двери; доснимите пол и соседнюю стену.": "Alignment is not confirmed. Check that the first photo faces the centre of the door, then capture more of the floor and adjacent wall.",
+        "Есть несколько подходящих положений. Снимите дверь вместе с более широким участком соседней стены.": "Several positions are possible. Capture the door with a wider section of the adjacent wall.",
+        "Нужен iPhone с LiDAR: в снимках нет глубины.": "An iPhone with LiDAR is required: these photos have no depth data."
+    ]
+    static func serviceText(_ text: String) -> String { serviceMessages[text] ?? text }
+    static func doorLabel(_ label: String) -> String {
+        // Only the service-generated numbered label is translated; IFC names remain unchanged.
+        guard label.range(of: "^Дверь [0-9]+$", options: .regularExpression) != nil else { return label }
+        return "Door " + label.split(separator: " ").last!
+    }
 }

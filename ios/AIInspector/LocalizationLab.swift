@@ -88,7 +88,7 @@ final class SessionLocalization: ObservableObject {
         guard let url = URL(string: text), let host = url.host,
               url.scheme == "https" || (url.scheme == "http" && (host.hasSuffix(".local") || host == Bundle.main.object(forInfoDictionaryKey: "LocalizationLabAllowedIPv4") as? String)),
               url.user == nil, url.password == nil, url.path.isEmpty, url.query == nil, url.fragment == nil else {
-            throw CaptureError.invalid("Укажите HTTPS-адрес Localization Service или разрешённый локальный адрес Mac")
+            throw CaptureError.invalid("Enter the Localization Service HTTPS URL or an allowed local Mac address")
         }
         return url
     }
@@ -97,22 +97,22 @@ final class SessionLocalization: ObservableObject {
         let generation = self.generation
         enabled = assignment.model_version != "unbound" && assignment.capture_origin == "device"
         guard enabled else { state = nil; meshes = []; return }
-        status = "Подключение локализации…"
+        status = "Connecting to localization…"
         let access = try await InspectorConnection.shared.prepareLocalization(assignment)
-        guard URL(string: access.endpoint)?.scheme == "https" else { throw CaptureError.invalid("Облачная локализация требует HTTPS") }
+        guard URL(string: access.endpoint)?.scheme == "https" else { throw CaptureError.invalid("Cloud localization requires HTTPS") }
         base = try Self.validatedURL(access.endpoint)
         code = access.session_token
         guard self.generation == generation else { throw CancellationError() }
         let configuration = try JSONDecoder().decode(LabDisplayConfiguration.self, from: await request("sessions/\(assignment.id)/config"))
         guard assignment.model_version == configuration.room.model_version || assignment.model_version == "upload-sha256:" + configuration.room.model_version,
-              !configuration.meshes.isEmpty else { throw CaptureError.invalid("Localization Service вернул другую BIM-модель") }
+              !configuration.meshes.isEmpty else { throw CaptureError.invalid("Localization Service returned a different BIM model") }
         guard self.generation == generation else { throw CancellationError() }
         meshes = configuration.meshes; state = nil
         try accept(await request("sessions/\(assignment.id)"))
         guard self.generation == generation else { throw CancellationError() }
         if configuration.entry_selection_required == true {
             pendingSegment = segment; pendingStore = store; choosingEntry = true
-            status = "Выберите дверь, с которой начнёте съёмку. Номера показаны на 3D-модели."
+            status = "Select the door where you will start capture. Door numbers are shown on the 3D model."
             return
         }
         try await activate(assignment: assignment, segment: segment, store: store)
@@ -125,7 +125,7 @@ final class SessionLocalization: ObservableObject {
             let bytes = try await request("sessions/\(assignment.id)/entry", body: ["entry_element_id":id])
             let config = try JSONDecoder().decode(LabDisplayConfiguration.self, from: bytes)
             guard config.room.entry_element_id == id, config.entry_selection_required == false else {
-                throw CaptureError.invalid("Сервис не подтвердил выбранную дверь")
+                throw CaptureError.invalid("The service did not confirm the selected door")
             }
             guard self.pendingSegment == pendingSegment, self.assignment?.id == assignment.id else { return }
             meshes = config.meshes
@@ -133,7 +133,7 @@ final class SessionLocalization: ObservableObject {
             guard self.generation == generation else { return }
             try await activate(assignment: assignment, segment: pendingSegment, store: pendingStore)
             choosingEntry = false; self.pendingSegment = nil; self.pendingStore = nil
-        } catch { guard self.generation == generation else { return }; status = "Не удалось выбрать вход: \(error.localizedDescription)" }
+        } catch { guard self.generation == generation else { return }; status = "Could not select the entry door: \(error.localizedDescription)" }
     }
     private func activate(assignment: InspectorAssignment, segment: String, store: ObservationStore) async throws {
         let generation = self.generation
@@ -141,7 +141,7 @@ final class SessionLocalization: ObservableObject {
         guard self.generation == generation else { throw CancellationError() }
         try accept(bytes)
         self.segment = segment; accepted = []; sequence = 0; lastPose = -.infinity
-        status = "Наведите камеру на выбранную дверь и сохраните первый снимок."
+        status = "Point the camera at the selected door and save the first photo."
         poll = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
@@ -151,7 +151,7 @@ final class SessionLocalization: ObservableObject {
                     let bytes = try await self.request("sessions/\(assignment.id)")
                     guard self.segment == segment else { return }
                     try self.accept(bytes)
-                } catch { self.receivedAt = .distantPast; self.status = "Нет связи с локализацией. Фото сохраняются; подключение повторяется." }
+                } catch { self.receivedAt = .distantPast; self.status = "Localization connection lost. Photos are saved; reconnecting automatically." }
             }
         }
     }
@@ -165,14 +165,14 @@ final class SessionLocalization: ObservableObject {
         return state?.instructions.first { $0.status == "active" && $0.source == "localization" }
     }
     private func request(_ path: String, body: [String:Any]? = nil) async throws -> Data {
-        guard let base else { throw CaptureError.invalid("Настройте Localization Service") }
+        guard let base else { throw CaptureError.invalid("Configure Localization Service") }
         var req = URLRequest(url: base.appendingPathComponent("v1/localization/" + path)); req.timeoutInterval = 30
         req.setValue(code, forHTTPHeaderField: "X-Localization-Code")
         if let body { req.httpMethod = "POST"; req.setValue("application/json", forHTTPHeaderField: "Content-Type"); req.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let (bytes,response) = try await http.data(for: req)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             let message = ((try? JSONSerialization.jsonObject(with: bytes)) as? [String:Any])?["message"] as? String
-            throw CaptureError.invalid(message ?? "Localization Service не подтвердил запрос")
+            throw CaptureError.invalid(EnglishInterface.serviceText(message ?? "Localization Service did not confirm the request"))
         }
         return bytes
     }
@@ -181,10 +181,10 @@ final class SessionLocalization: ObservableObject {
         guard let assignment, let binding = next.assignment_binding,
               sameUUID(next.session_id, assignment.id), sameUUID(binding.session_id,assignment.id),
               binding.project_id == assignment.project_id, binding.room_id == assignment.room_id,
-              binding.model_version == assignment.model_version else { throw CaptureError.invalid("Локализация относится к другому заданию") }
+              binding.model_version == assignment.model_version else { throw CaptureError.invalid("Localization belongs to another assignment") }
         if let state, next.revision < state.revision { return }
         state = next; receivedAt = Date()
-        status = next.guidance.phase == "inspecting" ? "Привязка подтверждена. Снимайте непокрытые участки." : "Следуйте инструкции локализации."
+        status = next.guidance.phase == "inspecting" ? "Alignment confirmed. Capture the uncovered areas." : "Follow the localization instructions."
     }
     func flush(store: ObservationStore) async {
         guard !draining, let assignment, let segment else { return }
@@ -202,7 +202,7 @@ final class SessionLocalization: ObservableObject {
                 guard self.segment == segment else { return }
                 try accept(result); accepted.insert(frame.id)
             }
-        } catch { receivedAt = .distantPast; status = "Фото сохранено. Передача в локализацию повторится: \(error.localizedDescription)" }
+        } catch { receivedAt = .distantPast; status = "Photo saved. Localization upload will retry: \(error.localizedDescription)" }
     }
     func pose(_ frame: ARFrame) {
         guard let assignment, let segment, !sending, !draining, frame.timestamp-lastPose >= 0.2 else { return }
@@ -230,14 +230,14 @@ struct SessionLocalizationPanel: View {
                 Text(localization.status).font(.headline)
                 if localization.choosingEntry, let doors = localization.state?.room.doors {
                     ForEach(doors) { door in
-                        Button(door.label + (door.name.isEmpty ? "" : " · " + door.name)) {
+                        Button(EnglishInterface.doorLabel(door.label) + (door.name.isEmpty ? "" : " · " + door.name)) {
                             Task { await localization.chooseEntry(door.id) }
                         }.buttonStyle(.bordered).disabled(localization.entryBusy)
                     }
                 }
                 TimelineView(.periodic(from: .now, by: 0.5)) { time in
                     if time.date.timeIntervalSince(localization.receivedAt) < 2, let instruction = localization.instruction {
-                        Text(instruction.text).padding().background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                        Text(EnglishInterface.serviceText(instruction.text)).padding().background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
                     }
                     if let state = localization.state {
                         LabRoom3DPanel(state: state, meshes: localization.meshes, live: capture.running && time.date.timeIntervalSince(localization.receivedAt) < 2)
@@ -251,8 +251,8 @@ struct SessionLocalizationPanel: View {
 struct LocalizationSettingsView: View {
     var body: some View {
         Form {
-            Text("Localization Service подключается автоматически через Inspector при открытии камеры задания с BIM.")
-            Text("Модель берётся из задания. Пока поддерживается одна прямоугольная комната: четыре стены, пол, окна и несколько дверей; размеры IFC в метрах. Начальную дверь выбираете на модели.")
-        }.navigationTitle("Локализация")
+            Text("Localization Service connects automatically through Inspector when you open the camera for a BIM assignment.")
+            Text("The model comes from the assignment. Currently supported: one rectangular room with four walls, a floor, windows and multiple doors; IFC dimensions must be in metres. Select the entry door on the model.")
+        }.navigationTitle("Localization")
     }
 }
