@@ -35,7 +35,10 @@ class Connection:
             query = 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'
         if query.startswith('INSERT OR IGNORE INTO '):
             query = query.replace('INSERT OR IGNORE INTO ', 'INSERT INTO ', 1) + ' ON CONFLICT DO NOTHING'
-        return self.raw.execute(query.replace('?', '%s'), parameters or None)
+        # psycopg parses literal percent signs whenever parameters are supplied.
+        # Escape SQL LIKE/modulo literals before translating our qmark placeholders.
+        sql = query.replace('%', '%%').replace('?', '%s') if parameters else query
+        return self.raw.execute(sql, parameters or None)
 
     def commit(self):
         self.raw.commit()
