@@ -316,7 +316,7 @@ Geometry Inspector сохраняет исходный пакет и приня�
 .\.venv\Scripts\python.exe -B -m uvicorn ai_inspector.discrepancy_agents:create_inspector_app_from_env --factory --host 127.0.0.1 --port 8101
 ```
 
-Для обоих процессов задать INSPECTOR_AGENT_PUBLIC_URL, INSPECTOR_AGENT_DATA_DIR, INSPECTOR_AGENT_CALLERS_JSON и существующие INSPECTOR_META_BASE_URL/MODEL/API_KEY/TIMEOUT_S. Public URL в production — HTTPS. INSPECTOR_AGENT_PROFILE_JSON опционален для этих двух factories: по умолчанию version=2, IDs discrepancy_inspector/discrepancy_verifier, правильные kind/instructions/tools/budgets. Для custom profile его kind должен совпадать с factory; изменение responsibilities требует новой version. Generic factory сохраняет прежний контракт.
+Для обоих процессов задать INSPECTOR_AGENT_PUBLIC_URL, INSPECTOR_AGENT_DATA_DIR, INSPECTOR_AGENT_CALLERS_JSON и существующие INSPECTOR_META_BASE_URL/MODEL/API_KEY/TIMEOUT_S. Public URL в production — HTTPS. INSPECTOR_AGENT_PROFILE_JSON опционален для этих двух factories: по умолчанию version=3, IDs discrepancy_inspector/discrepancy_verifier, правильные kind/instructions/tools/budgets. Для custom profile его kind должен совпадать с factory; изменение responsibilities требует новой version. Generic factory сохраняет прежний контракт.
 
 INSPECTOR_AGENT_CALLERS_JSON — private array client_id/project_id/token. У Geometry Inspector caller — Bob; у Geometry Verifier caller — Geometry Inspector. Token values хранятся в Secrets, не в документах или model payload. Они различаются между собой, backend-tool, operator/device/model credentials. Приложение/телефон не получают эти keys.
 
@@ -326,7 +326,7 @@ INSPECTOR_AGENT_CALLERS_JSON — private array client_id/project_id/token. У Ge
 {
   "inspector_id": "discrepancy_verifier",
   "kind": "discrepancy_verifier",
-  "version": "2",
+  "version": "3",
   "description": "Geometry Verifier: review supplied discrepancy candidates",
   "base_url": "https://verifier.example",
   "token_env": "INSPECTOR_VERIFIER_TOKEN"
@@ -342,7 +342,7 @@ INSPECTOR_VERIFIER_TOKEN — отдельный Secret только у Geometry 
   {
     "inspector_id": "discrepancy_inspector",
     "kind": "discrepancy_inspector",
-    "version": "2",
+    "version": "3",
     "description": "Geometry Inspector: collect evidence and obtain a Geometry Verifier review",
     "base_url": "https://inspector.example",
     "token_env": "INSPECTOR_TASK_TOKEN",
@@ -374,7 +374,7 @@ Geometry Inspector вызывает только inspection_evidence(asset_id) �
 
 Публичные имена двух агентов — **Geometry Inspector** и **Geometry Verifier**. Geometry Service остаётся отдельным вычислительным API. Служебные IDs/kind `discrepancy_inspector` и `discrepancy_verifier`, имена Python-классов/factories и переменных окружения сохранены: переименование не меняет маршрутизацию и идентификаторы задач. Карточки A2A показывают новые имена при прежних skill IDs.
 
-Стандартные профили теперь имеют version `2` из-за обновления названий в instructions. При первом запуске использовать version `2` в обеих регистрациях, как в примерах выше. Для уже начатых задач сохранить их прежний профиль/версию до завершения: смена регистрации не переписывает замороженные задачи и может удержать их до восстановления сохранённой конфигурации. Предметные JSON-схемы остаются версии `1.0`.
+Стандартные профили имеют version `3`: инструкции явно описывают Geometry compact 2.0 — единицы/знак, null, качество, processing tolerance отдельно от проектного допуска, частичные surface statistics и связанные RGB/mask/overlay. При первом запуске использовать version `3` в обеих регистрациях, как в примерах выше. Маппинг evidence и сохранение прежних reviews описаны в [Geometry guide](capture-to-geometry.md#compact-result-20--agent-evidence). Для уже начатых задач сохранить их прежний профиль/версию до завершения: смена регистрации не переписывает замороженные задачи и может удержать их до восстановления сохранённой конфигурации. Предметные JSON-схемы остаются версии `1.0`.
 
 
 ### Google Cloud deployment — 2 November 2026
