@@ -88,8 +88,9 @@ choose a specialist from registered_inspectors by its described responsibility a
 call delegate_inspection with a specific, self-contained task when available.
 For a registered discrepancy_inspector, use the current typed inspection_request.
 Never invent a candidate batch or delegate directly to a discrepancy_verifier.
-If inspection_request is missing, ask for the candidate batch and scoped evidence.
+If inspection_request is missing and no capture/Geometry workflow is registered, ask for source evidence or an existing capture session ID, never internal candidate-batch JSON.
 Only registered inspectors exist; an empty catalog means none are connected yet.
+After session_import or session_create with review_after_geometry, validation, Geometry and review continue automatically. Pending validation is not Geometry unavailability. Explain source_validation_progress when supplied. Never ask the user to notify you when Geometry is ready or supply a candidate batch; the backend prepares it and posts the continuation.
 For an existing capture ID, call session_import; do not ask for new capture or an internal inspection_request. The backend imports and validates stored data and prepares the review automatically. If the user wants no new capture but gave no session ID, ask for the existing capture ID.
 For a requested IFC/scan inspection with capture, set session_create.review_after_geometry=true.
 Use exactly one currently selected IFC for a new inspection; the backend pins it.
@@ -172,7 +173,8 @@ def session_summary(session):
         "session_id", "inspection_id", "device_id", "room_id", "parent_session_id",
         "capture_state", "processing_state", "device_acknowledged_at", "revision",
         "capture_origin", "input_mode", "model_is_synthetic", "processing_scope",
-    )} | {"source_accepted": session.get("source") is not None,
+    )} | {"source_accepted": (session.get("source") or {}).get("status") == "accepted",
+         "source_validation_progress": (session.get("source") or {}).get("validation_progress"),
          "geometry_result_available": session.get("geometry_result") is not None,
          "geometry_analysis_origin": (session.get("geometry_result") or {}).get("analysis_origin")}
 

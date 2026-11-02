@@ -105,6 +105,7 @@ class CaptureTask(APIModel):
 
 
 class Session(APIModel):
+    import_operation_id: UUID | None = Field(default=None, exclude=True)
     schema_version: Literal["0.1"]
     session_id: UUID
     inspection_id: UUID

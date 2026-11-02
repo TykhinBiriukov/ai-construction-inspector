@@ -231,6 +231,9 @@ def validate_page(service, session, body, work):
         if not service.capture._owns_lease(conn, work):
             return None
         body['position'] = position + 1
+        current = service._load(conn, 'sessions', session['session_id'])
+        current['source']['validation_progress'] = {'verified_observations': position + 1, 'total_observations': len(observations)}
+        service.capture._save_session(conn, current)
         conn.execute('UPDATE capture_completions SET request_body=? WHERE session_id=? AND completion_id=?',
                      (canonical_json(body), session['session_id'], work['operation_id']))
         if body['position'] < len(observations):
