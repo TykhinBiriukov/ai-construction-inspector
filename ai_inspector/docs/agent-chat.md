@@ -239,3 +239,25 @@ Different drawing identity starts a new checklist. Older tasks without a saved s
 remain readable but cannot supply a reusable checklist. Categories and stable requirement
 IDs belong to the snapshot; summaries must not merge geometry and material/product
 verdicts. UI progress labels reuse as Using saved checklist.
+
+### Reuse a saved capture
+
+Give Bob a capture session UUID in the current message and select one IFC. The
+`session_import` tool looks up an existing project-scoped Inspector session first.
+Its original IFC must match any selected reference. Otherwise it imports the
+standalone capture from the configured Geometry Supabase bucket; without a selected
+IFC it uses `<session UUID>/reference.ifc`. No phone assignment is created.
+
+The Geometry bucket is a trusted single-project import source available only to
+operators of `INSPECTOR_PROJECT_ID`; a UUID is not authorization in a multi-tenant
+bucket. No model-provided endpoint, bucket or object path is accepted. A unique
+hash-addressed `standalone_capture_v1` manifest and one RGB-D ARKit segment are
+required. The saved command freezes the manifest, storage and IFC hashes. The
+queue verifies and pins one observation per claim, then dispatches Geometry and
+registers the existing downstream review. Device captures become `recorded_capture`;
+synthetic provenance stays synthetic. Original files/results are preserved.
+
+Repeated use reuses the imported Inspector session and its original reference.
+A different IFC for an already imported ID, multiple manifests, geometry-parts-only
+captures and capture-only Inspector sessions are rejected explicitly. The tool
+cannot silently reinterpret old geometry results or start a new camera capture.

@@ -1,5 +1,5 @@
 // The public Worker only serves assets and forwards API/WSS to the Python
-// Durable Object (30s CPU budget). All persistent app data stays in Supabase.
+// backend. All persistent app data stays in Supabase.
 const SECURITY_HEADERS = {
   'Cache-Control': 'private, no-store',
   'X-Content-Type-Options': 'nosniff',
@@ -8,6 +8,7 @@ const SECURITY_HEADERS = {
 };
 export default {
   async scheduled(controller, env, ctx) {
+    if (env.INSPECTOR_BACKEND_ORIGIN) return; // Native workers own the queue.
     await env.INSPECTOR.getByName('main-device-cancel-v2').process();
   },
   async fetch(request, env, ctx) {
@@ -18,6 +19,17 @@ export default {
       const response = new Response(asset.body, asset);
       for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value);
       return response;
+    }
+    if (env.INSPECTOR_BACKEND_ORIGIN) {
+      const upstream = new URL(env.INSPECTOR_BACKEND_ORIGIN);
+      if (upstream.protocol !== 'https:' || !env.INSPECTOR_GATEWAY_TOKEN) {
+        return new Response('Backend configuration unavailable', {status: 503});
+      }
+      upstream.pathname = upstream.pathname.replace(/\/$/, '') + url.pathname;
+      upstream.search = url.search;
+      const forwarded = new Request(upstream, request);
+      forwarded.headers.set('X-Inspector-Gateway-Token', env.INSPECTOR_GATEWAY_TOKEN);
+      return fetch(forwarded, {redirect: 'manual'});
     }
     const inspector = env.INSPECTOR.getByName('main-device-cancel-v2');
     const response = await inspector.fetch(request);

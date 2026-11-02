@@ -38,6 +38,8 @@ class CaptureWorkflow:
         self._source_store = value
 
     def store_for(self, session: dict):
+        if session["storage"].get("storage_id") == "geometry-import":
+            return self.service.geometry_engine.storage
         if session["storage"].get("provider") == "supabase":
             if self._supabase_source_store is None:
                 from .supabase_captures import SupabaseCaptureSourceStore
@@ -214,7 +216,13 @@ class CaptureWorkflow:
                 (work["session_id"], work["operation_id"]),
             ).fetchone()
             body = json.loads(row["request_body"])
-        inventory = self.store_for(session).validate(session, body["capture_ref"])
+        if body.get('import_snapshot'):
+            from .capture_import import validate_page
+            inventory = validate_page(self.service, session, body, work)
+            if inventory is None:
+                return
+        else:
+            inventory = self.store_for(session).validate(session, body["capture_ref"])
         with self.database.transaction() as connection:
             if not self._owns_lease(connection, work):
                 return
@@ -347,7 +355,8 @@ class CaptureWorkflow:
                         "UPDATE capture_completions SET data=? WHERE session_id=? AND completion_id=?",
                         (canonical_json(completion), work["session_id"], work["operation_id"]),
                     )
-                    session.update(completion=completion, capture_state="capturing", processing_state="idle")
+                    session.update(completion=completion, capture_state="sealed" if session.get("import_operation_id") else "capturing",
+                                   processing_state="failed" if session.get("import_operation_id") else "idle")
                     session["source"]["status"] = "rejected"
                 session["source"]["validation_error"] = error.body
             else:
