@@ -128,7 +128,8 @@ class GeometryEngineAdapter:
     def __init__(self, service):
         self.service, self.settings = service, service.settings
         transport = getattr(service, 'geometry_transport', None)
-        self.storage = SupabaseCaptureSourceStore(self.settings,
+        self.storage_settings = self.settings.geometry_storage_settings()
+        self.storage = SupabaseCaptureSourceStore(self.storage_settings,
             httpx.Client(transport=transport, timeout=self.settings.geometry_timeout_s) if transport else None)
 
     @staticmethod
@@ -188,7 +189,7 @@ class GeometryEngineAdapter:
             'operation_key': operation_key, 'project_id': session['project_id'], 'session_id': session['session_id'],
             'manifest_sha256': session['source']['manifest_sha256'], 'model_sha256': model['sha256'],
             'base_url': self.settings.geometry_base_url.rstrip('/'),
-            'storage_origin': self.settings.supabase_url, 'storage_bucket': self.settings.supabase_storage_bucket,
+            'storage_origin': self.storage_settings.supabase_url, 'storage_bucket': self.storage_settings.supabase_storage_bucket,
             'payload': {'session_id': session['session_id'], 'capture_manifest_path': manifest_key,
                         'ifc_object_key': model_key, 'parameters': {'tolerance_m': 0.1,
                          'include_boundary_candidates': True, 'interior_point_ifc_m': None}},
@@ -197,8 +198,8 @@ class GeometryEngineAdapter:
     def check_config(self, command):
         self.require_current_command(command)
         if (command['base_url'] != self.settings.geometry_base_url.rstrip('/')
-                or command['storage_origin'] != self.settings.supabase_url
-                or command['storage_bucket'] != self.settings.supabase_storage_bucket):
+                or command['storage_origin'] != self.storage_settings.supabase_url
+                or command['storage_bucket'] != self.storage_settings.supabase_storage_bucket):
             raise unavailable('geometry_configuration_changed')
         if not self.settings.geometry_api_token:
             raise unavailable('geometry_credentials_not_configured')

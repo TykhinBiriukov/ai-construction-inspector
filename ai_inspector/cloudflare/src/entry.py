@@ -57,6 +57,9 @@ class InspectorRuntime(DurableObject):
             geometry_review_inspector_id=getattr(env,'INSPECTOR_GEOMETRY_REVIEW_INSPECTOR_ID',''),
             geometry_api_token=getattr(env,'INSPECTOR_GEOMETRY_API_TOKEN',''),
             geometry_api_username=getattr(env,'INSPECTOR_GEOMETRY_API_USERNAME','') or '',
+            geometry_supabase_url=getattr(env,'INSPECTOR_GEOMETRY_SUPABASE_URL','') or '',
+            geometry_supabase_storage_bucket=getattr(env,'INSPECTOR_GEOMETRY_SUPABASE_STORAGE_BUCKET','') or '',
+            geometry_supabase_secret_key=getattr(env,'INSPECTOR_GEOMETRY_SUPABASE_SECRET_KEY','') or '',
             remote_agents_json=getattr(env,'INSPECTOR_REMOTE_AGENTS_JSON','[]') or '[]',
         )
         service = InspectorService(settings,

@@ -12,7 +12,11 @@
     "INSPECTOR_META_TIMEOUT_S": "30",
     "INSPECTOR_AGENT_MAX_STEPS": "6",
     "INSPECTOR_REMOTE_AGENTS_JSON": "[{\"inspector_id\":\"discrepancy_inspector\",\"kind\":\"discrepancy_inspector\",\"version\":\"2\",\"description\":\"Geometry Inspector: collect evidence and obtain a Geometry Verifier review\",\"base_url\":\"https://35.205.36.182.sslip.io/geometry-inspector\",\"token_env\":\"INSPECTOR_TASK_TOKEN\",\"tool_token_env\":\"INSPECTOR_TOOL_TOKEN\",\"allowed_tools\":[\"inspection_evidence\"]}]",
-    "INSPECTOR_DRAWING_PHOTO_WORKFLOW": "staged"
+    "INSPECTOR_DRAWING_PHOTO_WORKFLOW": "staged",
+    "INSPECTOR_GEOMETRY_BASE_URL": "https://35.205.36.182.sslip.io",
+    "INSPECTOR_GEOMETRY_REVIEW_INSPECTOR_ID": "discrepancy_inspector",
+    "INSPECTOR_GEOMETRY_SUPABASE_URL": "https://mrsiftnkwguehudbbqad.supabase.co",
+    "INSPECTOR_GEOMETRY_SUPABASE_STORAGE_BUCKET": "inspection-captures"
   },
   "observability": {
     "enabled": true
