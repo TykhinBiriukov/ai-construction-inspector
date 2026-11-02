@@ -324,9 +324,9 @@ class GeometryReview:
         configured = state['inspector_id'] or self.service.settings.geometry_review_inspector_id
         profile = self.profile(configured)
         if rows and (profile is None or profile.kind != 'discrepancy_inspector'):
-            raise APIError(503, 'geometry_review_not_configured', 'Configure the discrepancy Inspector and verifier services', retryable=True)
+            raise APIError(503, 'geometry_review_not_configured', 'Configure the Geometry Inspector and Geometry Verifier services', retryable=True)
         if rows and state['profile'] is not None and state['profile'] != profile.model_dump(mode='json'):
-            raise APIError(503, 'geometry_review_configuration_changed', 'Restore the saved Inspector registration to resume', retryable=True)
+            raise APIError(503, 'geometry_review_configuration_changed', 'Restore the saved Geometry Inspector registration to resume', retryable=True)
         state.update(inspector_id=configured, profile=profile.model_dump(mode='json') if profile else None, error=None)
         if state['prepared'] < len(rows):
             state['status'] = 'preparing_evidence'
@@ -346,11 +346,11 @@ class GeometryReview:
             run, _ = self.service.agent.submit(principal, state['chat_id'], message,
                 geometry_continuation={'review_id': state['review_id'], 'inspector_id': configured, 'internal_batch': True}, geometry_work=work)
             if run['status'] == 'failed':
-                raise APIError(502, 'geometry_review_failed', 'The saved Inspector review failed; its run and evidence were retained')
+                raise APIError(502, 'geometry_review_failed', 'The saved Geometry Inspector review failed; its run and evidence were retained')
             if run['status'] == 'completed':
                 report = run.get('inspection_report')
                 if report is None:
-                    raise APIError(502, 'geometry_review_failed', 'Inspector completed without a validated report')
+                    raise APIError(502, 'geometry_review_failed', 'Geometry Inspector completed without a validated report')
                 state['reports'].append(report)
                 state['batch_runs'].append(run['run_id'])
             self.save(work, state, delay=5)

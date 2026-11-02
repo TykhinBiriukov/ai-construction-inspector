@@ -85,7 +85,7 @@ class InspectorAgentService:
 
     def card(self):
         profile = self.profile
-        return {"name": profile.inspector_id, "description": profile.description, "version": profile.version,
+        return {"name": profile.display_name, "description": profile.description, "version": profile.version,
                 "metadata": {"workflow_kind": profile.kind},
                 "supportedInterfaces": [{"url": self.public_url, "protocolBinding": "HTTP+JSON", "protocolVersion": VERSION}],
                 "capabilities": {"streaming": False, "pushNotifications": False, "extendedAgentCard": False,
@@ -94,7 +94,7 @@ class InspectorAgentService:
                 "securitySchemes": {"serviceBearer": {"httpAuthSecurityScheme": {"scheme": "bearer"}}},
                 "securityRequirements": [{"schemes": {"serviceBearer": {"list": []}}}],
                 "defaultInputModes": ["text/plain"], "defaultOutputModes": ["text/plain"],
-                "skills": [{"id": profile.inspector_id, "name": profile.inspector_id,
+                "skills": [{"id": profile.inspector_id, "name": profile.display_name,
                             "description": profile.description, "tags": ["construction", "inspection"]}]}
 
     def validate_payload(self, data):

@@ -25,6 +25,12 @@ class InspectorProfile(APIModel):
     instructions_prompt: Annotated[str, Field(pattern=r"^[a-zA-Z0-9_/-]{1,128}$")] | None = None
     instructions_prompt_version: Annotated[int, Field(ge=1)] | None = None
 
+    @property
+    def display_name(self):
+        # Presentation only: keep persisted profile identities and hashes unchanged.
+        return {"discrepancy_inspector": "Geometry Inspector",
+                "discrepancy_verifier": "Geometry Verifier"}.get(self.kind, self.inspector_id)
+
     @model_serializer(mode="wrap")
     def compatible_snapshot(self, handler):
         value = handler(self)
