@@ -240,6 +240,20 @@ class Telemetry:
                                "sha256": hashlib.sha256(text.encode()).hexdigest()}
         return snapshots[name]["text"]
 
+    def score(self, trace_id, name, value, *, observation_id=None, comment=None):
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name):
+            raise ValueError("Invalid score name")
+        if type(value) not in (int, float, bool) or not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError("Scores must be between zero and one")
+        if self.client:
+            try:
+                self.client.create_score(trace_id=trace_id, observation_id=observation_id,
+                    name=name, value=float(value), data_type="NUMERIC", comment=comment)
+                return True
+            except Exception:
+                pass
+        return False
+
     def flush(self):
         if self.client:
             try:
