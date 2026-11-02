@@ -389,7 +389,11 @@ Append `/.well-known/agent-card.json`, `/contracts` or `/docs` for discovery and
 schemas. Task endpoints require the caller's dedicated Bearer token plus
 `A2A-Version: 1.0` and `A2A-Extensions: urn:ai-inspector:delegation:v1`. Credentials
 are server-only and distinct for Bob→Inspector, Inspector→Verifier and the
-Inspector→Bob evidence tool. Both profiles use version `2`, project `demo-building`.
+Inspector→Bob evidence tool. The initial deployment used profile version `2`,
+project `demo-building`. Current code defaults to version `3`; check both live
+agent cards and both caller registrations before changing routing. The deployment
+registry and VM environment are independently managed, so publishing code alone
+does not synchronize their versions or prove a complete inspection run.
 
 The Cloudflare deployment registry includes only Geometry Inspector, with the
 `inspection_evidence` tool grant. `INSPECTOR_TASK_TOKEN` and `INSPECTOR_TOOL_TOKEN`
