@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 import httpx
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator, model_serializer
 
 from .errors import APIError
 from .inspectors import InspectorID
@@ -58,14 +58,22 @@ class RemoteInspector(APIModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     transport: Literal["a2a"] = "a2a"
     inspector_id: InspectorID
+    kind: Literal["generic", "discrepancy_inspector", "discrepancy_verifier"] = "generic"
     version: Annotated[str, Field(min_length=1, max_length=64)]
     description: Annotated[str, Field(min_length=1, max_length=1000)]
     base_url: Annotated[str, Field(max_length=2000)]
     token_env: Annotated[str, Field(pattern=r"^[A-Z_][A-Z0-9_]{0,95}$")]
     tool_token_env: Annotated[str, Field(pattern=r"^[A-Z_][A-Z0-9_]{0,95}$")] | None = None
-    allowed_tools: tuple[Literal["session_get", "device_status"], ...] = ()
+    allowed_tools: tuple[Literal["session_get", "device_status", "inspection_evidence"], ...] = ()
     timeout_s: Annotated[float, Field(ge=1, le=30, allow_inf_nan=False)] = 10.0
     poll_interval_s: Annotated[float, Field(ge=1, le=60, allow_inf_nan=False)] = 2.0
+
+    @model_serializer(mode="wrap")
+    def compatible_snapshot(self, handler):
+        value = handler(self)
+        if self.kind == "generic":
+            value.pop("kind", None)
+        return value
 
     _url = field_validator("base_url")(service_url)
 
@@ -73,6 +81,11 @@ class RemoteInspector(APIModel):
     def tool_grant(self):
         if self.allowed_tools and (not self.tool_token_env or self.tool_token_env == self.token_env):
             raise ValueError("Backend tools require a separate credential reference")
+        if ((self.kind == "discrepancy_verifier" and self.allowed_tools)
+                or (self.kind != "discrepancy_inspector" and "inspection_evidence" in self.allowed_tools)):
+            raise ValueError("This agent role cannot access evidence backend tools")
+        if self.kind == "discrepancy_inspector" and set(self.allowed_tools) != {"inspection_evidence"}:
+            raise ValueError("Inspector requires exactly its scoped evidence backend grant")
         return self
 
     @field_validator("version", "description")
@@ -129,6 +142,7 @@ class DelegationInput(APIModel):
     delegation_run_id: UUID
     context: dict
     reference: str | list[dict]
+    payload: dict | None = None
 
     @field_validator("reference")
     @classmethod
@@ -228,6 +242,8 @@ class RemoteInspectorClient(ServiceHTTP):
                      and any(item.get("id") == profile.inspector_id for item in card["skills"])
                      and any(item.get("url", "").rstrip("/") == self.base_url and item.get("protocolBinding") == "HTTP+JSON"
                              and item.get("protocolVersion") == VERSION for item in card["supportedInterfaces"]))
+            if profile.kind != "generic":
+                valid = valid and card.get("metadata", {}).get("workflow_kind") == profile.kind
         except (ValueError, TypeError, KeyError, AttributeError):
             raise APIError(502, "invalid_remote_agent_output", "The inspector service returned an invalid Agent Card") from None
         if not valid:

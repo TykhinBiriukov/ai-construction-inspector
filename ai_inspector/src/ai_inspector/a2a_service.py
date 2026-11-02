@@ -44,11 +44,13 @@ class AgentCaller(APIModel):
 
 
 class BackendToolClient(ServiceHTTP):
-    def execute(self, inspector_id, binding, name, operation_id):
-        if name not in ("session_get", "device_status"):
+    def execute(self, inspector_id, binding, name, operation_id, arguments=None):
+        if name not in ("session_get", "device_status", "inspection_evidence"):
             raise APIError(502, "inspector_tool_forbidden", "The inspector selected an unavailable tool")
         body = {key: binding[key] for key in ("project_id", "chat_id", "parent_run_id", "delegation_run_id", "operation_id")}
         body["tool_operation_id"] = operation_id
+        if name == "inspection_evidence":
+            body["arguments"] = arguments
         return self.request("POST", f"/v1/inspector-tools/{inspector_id}/{name}", body=canonical_json(body)), None
 
 
@@ -65,7 +67,7 @@ class InspectorAgentService:
         private = {settings.operator_token, settings.device_token, settings.meta_api_key}
         if any(token in private for token in tokens):
             raise ValueError("Inspector credentials must differ from operator, device and model credentials")
-        if profile.allowed_tools and tool_client is None:
+        if set(profile.allowed_tools) & {"session_get", "device_status", "inspection_evidence"} and tool_client is None:
             raise ValueError("An inspector with backend tools requires a configured tool client")
         if tool_client and tool_client.token in private | set(tokens):
             raise ValueError("Backend tools require a separate service credential")
@@ -84,6 +86,7 @@ class InspectorAgentService:
     def card(self):
         profile = self.profile
         return {"name": profile.inspector_id, "description": profile.description, "version": profile.version,
+                "metadata": {"workflow_kind": profile.kind},
                 "supportedInterfaces": [{"url": self.public_url, "protocolBinding": "HTTP+JSON", "protocolVersion": VERSION}],
                 "capabilities": {"streaming": False, "pushNotifications": False, "extendedAgentCard": False,
                                  "extensions": [{"uri": EXTENSION, "required": True,
@@ -93,6 +96,45 @@ class InspectorAgentService:
                 "defaultInputModes": ["text/plain"], "defaultOutputModes": ["text/plain"],
                 "skills": [{"id": profile.inspector_id, "name": profile.inspector_id,
                             "description": profile.description, "tags": ["construction", "inspection"]}]}
+
+    def validate_payload(self, data):
+        if data.get("payload") is not None:
+            raise APIError(400, "invalid_argument", "This generic inspector does not accept a typed inspection payload")
+
+    def system_message(self, instructions, context):
+        return INSPECTOR_PROMPT + "\nSpecialty instructions:\n" + instructions + "\nServer context: " + canonical_json(context)
+
+    def initialize_state(self, state):
+        return state
+
+    def prepare_model(self, state):
+        if not state.get("steps") and not state.get("pending_model") and self.profile.instructions_prompt:
+            instructions = self.telemetry.resolve_prompt(state, self.profile.instructions_prompt,
+                self.profile.instructions, version=self.profile.instructions_prompt_version)
+            state["messages"][0]["content"] = self.system_message(instructions, state["binding"]["context"])
+        messages = state["messages"]
+        return [messages[0]] + state["history"] + messages[1:], [item for item in TOOLS if item["function"]["name"] in self.profile.allowed_tools]
+
+    def plan_tool(self, state, call):
+        name = call["function"]["name"]
+        if name not in self.profile.allowed_tools:
+            raise APIError(502, "inspector_tool_forbidden", "The inspector selected an unallowed tool")
+        try:
+            NoArguments.model_validate_json(call["function"]["arguments"])
+        except ValueError:
+            raise APIError(502, "invalid_tool_arguments", "The inspector supplied invalid tool arguments") from None
+        return {"name": name, "tool_call_id": call["id"], "operation_id": str(uuid5(UUID(state["run_id"]), f"tool:{state['steps']}"))}
+
+    def execute_tool(self, state, plan, checkpoint):
+        if plan["name"] not in self.profile.allowed_tools:
+            raise APIError(502, "inspector_tool_forbidden", "The inspector selected an unallowed tool")
+        return self.tool_client.execute(self.profile.inspector_id, state["binding"], plan["name"], plan["operation_id"])
+
+    def finalize_reply(self, state, content):
+        return content
+
+    def contracts(self):
+        return {"workflow_kind": self.profile.kind, "schemas": {}}
 
     def submit(self, caller, raw, *, traceparent=None):
         try:
@@ -105,6 +147,9 @@ class InspectorAgentService:
         if str(request.message.messageId) != data["operation_id"] or request.message.taskId:
             raise APIError(400, "invalid_argument", "A new task requires its stable operation ID as messageId")
         body = canonical_json(raw)
+        if len(body.encode("utf-8")) > MAX_BODY:
+            raise APIError(413, "request_too_large", "Inspector task request exceeds its size limit")
+        self.validate_payload(data)
         task_text = request.message.parts[0].text
         if not task_text.strip():
             raise APIError(400, "invalid_argument", "The delegated task cannot be blank")
@@ -118,15 +163,15 @@ class InspectorAgentService:
             for prior in previous:
                 history.extend([{"role": "user", "content": prior["task"]}, {"role": "assistant", "content": prior["reply"]}])
             now = utc_now()
-            return {"run_id": task_id, "context_id": context_id, "task": task_text, "binding": data,
+            state = {"run_id": task_id, "context_id": context_id, "task": task_text, "binding": data,
                     "_trace_context": trace_context(traceparent), "inspector_id": self.profile.inspector_id,
                     "request_sha256": digest(raw), "wire_message": raw["message"], "profile": self.profile.model_dump(mode="json", exclude_none=True),
                     "status": "pending", "reply": None, "error": None, "created_at": now, "updated_at": now,
-                    "messages": [{"role": "developer", "content": INSPECTOR_PROMPT + "\nSpecialty instructions:\n"
-                                  + self.profile.instructions + "\nServer context: " + canonical_json(data["context"])},
+                    "messages": [{"role": "developer", "content": self.system_message(self.profile.instructions, data["context"])},
                                  {"role": "user", "content": data["reference"]}, {"role": "user", "content": task_text}],
                     "history": history, "history_run_ids": [item["run_id"] for item in previous],
                     "steps": 0, "pending_model": None, "pending_tool": None, "tool_results": [], "retry_failures": 0}
+            return self.initialize_state(state)
         return self.store.admit(caller.client_id, caller.project_id, data["operation_id"], body,
                                 self.profile.model_dump(mode="json", exclude_none=True), make_state)
 
@@ -162,39 +207,23 @@ class InspectorAgentService:
                 raise APIError(503, "inspector_unavailable", "Restore the saved inspector profile to resume this task", retryable=True)
             def checkpoint(**_):
                 self.store.save(state, token, lease_seconds)
-            def prepare_model():
-                if not state.get("steps") and not state.get("pending_model") and self.profile.instructions_prompt:
-                    instructions = self.telemetry.resolve_prompt(state, self.profile.instructions_prompt,
-                        self.profile.instructions, version=self.profile.instructions_prompt_version)
-                    state["messages"][0]["content"] = INSPECTOR_PROMPT + "\nSpecialty instructions:\n" + instructions + "\nServer context: " + canonical_json(state["binding"]["context"])
-                messages = state["messages"]
-                return [messages[0]] + state["history"] + messages[1:], [item for item in TOOLS if item["function"]["name"] in self.profile.allowed_tools]
-            def plan_tool(call):
-                name = call["function"]["name"]
-                if name not in self.profile.allowed_tools:
-                    raise APIError(502, "inspector_tool_forbidden", "The inspector selected an unallowed tool")
-                try:
-                    NoArguments.model_validate_json(call["function"]["arguments"])
-                except ValueError:
-                    raise APIError(502, "invalid_tool_arguments", "The inspector supplied invalid tool arguments") from None
-                return {"name": name, "tool_call_id": call["id"], "operation_id": str(uuid5(UUID(state["run_id"]), f"tool:{state['steps']}"))}
-            def execute_tool(plan):
-                if plan["name"] not in self.profile.allowed_tools:
-                    raise APIError(502, "inspector_tool_forbidden", "The inspector selected an unallowed tool")
-                return self.tool_client.execute(self.profile.inspector_id, state["binding"], plan["name"], plan["operation_id"])
             AgentHarness(state, model=self.model, max_steps=self.profile.max_steps, checkpoint=checkpoint,
-                         prepare_model=prepare_model, plan_tool=plan_tool, execute_tool=execute_tool,
-                         telemetry=self.telemetry).advance()
+                         prepare_model=lambda: self.prepare_model(state), plan_tool=lambda call: self.plan_tool(state, call),
+                         execute_tool=lambda plan: self.execute_tool(state, plan, checkpoint),
+                         telemetry=self.telemetry, finalize_reply=lambda content: self.finalize_reply(state, content),
+                         fatal_tool_errors=getattr(self, "fatal_tool_errors", ())).advance()
         except APIError as error:
             if error.body["code"] == "agent_lease_lost":
                 return True
             state.update(status="retryable" if error.body["retryable"] else "failed", error=error.body, updated_at=utc_now())
             if error.body["retryable"]:
-                if error.body["code"] not in ("model_not_configured", "inspector_unavailable"):
+                if error.body["code"] not in ("model_not_configured", "inspector_unavailable", "verification_pending", "verification_not_configured"):
                     state["retry_failures"] += 1
                 if state["retry_failures"] >= 12:
                     state.update(status="failed", error=APIError(502, "agent_retry_limit", "The inspector reached its retry limit").body)
                 next_attempt_at = time.time() + (30 if state["retry_failures"] == 0 else min(60, 2 ** state["retry_failures"]))
+                if error.body["code"] == "verification_pending":
+                    next_attempt_at = state["verification"]["next_poll_at"]
         except Exception:
             state["retry_failures"] += 1
             state.update(status="failed" if state["retry_failures"] >= 12 else "retryable",
@@ -270,6 +299,10 @@ def create_inspector_app(service, *, background_worker=True):
     def card():
         return service.card()
 
+    @app.get("/contracts")
+    def contracts():
+        return service.contracts()
+
     @app.post("/message:send")
     async def send(request: Request):
         identity = caller(request)
@@ -310,10 +343,16 @@ def create_inspector_app(service, *, background_worker=True):
     return app
 
 
-def create_app_from_env():
+def create_app_from_env(*, role=None):
     """uvicorn ai_inspector.a2a_service:create_app_from_env --factory ..."""
     try:
-        profile = InspectorProfile.model_validate_json(os.environ["INSPECTOR_AGENT_PROFILE_JSON"])
+        if role and not os.environ.get("INSPECTOR_AGENT_PROFILE_JSON"):
+            from .discrepancy_agents import default_profile
+            profile = default_profile(role)
+        else:
+            profile = InspectorProfile.model_validate_json(os.environ["INSPECTOR_AGENT_PROFILE_JSON"])
+        if role and profile.kind != role:
+            raise ValueError("The configured profile has a different role")
         callers = [AgentCaller.model_validate(item) for item in json.loads(os.environ["INSPECTOR_AGENT_CALLERS_JSON"])]
         settings = Settings(data_dir=Path(os.environ.get("INSPECTOR_AGENT_DATA_DIR", "agent-data")),
                             observability=ObservabilityConfig.from_mapping(os.environ),
@@ -323,10 +362,15 @@ def create_app_from_env():
                             meta_api_key=os.environ.get("INSPECTOR_META_API_KEY", ""),
                             meta_timeout_s=float(os.environ.get("INSPECTOR_META_TIMEOUT_S", "30")))
         tools = None
-        if profile.allowed_tools:
+        if set(profile.allowed_tools) & {"session_get", "device_status", "inspection_evidence"}:
             tools = BackendToolClient(os.environ["INSPECTOR_AGENT_BACKEND_URL"], os.environ["INSPECTOR_AGENT_BACKEND_TOKEN"])
-        service = InspectorAgentService(settings, profile=profile, database_path=settings.data_dir / "tasks.sqlite3",
-                                        public_url=os.environ["INSPECTOR_AGENT_PUBLIC_URL"], callers=callers, tool_client=tools)
+        options = dict(profile=profile, database_path=settings.data_dir / "tasks.sqlite3",
+                       public_url=os.environ["INSPECTOR_AGENT_PUBLIC_URL"], callers=callers, tool_client=tools)
+        if profile.kind == "generic":
+            service = InspectorAgentService(settings, **options)
+        else:
+            from .discrepancy_agents import service_from_env
+            service = service_from_env(settings, **options)
     except (ValueError, KeyError, TypeError):
         raise ValueError("Invalid inspector service environment; check profile, callers, URLs and server-only credentials") from None
     return create_inspector_app(service)

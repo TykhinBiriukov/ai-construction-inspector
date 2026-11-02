@@ -21,6 +21,7 @@ Open `/` for the operational console or `/ui/demo.html` for the document/chat wo
 | Concern | Guide |
 |---|---|
 | Agent roles, registration, A2A and recovery | [Agent runtime](docs/agent-chat.md) |
+| Inspector → separate verification agent, JSON/evidence contracts and native setup | [Discrepancy review agents](docs/ifc-discrepancy-review.md) |
 | Operator UI, chat/files, intake and capture creation | [Web integration](docs/web-integration.md) |
 | Device authentication, assignment, capture/upload and reconnect | [iPhone integration](docs/ios-integration.md) |
 | Single-ZIP capture layout | [ZIP format](docs/zip-capture.md) |

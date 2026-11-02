@@ -12,7 +12,7 @@ from .storage import canonical_json
 
 
 class AgentHarness:
-    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool, telemetry=None):
+    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool, telemetry=None, finalize_reply=None, fatal_tool_errors=()):
         self.state = state
         self.model = model
         if getattr(model, "analysis_origin", None) in ("synthetic", "mock", "recorded"):
@@ -23,6 +23,8 @@ class AgentHarness:
         self.plan_tool = plan_tool
         self.execute_tool = execute_tool
         self.telemetry = telemetry or Telemetry()
+        self.finalize_reply = finalize_reply
+        self.fatal_tool_errors = frozenset(fatal_tool_errors)
 
     def _start_activity(self, kind, name, operation_id):
         events = self.state.setdefault("activity_events", [])
@@ -72,7 +74,7 @@ class AgentHarness:
                             span.update(output={"status": "failed" if result.get("error") else "completed",
                                                 "result_keys": list(result)[:20]})
                     except APIError as error:
-                        if error.body["retryable"]:
+                        if error.body["retryable"] or error.body["code"] in self.fatal_tool_errors:
                             raise
                         result, session_id = {"error": error.body}, None
                     self._finish_activity(activity, started, "failed" if result.get("error") else "completed",
@@ -141,6 +143,19 @@ class AgentHarness:
                     state["pending_tool"] = plan
                     self.checkpoint()
                 else:
+                    if self.finalize_reply is not None:
+                        try:
+                            message["content"] = self.finalize_reply(message["content"])
+                        except APIError as error:
+                            if error.body["code"] != "invalid_inspection_output":
+                                raise
+                            state["messages"].append(message)
+                            state["output_validation_errors"] = state.get("output_validation_errors", 0) + 1
+                            state["messages"].append({"role": "user", "content": "Output validation failed: " + error.body["message"] + ". Return a corrected complete result using only the supplied evidence."})
+                            self.checkpoint()
+                            if state["output_validation_errors"] > 2:
+                                raise APIError(502, "inspection_output_invalid", "The agent could not produce a valid complete inspection result") from None
+                            continue
                     state["messages"].append(message)
                     state.update(status="completed", reply=message["content"], updated_at=utc_now())
                     self.checkpoint()

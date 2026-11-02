@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator, model_serializer
 
 from .errors import APIError
 from .schemas import APIModel
@@ -16,18 +16,31 @@ class InspectorProfile(APIModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     inspector_id: InspectorID
+    kind: Literal["generic", "discrepancy_inspector", "discrepancy_verifier"] = "generic"
     version: Annotated[str, Field(min_length=1, max_length=64)]
     description: Annotated[str, Field(min_length=1, max_length=1000)]
     instructions: Annotated[str, Field(min_length=1, max_length=16000)]
-    allowed_tools: tuple[Literal["session_get", "device_status"], ...] = ()
+    allowed_tools: tuple[Literal["session_get", "device_status", "inspection_evidence", "review_candidates"], ...] = ()
     max_steps: Annotated[int, Field(ge=1, le=32)] = 6
     instructions_prompt: Annotated[str, Field(pattern=r"^[a-zA-Z0-9_/-]{1,128}$")] | None = None
     instructions_prompt_version: Annotated[int, Field(ge=1)] | None = None
+
+    @model_serializer(mode="wrap")
+    def compatible_snapshot(self, handler):
+        value = handler(self)
+        if self.kind == "generic":
+            value.pop("kind", None)  # Preserve existing profile hashes, A2A context IDs and saved histories.
+        return value
 
     @model_validator(mode="after")
     def pinned_prompt(self):
         if bool(self.instructions_prompt) != bool(self.instructions_prompt_version):
             raise ValueError("Inspector prompt name and immutable version must be configured together")
+        allowed = {"generic": {"session_get", "device_status"},
+                   "discrepancy_inspector": {"inspection_evidence", "review_candidates"},
+                   "discrepancy_verifier": set()}[self.kind]
+        if not set(self.allowed_tools) <= allowed:
+            raise ValueError("Tools are outside this agent role")
         return self
 
     @field_validator("allowed_tools")
@@ -67,6 +80,8 @@ class InspectorRegistry:
             if not isinstance(profile, (InspectorProfile, RemoteInspector)):
                 raise TypeError("Inspectors must be server-defined local or remote profiles")
             profile = type(profile).model_validate(profile.model_dump(warnings=False))
+            if isinstance(profile, InspectorProfile) and profile.kind != "generic":
+                raise ValueError("Discrepancy agents require independent A2A services")
             if profile.inspector_id == "orchestrator" or profile.inspector_id in self._profiles:
                 raise ValueError("Inspector IDs must be unique and cannot be orchestrator")
             if isinstance(profile, RemoteInspector):
@@ -87,7 +102,7 @@ class InspectorRegistry:
         return profile
 
     def catalog(self):
-        return [profile.model_dump(include={"inspector_id", "version", "description"}) for profile in self._profiles.values()]
+        return [profile.model_dump(include={"inspector_id", "version", "description", "kind"}) for profile in self._profiles.values()]
 
     def tools(self):
         if not self._profiles:
