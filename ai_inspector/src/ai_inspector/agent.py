@@ -190,6 +190,14 @@ def session_summary(session):
          "geometry_analysis_origin": (session.get("geometry_result") or {}).get("analysis_origin")}
 
 
+def delegation_session_summary(session):
+    """Keep conversation progress out of the established flat A2A projection."""
+    summary = session_summary(session)
+    if summary is not None:
+        summary.pop("source_validation_progress", None)
+    return summary
+
+
 class OrchestratorAgent:
     def __init__(self, service, model_client=None, *, inspectors=(), remote_transport=None, secret_resolver=None):
         self.service = service
@@ -429,7 +437,7 @@ class OrchestratorAgent:
                 raise APIError(502, "invalid_tool_arguments", "A typed inspection_request with pinned candidate evidence is required")
             chat, session = self._context(principal, run)
             context = {"project_id": chat["project_id"], "device_id": chat["device_id"],
-                       "room_id": chat["room_id"], "session": session_summary(session)}
+                       "room_id": chat["room_id"], "session": delegation_session_summary(session)}
             child_id = str(uuid5(UUID(operation_id), "inspector"))
             if isinstance(profile, RemoteInspector):
                 if session and session.get("source"):

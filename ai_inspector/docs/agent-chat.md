@@ -257,6 +257,10 @@ queue verifies and pins one observation per claim, then dispatches Geometry and
 registers the existing downstream review. Device captures become `recorded_capture`;
 synthetic provenance stays synthetic. Original files/results are preserved.
 
+`source_validation_progress` is available to the main conversation for progress
+explanations. Delegation retains the existing flat A2A session projection and omits
+this progress object; task/source bindings and the verifier contract are unchanged.
+
 Repeated use reuses the imported Inspector session and its original reference.
 A different IFC for an already imported ID, multiple manifests, geometry-parts-only
 captures and capture-only Inspector sessions are rejected explicitly. The tool
