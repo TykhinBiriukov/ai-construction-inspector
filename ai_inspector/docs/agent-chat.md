@@ -240,28 +240,30 @@ remain readable but cannot supply a reusable checklist. Categories and stable re
 IDs belong to the snapshot; summaries must not merge geometry and material/product
 verdicts. UI progress labels reuse as Using saved checklist.
 
-### Reuse a saved capture
+### Reuse a saved Geometry result
 
-Give Bob a capture session UUID in the current message and select one IFC. The
-`session_import` tool looks up an existing project-scoped Inspector session first.
-Its original IFC must match any selected reference. Otherwise it imports the
-standalone capture from the configured Geometry Supabase bucket; without a selected
-IFC it uses `<session UUID>/reference.ifc`. No phone assignment is created.
+Give Bob the capture session UUID in a new chat and optionally select one IFC.
+`session_import` now attaches only an already completed Geometry result. It selects
+the most recently completed result matching that session and the selected IFC hash;
+without a selected IFC it uses the completed job's original reference. This mode
+never submits a Geometry job, reconstructs, segments, or silently falls back to raw
+capture processing. No matching result produces a clear error without work creation.
 
-The Geometry bucket is a trusted single-project import source available only to
-operators of `INSPECTOR_PROJECT_ID`; a UUID is not authorization in a multi-tenant
-bucket. No model-provided endpoint, bucket or object path is accepted. A unique
-hash-addressed `standalone_capture_v1` manifest and one RGB-D ARKit segment are
-required. The saved command freezes the manifest, storage and IFC hashes. The
-queue verifies and pins one observation per claim, then dispatches Geometry and
-registers the existing downstream review. Device captures become `recorded_capture`;
-synthetic provenance stays synthetic. Original files/results are preserved.
+The configured Geometry bucket is a trusted single-project source, available only
+to operators of `INSPECTOR_PROJECT_ID`. Model-provided endpoints and storage keys
+are forbidden. Result metadata, capture identity, IFC hash, committed result/stage
+manifests and bounded evidence are checked by the normal Geometry adapter. Raw
+RGB-D files and large reconstruction artifacts are not reprocessed. Provenance says
+`saved_result`; previous local context is retained in an audit receipt, old Geometry
+jobs/results are never deleted. A cancelled chat review stays cancelled: start a new
+chat for a new test. Active processing must be stopped before switching modes.
 
 `source_validation_progress` is available to the main conversation for progress
 explanations. Delegation retains the existing flat A2A session projection and omits
 this progress object; task/source bindings and the verifier contract are unchanged.
 
-Repeated use reuses the imported Inspector session and its original reference.
-A different IFC for an already imported ID, multiple manifests, geometry-parts-only
-captures and capture-only Inspector sessions are rejected explicitly. The tool
-cannot silently reinterpret old geometry results or start a new camera capture.
+The queue reads the saved result, prepares evidence, delegates Inspector → Verifier
+and posts Bob's continuation automatically. The user supplies neither candidate-batch
+JSON nor a notification that Geometry is ready. The UI identifies loading a saved
+result and shows reviewed batch counts. New phone capture remains a separate explicit
+`session_create` action; previously queued raw imports retain their frozen commands.

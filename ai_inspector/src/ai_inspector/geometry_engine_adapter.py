@@ -260,6 +260,8 @@ class GeometryEngineAdapter:
 
     def request(self, method, command, suffix, client=None, **kwargs):
         self.check_config(command)
+        if command.get('read_only_result') and method != 'GET':
+            raise APIError(409, 'saved_result_read_only', 'Saved-result mode cannot start Geometry computation')
         owns = client is None
         client = client or httpx.Client(transport=getattr(self.service, 'geometry_transport', None), timeout=self.settings.geometry_timeout_s)
         try:
@@ -365,6 +367,8 @@ class GeometryEngineAdapter:
         body = self.request('GET', command, '/inspections/' + remote_id, client)
         self.validate_status(body, command, remote_id)
         status = body['status']
+        if command.get('read_only_result') and (status != 'completed' or body.get('result_manifest_sha256') != command['expected_result_manifest_sha256']):
+            raise invalid()
         result = None
         if status == 'completed':
             if body.get('ifc_sha256') != command['model_sha256']:
@@ -416,6 +420,7 @@ class GeometryEngineAdapter:
                 'model_version': session['model_version'], 'model_sha256': command['model_sha256'],
                 'geometry_revision': 1, 'job_revision': 3, 'processing_scope': 'geometry_only_v1',
                 'analysis_origin': 'recorded_model' if session.get('input_mode') == 'recorded_capture' else 'live_model',
+                'processing_mode': 'saved_result' if command.get('read_only_result') else 'full_pipeline',
                 'is_synthetic': session.get('capture_origin') == 'synthetic',
                 'model_is_synthetic': session.get('model_is_synthetic', False),
                 'observation_accounting': 'unreported_by_geometry', 'evidence_observation_ids': [],
