@@ -151,9 +151,10 @@ class GeometryEngineAdapter:
     def plan(self, session, inventory, inspection, job_id, operation_key):
         if not self.settings.supabase_enabled:
             raise unavailable('geometry_storage_not_configured')
+        source_settings = self.storage_settings if session['storage'].get('storage_id') == 'geometry-import' else self.settings
         if session['storage'].get('provider') == 'supabase' and (
-                session['storage'].get('project_url') != self.settings.supabase_url.rstrip('/')
-                or session['storage'].get('bucket') != self.settings.supabase_storage_bucket):
+                session['storage'].get('project_url') != source_settings.supabase_url.rstrip('/')
+                or session['storage'].get('bucket') != source_settings.supabase_storage_bucket):
             raise unavailable('geometry_storage_configuration_changed')
         model = inspection.get('bim_model')
         if not model or not model['filename'].lower().endswith('.ifc'):

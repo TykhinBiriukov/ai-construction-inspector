@@ -54,12 +54,18 @@ class NoArguments(APIModel):
     pass
 
 
+class ImportCaptureArguments(APIModel):
+    session_id: UUID
+    review_after_geometry: bool = True
+
+
 class CaptureArguments(APIModel):
     review_after_geometry: bool = False
 
 
 TOOL_DESCRIPTIONS = {
     "session_create": "Assign capture to this chat's registered iPhone only when the user requests capture. Reuse the current open session. After sealing, an explicitly requested rescan creates a linked session with the same inspection context.",
+    "session_import": "Use an existing capture by the session UUID explicitly supplied by the user, without new phone capture. Look up Inspector first, otherwise import saved RGB-D from configured Geometry Supabase. Select one IFC or use the stored reference.ifc. Review after Geometry by default. Never invent a session ID.",
     "session_get": "Read the current capture session of this chat, acknowledgement, source and processing states. Does not create a session.",
     "device_status": "Read whether this chat's configured iPhone currently has a live connection. Offline does not cancel a session.",
 }
@@ -72,6 +78,8 @@ TOOLS.extend(drawing_photo.TOOLS)
 TOOLS[0]['function']['parameters']['properties'] = {'review_after_geometry': {
     'type': 'boolean', 'description': 'True only when the user requests an IFC/scan inspection after capture. Requires a selected IFC or an existing IFC-bound session.'}}
 
+next(t for t in TOOLS if t['function']['name']=='session_import')['function']['parameters'] = ImportCaptureArguments.model_json_schema()
+
 SYSTEM_PROMPT = """You are the main AI Construction Inspector: the orchestrator, running on Meta/Muse Spark.
 Own the conversation with the user: understand the request, clarify ambiguity,
 choose a supplied tool or a registered specialist inspector, and explain the result.
@@ -82,6 +90,7 @@ For a registered discrepancy_inspector, use the current typed inspection_request
 Never invent a candidate batch or delegate directly to a discrepancy_verifier.
 If inspection_request is missing, ask for the candidate batch and scoped evidence.
 Only registered inspectors exist; an empty catalog means none are connected yet.
+For an existing capture ID, call session_import; do not ask for new capture or an internal inspection_request. The backend imports and validates stored data and prepares the review automatically. If the user wants no new capture but gave no session ID, ask for the existing capture ID.
 For a requested IFC/scan inspection with capture, set session_create.review_after_geometry=true.
 Use exactly one currently selected IFC for a new inspection; the backend pins it.
 The saved workflow will prepare evidence and invoke the configured Inspector after Geometry.
@@ -375,7 +384,7 @@ class OrchestratorAgent:
         if name not in TOOL_DESCRIPTIONS and not (name == "delegate_inspection" and catalog):
             raise APIError(502, "unknown_model_tool", "The model selected an unavailable tool")
         try:
-            schema = DelegateInspectionRequest if name == "delegate_inspection" else CaptureArguments if name == 'session_create' else drawing_photo.SCHEMAS.get(name, NoArguments)
+            schema = DelegateInspectionRequest if name == "delegate_inspection" else CaptureArguments if name == 'session_create' else ImportCaptureArguments if name == 'session_import' else drawing_photo.SCHEMAS.get(name, NoArguments)
             arguments = schema.model_validate_json(call["function"]["arguments"])
         except ValidationError as error:
             issues = [{"loc": list(item['loc']), "type": item['type']}
@@ -386,6 +395,18 @@ class OrchestratorAgent:
             raise APIError(502, "invalid_tool_arguments", "The model selected an unregistered inspector")
         operation_id = str(uuid5(UUID(run["run_id"]), "tool:" + str(run["steps"])))
         plan = {"name": name, "tool_call_id": call["id"], "operation_id": operation_id}
+        if name == 'session_import':
+            from . import capture_import
+            # A model may not attach an arbitrary guessed session from history or file content.
+            import re
+            supplied = {str(UUID(value)) for value in re.findall(r'(?i)\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b', run['text'])}
+            if str(arguments.session_id) not in supplied:
+                raise APIError(422, 'invalid_tool_arguments', 'Ask the user to provide the capture session ID in this message')
+            chat, current = self._context(principal, run)
+            if current and current['session_id'] != str(arguments.session_id) and current['capture_state'] in ('assigned','capturing','submitted'):
+                raise APIError(409, 'capture_in_progress', 'Use a new chat while its current capture is active')
+            plan.update(capture_import.plan(self.service, principal, run, str(arguments.session_id)))
+            run['geometry_review_requested'] = arguments.review_after_geometry
         if name == "delegate_inspection":
             # Resolve only a trusted, registered role. Freeze its exact request before IO.
             profile = self.inspectors.get(arguments.inspector_id)
@@ -738,6 +759,11 @@ class OrchestratorAgent:
             run.pop('comparison_retry', None)
             run['remote_waiting'] = False
             return result, None
+        if plan['name'] == 'session_import':
+            from . import capture_import
+            imported = capture_import.execute(self.service, principal, run, plan)
+            return {'session': session_summary(imported), 'source': 'saved_capture',
+                    'new_phone_capture': False}, imported['session_id']
         if plan["name"] == "device_status":
             return self.service.device_events.status(principal, chat["device_id"]), None
         if plan["name"] == "session_get":
