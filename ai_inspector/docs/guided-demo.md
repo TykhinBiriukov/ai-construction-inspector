@@ -1,6 +1,6 @@
 # Guided recorded demo and dictation
 
-For reviewer access without cloud credentials, use the [versioned real-room Geometry package and complementary cases](../../docs/evidence/2026-11-03/README.md). It includes the complete selected RGB-D capture and retained point cloud/meshes. The Geometry walkthrough originates in this real capture; the window observations are manually curated, and Progress4D uses rendered development surveys with a prepared seventh scene.
+For reviewer access without cloud credentials, use the [versioned real-room Geometry package and complementary cases](../../docs/evidence/2026-11-03/README.md). Public reports are available now; the complete selected RGB-D capture and point cloud/mesh archive is prepared locally and awaits explicit dataset-publication consent. The Geometry walkthrough originates in this real capture; the window observations are manually curated, and Progress4D uses rendered development surveys with a prepared seventh scene.
 
 Saved-result viewing and fresh analysis are separate: the package proves retained computation artifacts, not a newly completed Inspector review. The case guide lists source hashes, measured outputs and acceptance gaps.
 
@@ -23,8 +23,8 @@ The read-only mount comes from `/opt/inspector-backend/demo-assets` and contains
 - `timeline.json`, `progress-assets.json`, `progress/`: exported seven-week
   result and its immutable artifacts.
 
-Runtime assets are deployed separately. Compact evidence records are committed to Git, and the selected real-room inputs/results are distributed through the versioned release linked above. The original remote
-result with signed URLs, credentials and local databases are excluded. Raw captures are excluded from the runtime demo mount; the selected capture is available in the separate evidence release.
+Runtime assets are deployed separately. Compact evidence records are committed to Git, and the selected real-room input/model archive awaits publication consent. The original remote
+result with signed URLs, credentials and local databases are excluded. Raw captures are excluded from the runtime demo mount; the selected capture is preserved in the prepared evidence archive.
 All asset routes check operator access and chat ownership. Demo stages are
 simulated; selecting a scenario reads existing results. Follow-up questions use
 the configured chat model. Disable the directory setting to restore normal mode.

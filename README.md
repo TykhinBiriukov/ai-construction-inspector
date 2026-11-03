@@ -22,11 +22,11 @@ The team knows this problem from work in construction. **Egor Pichugin** worked 
 
 This system works with more than ordinary chat attachments. A scan comparison needs RGB photographs, LiDAR depth and confidence, camera calibration and poses, capture metadata, and an IFC reference model. Progress monitoring needs overlapping dated surveys and a model with a work schedule. A visitor should be able to explore the product without first obtaining a compatible device, access to a construction site and its design files.
 
-The demo uses prepared inputs and saved computation results. Start with the [versioned evidence cases](docs/evidence/2026-11-03/README.md): the primary case is a completed Geometry reconstruction from **99 real-room RGB-D observations**, with the reference IFC, point cloud, meshes and image-linked comparison results available as a [downloadable package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03).
+The demo uses prepared inputs and saved computation results. Start with the [versioned evidence cases](docs/evidence/2026-11-03/README.md): the primary case is a completed Geometry reconstruction from **99 real-room RGB-D observations**, with public numerical reports, source hashes and image-reference identities. The complete IFC/capture/mesh archive is prepared locally; public release of those source assets is awaiting explicit dataset-publication consent.
 
 | Case | Available evidence | What it establishes |
 |---|---|---|
-| Real-room scan versus BIM | 396 capture files, pinned IFC, point cloud, reconstructed/segmented meshes, 12 stage manifests and comparison reports | Completed Geometry computation; 6 object candidates, 5 observed surfaces and traceable source frames |
+| Real-room scan versus BIM | Public comparison reports and hashes; prepared archive holds 396 capture files, pinned IFC, point cloud, meshes and stage manifests | Completed Geometry computation; 6 object candidates, 5 observed surfaces and traceable source frames |
 | Photograph versus drawing | Same-input legacy/staged reports; three frozen-checklist runs with audit diagnostics and evidence regions | Historical live model analyses, requirement reuse and retained uncertainty; the edited-gap case did not obtain its expected mismatch |
 | Construction progress | Six dated development evaluation records and the saved seven-week walkthrough | Recorded monitoring behavior and coverage limits; the seventh scene is prepared visualization |
 
@@ -348,7 +348,7 @@ Start with the [step-by-step setup guide](docs/reproducible-setup.md). It covers
 | Capture on a phone | [iOS](ios/README.md) | macOS/Xcode, real compatible iPhone, configured Inspector and upload storage |
 | Use the restricted spatial solver | [Localization](localization_service/deploy/README.md) | Supported IFC, service/database setup and session-bound phone integration |
 
-Components do not share one Python environment or a universal key. No production credentials are distributed. The [versioned Geometry evidence release](docs/evidence/2026-11-03/README.md) contains the selected real-room capture and results; other private captures and the full Progress4D development dataset are not distributed in the clone. Local `.env` files do not configure deployed services. Consolidating code on `main` does not deploy it or change a host's selected branch.
+Components do not share one Python environment or a universal key. No production credentials are distributed. The [Geometry evidence guide](docs/evidence/2026-11-03/README.md) links public reports and the manifest of the prepared source archive. Raw capture/mesh assets await dataset-publication consent; other private captures and the full Progress4D development dataset are not distributed in the clone. Local `.env` files do not configure deployed services. Consolidating code on `main` does not deploy it or change a host's selected branch.
 
 ## Verification and current boundaries
 
@@ -360,7 +360,7 @@ Material limits are intentional and visible: incomplete coverage, unvalidated ro
 
 ## Roadmap
 
-1. **Complete independent reproduction of the evidence package.** The real-room capture/result package and saved drawing/photo comparisons are linked above. Remaining work includes a terminal Geometry agent review, exact historical runtime revision recovery and a clean-environment reproduction by someone outside the team.
+1. **Complete independent reproduction of the evidence package.** The real-room reports and saved drawing/photo comparisons are linked above; the prepared source archive still awaits publication consent. Remaining work includes a terminal Geometry agent review, exact historical runtime revision recovery and a clean-environment reproduction by someone outside the team.
 2. **Validate on real projects.** Calibrate measurement uncertainty and acceptance rules with domain experts, collect held-out site evidence, and measure false findings, abstentions and time saved.
 3. **Broaden spatial and inspection coverage.** Extend supported IFC layouts and room validation, improve coverage/registration evidence, and complete the general clarification and follow-up workflow.
 4. **Automate capture with a robot dog or another mobile platform.** The existing separation between capture, source validation, computation and inspection gives a useful integration boundary. A robot adapter would still need compatible calibrated RGB-D/pose data, device authentication, safe navigation, repeatable coverage and field validation. Hardware design and robot integration are future work.
