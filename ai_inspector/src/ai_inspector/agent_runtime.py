@@ -176,3 +176,14 @@ class AgentHarness:
             state.update(status="retryable" if error.body["retryable"] else "failed", error=error.body, updated_at=utc_now())
             self.checkpoint()
             raise
+        except Exception as cause:
+            # Keep an interrupted persisted command resumable, not forever "running".
+            import logging
+            logging.getLogger(__name__).error('Agent execution interrupted: %s', type(cause).__name__)
+            error = APIError(503, 'agent_execution_interrupted',
+                'Processing stopped because of a server error. Resume continues the saved request.', retryable=True)
+            if activity and activity['status'] == 'running':
+                self._finish_activity(activity, started, 'failed', error.body['message'])
+            state.update(status='retryable', error=error.body, remote_waiting=False, updated_at=utc_now())
+            self.checkpoint()
+            raise error from None
