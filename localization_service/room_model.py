@@ -39,12 +39,20 @@ def load_room(path):
     if any(b[0][1]>ymin+.06 or b[1][1]<ymax-.06 for b in xs) or any(b[0][0]>xmin+.06 or b[1][0]<xmax-.06 for b in ys):
         raise ValueError('Walls do not enclose a complete rectangle')
     transform=np.array([[1,0,0,-xmin],[0,0,1,-floor],[0,-1,0,ymin],[0,0,0,1]])
+    # IFC void relations identify the host even when an opening reaches a corner.
+    host_planes={}
+    for wall,box in zip(walls,boxes):
+        lo,hi=bounds_after(*box,transform)
+        axis=0 if box[1][0]-box[0][0]<box[1][1]-box[0][1] else 2
+        planes=(0.,float(length)) if axis==0 else (0.,-float(width))
+        plane=min(planes,key=lambda value:abs((lo[axis]+hi[axis])/2-value))
+        host_planes[wall.id()]=(axis,plane)
     apertures=[]
     for opening in openings:
         hosts=[rel.RelatingBuildingElement for rel in opening.VoidsElements]
         if hosts and (len(hosts)!=1 or hosts[0] not in walls):raise ValueError('Only wall openings in this room are supported')
         lo,hi=bounds_after(*bounds(opening),transform)
-        axis,plane=wall_for(lo,hi,length,width)
+        axis,plane=wall_for(lo,hi,length,width,host_wall=host_planes[hosts[0].id()] if hosts else None)
         other=2 if axis==0 else 0
         if lo[1]<-.06 or hi[1]>height+.06 or hi[other]-lo[other]<.05:raise ValueError('Invalid opening bounds')
         fills=[rel.RelatedBuildingElement for rel in opening.HasFillings]

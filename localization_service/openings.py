@@ -10,9 +10,10 @@ def bounds_after(low, high, transform):
     return points.min(axis=0).tolist(),points.max(axis=0).tolist()
 
 
-def wall_for(low,high,length,width,tolerance=.06):
+def wall_for(low,high,length,width,tolerance=.06,host_wall=None):
     candidates=[]
     for axis,plane in [(0,0.),(0,length),(2,0.),(2,-width)]:
+        if host_wall is not None and (axis,plane)!=host_wall:continue
         if low[axis]-tolerance<=plane<=high[axis]+tolerance:
             candidates.append((axis,plane))
     if len(candidates)!=1:raise ValueError('Opening must belong unambiguously to one room wall')
@@ -64,8 +65,11 @@ def select_entry(room,element_id,confirmed=True):
     if axis==2:result['length'],result['width']=width,length
     for collection in ('openings','doors'):
         for item in result[collection]:
+            normal=t[:3,item['axis']]
+            new_axis=int(np.argmax(np.abs(normal)))
+            new_plane=float(normal[new_axis]*item['plane']+t[new_axis,3])
             item['low'],item['high']=bounds_after(item['low'],item['high'],t)
-            item['axis'],item['plane']=wall_for(item['low'],item['high'],result['length'],result['width'])
+            item['axis'],item['plane']=wall_for(item['low'],item['high'],result['length'],result['width'],host_wall=(new_axis,new_plane))
     selected=next(d for d in result['doors'] if d['element_id']==element_id)
     result.update(entry_element_id=element_id,entry_confirmed=confirmed,
                   bim_frame_id='room-y-up-entry:'+element_id,

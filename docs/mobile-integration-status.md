@@ -103,3 +103,7 @@ Free capture also offers “Сбросить и начать заново” in 
 ## English interface (2 November 2026)
 
 All built-in iOS screen labels, actions, confirmations, accessibility labels, status/error messages, local notifications and permission descriptions are in English. SwiftUI and observation-date formatting use English. Fixed legacy Russian Localization Service messages and generated numbered door labels are translated only for display, including older server/session payloads; custom operator text and IFC names remain unchanged. The legacy standalone room identifier remains unchanged on disk/wire so existing captures and frozen uploads can still reopen. No capture protocol, IDs, measurements or backend logic changed. Device installation is intentionally deferred at Oleg's request.
+
+## Corner-reaching openings (3 November 2026)
+
+Localization resolves an opening's wall from its explicit IFC void host when present, validating that the aperture intersects that wall. Full-width windows touching adjacent walls no longer become ambiguous. Entry-frame rotation preserves the resolved wall plane. Unhosted ambiguous openings still fail; room dimensions and source geometry are unchanged.
