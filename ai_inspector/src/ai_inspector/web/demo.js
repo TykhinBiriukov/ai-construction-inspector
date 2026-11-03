@@ -7,6 +7,7 @@
   let token = read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
   let scopedSessions = [], scopedInspections = [];
   let geometryViewer=null;
+  let demoModes=null,selectedDemoMode='',modeBusy=false;
   let chatChoices=null;
   let workState=null,workspaceBusy=false,showTrash=false,uploadQueue=[],planEditing=null,observationEditing=null,importRequest=null;
   const chosenFiles=new Set();
@@ -52,13 +53,14 @@
   function lock() {
     closeProgress4d();geometryViewer?.clear();
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
-    chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
+    demoModes=null;selectedDemoMode='';syncModePickers();chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
   function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
-    $('progress4d-open').disabled=!chat?.chat_id;
+    $('progress4d-open').disabled=!chat?.chat_id||modeBusy;
+    for(const picker of document.querySelectorAll('[data-demo-mode],#demo-mode'))picker.disabled=!token||sending||workspaceBusy||modeBusy;
     $('chat-picker').disabled=sending||workspaceBusy;
     $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
     $('new-chat').disabled= !token || sending || workspaceBusy;
@@ -342,7 +344,13 @@
     } else if(last&&pending?.request_id===last.request_id){pending=null;remember();if(!sending)$('message').value='';}
     controls();
   }
-  async function refresh() {
+  let activeRefresh=null;
+  function refresh(){
+    if(activeRefresh)return activeRefresh;
+    activeRefresh=refreshWorkspace().finally(()=>{activeRefresh=null;});
+    return activeRefresh;
+  }
+  async function refreshWorkspace() {
     if(!token||refreshing) return; const current=epoch; refreshing=true;
     try {
       const [data,capabilities]=await Promise.all([api('/v1/operator/overview'),api('/v1/capabilities')]);
@@ -350,6 +358,7 @@
       if(current!==epoch) return;
       overview=data; caps=capabilities; device=status;
       if(chatChoices===null)chatChoices=(await api('/v1/chats')).chats;
+      if(demoModes===null)demoModes=(await api('/v1/demo-modes')).modes;
       if(current!==epoch)return;
       if(!chat && !create) {
         try {
@@ -368,6 +377,7 @@
       const workspaceData=scopeChat?await api(`/v1/chats/${scopeChat}/workspace`):null;
       if(current!==epoch || scopeChat!==chat?.chat_id) return;
       if(chat?.chat_id&&!chatChoices.some(c=>c.chat_id===chat.chat_id))chatChoices.unshift(chat);
+      selectedDemoMode=demoModes.find(m=>m.chat_id===chat?.chat_id)?.id||'';syncModePickers();
       renderChatPicker();
       workState=workspaceData; scopedSessions = linkedSessions; scopedInspections = linkedInspections;
       geometryViewer?.sync(chat?.chat_id,JSON.stringify([chat?.geometry_reviews,linkedSessions.map(s=>[s.session_id,s.processing_state,s.geometry_result?.job_id])]));
@@ -558,7 +568,7 @@
   function closeProgress4d(){progress4dGeneration++;$('progress4d-dialog').close();$('progress4d-frame').removeAttribute('src');}
   $('progress4d-close').onclick=closeProgress4d;
   $('progress4d-dialog').addEventListener('cancel',event=>{event.preventDefault();closeProgress4d();});
-  $('progress4d-open').onclick=async()=>{
+  async function openProgress4d(){
     if(!chat?.chat_id)return;
     const generation=++progress4dGeneration;
     $('progress4d-dialog').showModal();$('progress4d-status').textContent='Loading 4D result…';
@@ -570,7 +580,40 @@
       $('progress4d-frame').src=url.href;$('progress4d-status').textContent='';
     }catch(error){if(generation===progress4dGeneration)$('progress4d-status').textContent=error.message;}
   };
+  function syncModePickers(){
+    for(const picker of document.querySelectorAll('[data-demo-mode],#demo-mode'))picker.value=selectedDemoMode;
+  }
+  async function openDemo(){
+    if(!chat?.chat_id)return;
+    if(selectedDemoMode==='monitoring')return openProgress4d();
+    if(selectedDemoMode==='geometry')return geometryViewer.open(chat.chat_id,{scope:'model'});
+    if(selectedDemoMode==='drawing'){
+      const result=document.querySelector('.comparison-evidence');
+      if(result)result.scrollIntoView({block:'start',behavior:'smooth'});
+      const file=(workState?.files||[]).find(f=>!f.deleted&&(/drawing|plan|чертеж/i.test(f.name)||/\.pdf$/i.test(f.name)));
+      if(file)await openDocument(file);
+      if(!result)notify('No saved drawing/photo comparison is available in this conversation.');
+      return;
+    }
+    return openProgress4d();
+  }
+  async function chooseDemoMode(value){
+    if(modeBusy||sending||workspaceBusy)return;
+    const entry=demoModes?.find(m=>m.id===value);
+    if(!entry?.chat_id){syncModePickers();notify('This demo is not connected yet.');return;}
+    modeBusy=true;controls();
+    try{
+      await switchConversation(entry.chat_id);
+      if(chat?.chat_id!==entry.chat_id){syncModePickers();return;}
+      selectedDemoMode=value;syncModePickers();await openDemo();
+    }catch(error){notify(error.message);}finally{modeBusy=false;controls();}
+  }
+  $('demo-mode').onchange=()=>chooseDemoMode($('demo-mode').value);
+  $('progress4d-open').onclick=openDemo;
   geometryViewer=new InspectionViewer($('geometry-dialog'),api);
+  for(const header of [$('geometry-dialog').querySelector('.gv-header'),$('progress4d-dialog').querySelector('.progress4d-toolbar')]){
+    const label=node('label','mode-control','Mode '),picker=$('demo-mode').cloneNode(true);picker.removeAttribute('id');picker.dataset.demoMode='';picker.onchange=()=>chooseDemoMode(picker.value);label.append(picker);header.insertBefore(label,header.lastElementChild);
+  }
   function geometryResultCard(sessionId){
     const card=node('section','geometry-result-card');card.append(node('h4','','Captured geometry and inspection results'),node('p','','Explore the model, review decisions and the captured evidence.'));
     const actions=node('div','geometry-result-actions'),chatId=chat.chat_id;
@@ -608,7 +651,8 @@
     $('chat-picker').value=chat?.chat_id||'';
   }
   async function switchConversation(id){
-    if(sending||workspaceBusy)return;
+    if(activeRefresh)await activeRefresh;
+    if(sending||workspaceBusy||!token)return;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
     remember(); // Keep the exact frozen payload in the old chat, including document selection.
     closeProgress4d();geometryViewer?.clear();epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;

@@ -60,3 +60,24 @@ with HTTPS unless both processes actually share loopback.
 Synthetic visualization provenance and inconclusive analysis remain in the service
 JSON. The embedded UI consumes the same results as the standalone viewer and does
 not promote a synthetic scene to photographic evidence.
+
+## One workspace, three demo modes
+
+The existing workspace header has a **Mode** selector. The same selector is present
+inside the model and 4D dialogs, so switching does not require closing a viewer.
+The existing document panel, chat, files, evidence and model viewers are preserved.
+The supplied Inspector logo is served locally as `/ui/inspector-logo.jpeg`.
+
+Set `INSPECTOR_DEMO_MODE_CHATS_JSON` to a server-owned JSON map with keys `geometry`,
+`drawing` and `monitoring` and distinct existing Inspector chat UUIDs as values.
+The monitoring chat must also appear in `INSPECTOR_PROGRESS4D_CHAT_PROJECTS_JSON`.
+Use a geometry chat with an accepted saved model result and a drawing chat with a
+saved drawing/photo comparison. No demo data is created or analysis launched by
+selecting a mode. The authenticated `/v1/demo-modes` response exposes only chats the
+operator may access. Unconfigured modes show a connection message instead of
+opening another demo. Normal conversation selection remains available.
+
+Selecting a mode switches to its saved conversation and opens the existing result:
+geometry model viewer, drawing comparison and document, or 4D viewer. **Open demo**
+reopens it after closing. Reload retains the conversation and selected mode through
+the existing workspace persistence. Unsaved-message confirmation is preserved.
