@@ -2,11 +2,13 @@
 
 Start with the real-room Geometry case. It connects a device capture to a completed reconstruction, an IFC reference and image-linked comparison results. Drawing/photo and Progress4D provide complementary evidence about requirement handling and dated observations.
 
-For the recovered algorithm history and quantitative comparison, see [Geometry workflow evolution](workflow-evolution.md): paired projection diagnostics calculated on GCP, cold/warm SAM timings and byte-level output preservation.
+For the recovered algorithm history and quantitative comparison, see [Geometry workflow evolution](workflow-evolution.md): paired projection diagnostics and controlled numerical comparisons calculated on GCP.
+
+[Numerical comparison with four figures](controlled-comparison.md): real-room residuals, 26 camera-pose cases and 18 known-displacement cases, with all inputs/results and a reproducible runner.
 
 ## 1. Real-room Geometry: capture → reconstruction → IFC comparison
 
-**Source-archive access:** the complete capture/result ZIP is prepared and verified locally, but is not publicly downloadable yet. Publishing the actual photographs, RGB-D, IFC and models requires explicit dataset-publication consent. The numerical reports and workflow comparison below are public. The [package manifest](geometry-case-manifest.json) records file hashes, provenance and verification boundaries. The compact [comparison result](geometry-result.json) is readable directly in the repository.
+[Download the real-room capture and results](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03). The [package manifest](geometry-case-manifest.json) records file hashes, provenance and verification boundaries. The compact [comparison result](geometry-result.json) is readable directly in the repository.
 
 | Item | Recorded evidence |
 |---|---|
@@ -87,7 +89,7 @@ This is a completed **Geometry computation** on real captured data. The read-onl
 
 ### Inspect and reproduce
 
-1. Once dataset publication is authorized and the archive is made available, download and extract it. Verify its SHA256 against `geometry-case-manifest.json`, then verify the per-file hashes in the archive's `SHA256SUMS`.
+1. Download and extract the release archive. Verify its SHA256 against `geometry-case-manifest.json`, then verify the per-file hashes in the archive's `SHA256SUMS`.
 2. Read `capture-manifest.json`, `reference.ifc`, `result-manifest.json`, the stage manifests and the numerical reports. Follow an object in `demo/geometry-demo/result.json` through `assets.json` to its RGB, mask and overlay; its `frame_id` resolves to `capture/observations/<frame_id>/`.
 3. Inspect `outputs/point_cloud.ply`, `outputs/mesh.ply` and `outputs/segmented_mesh.ply` with a PLY-capable viewer. `demo/geometry-demo/comparison.json.gz` is the saved application-viewer projection; it is not a second independent reconstruction.
 4. To rerun analysis, follow the [Geometry setup](../../reproducible-setup.md#4-geometry-profile-rgb-d-reconstruction-and-ifc-comparison) and [capture upload contract](../../../geometry-engine/README.md). Put the preserved files in your own configured storage, keeping the manifest paths consistent. Use your own credentials and a new job; retain the new code revision, parameters, model/cache status and result manifest. A rerun may differ from the historical output and uses compute/model access.
@@ -144,4 +146,4 @@ The seventh displayed week is a prepared scene, not an additional successful rec
 
 ## Remaining acceptance work
 
-The recovered local package establishes the real capture/result chain; the public repository exposes its numerical reports and existing model-run evidence. Independent source-data inspection still depends on release of the prepared archive. It does not close independent physical accuracy, final Geometry agent review, held-out quality, measured engineer benefit or external clean-environment reproduction. No new benchmark judges were run for this documentation/data release.
+The recovered local package establishes the real capture/result chain; the public repository exposes its numerical reports and existing model-run evidence. The source archive is now public for independent inspection. It does not close independent physical accuracy, final Geometry agent review, held-out quality, measured engineer benefit or external clean-environment reproduction. No new benchmark judges were run for this documentation/data release.

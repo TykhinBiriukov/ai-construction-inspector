@@ -15,8 +15,8 @@
     "name": "geometry-real-room-v1.zip",
     "bytes": 135086811,
     "sha256": "e9e1a60ef783563c80c489f429155ab8fc996c8b748cdd539ca485c76d3e41bb",
-    "publication_status": "prepared_locally_pending_explicit_source_dataset_publication_consent",
-    "proposed_release_tag": "evidence-2026-11-03"
+    "publication_status": "published",
+    "url": "https://github.com/TykhinBiriukov/ai-construction-inspector/releases/download/evidence-2026-11-03/geometry-real-room-v1.zip"
   },
   "file_count": 506,
   "verification": {

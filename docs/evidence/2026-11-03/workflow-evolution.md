@@ -1,6 +1,6 @@
 # Geometry workflow evolution and measured tradeoffs
 
-This study reconstructs the team's implementation history and analyzes retained evidence from the real-room capture `2b6b4560-c2d5-482d-880b-21f34502b9f2`. It separates source-code evolution, a paired projection diagnostic comparison, and the operational benefit of reusing Meta SAM results. It does not claim that every later algorithm is more accurate than every earlier one.
+This study reconstructs the team's implementation history and analyzes retained evidence from the real-room capture `2b6b4560-c2d5-482d-880b-21f34502b9f2`. It separates source-code evolution, a paired projection diagnostic comparison, and the numerical choices behind the current pipeline. It does not claim that every later algorithm is more accurate than every earlier one.
 
 ## 1. What we tried, and what remains in Git
 
@@ -64,22 +64,9 @@ The rejected subset is important: an improved average alone did not make a propo
 
 **Interpretation:** the retained refinement mechanism improves the recorded projection consistency while preserving an explicit refusal path. Selection gates themselves require improvement, so this conditional result is partly expected by construction; it is not an unbiased estimate of generalization. It does not establish improved SAM mask IoU, object dimensions, inspection accuracy or real-site performance. The 77 correlated frames come from one development capture; no independent-trial confidence interval is claimed.
 
-## 3. Operational efficiency: reuse the same Meta outputs
+## 3. Controlled numerical comparisons
 
-The first and final jobs use the same selection-manifest hash, model (`sam-3.1`), six prompts and segmentation settings. Both process 77 views and report 284 image detections. [First](workflow-comparison/sam-first.json) and [final](workflow-comparison/sam-final.json) reports retain the cache counters.
-
-| Retained job | First computation | Final computation |
-|---|---:|---:|
-| SAM cache misses | 462 | 0 |
-| SAM cache hits | 0 | 462 |
-| Segmentation-stage elapsed time | 3,668.47 s (61.1 min) | 161.21 s (2.7 min) |
-| Entire job elapsed time | 4,238.53 s (70.6 min) | 818.09 s (13.6 min) |
-
-The observed segmentation-stage time is **22.76× shorter** on reuse. This is a historical cold/warm comparison, not proof of a 22.76× faster segmentation algorithm: cache state is intentionally different, and runtime environment, I/O and other stage work were not controlled as a repeated benchmark. Cache misses count uncached prompt/image combinations, not a separately audited total of HTTP attempts or billed requests.
-
-To check that this efficiency came from reuse rather than silently changing model outputs, we compared the immutable stage manifests: **362 of 363 files have identical SHA256 and size**, including detections, masks and overlays. The only changed file is `segmentation/report.json`, which records the different cache accounting. The [complete comparison and both file indexes](workflow-comparison/sam-artifact-comparison.json) retain the evidence.
-
-This establishes a useful engineering benefit: changing later numerical comparison work need not purchase or wait for the same semantic inference again. It does not establish that SAM is more accurate than a different model or a non-model baseline.
+The [known-ground-truth study](controlled-comparison.md) adds 26 pose cases and 18 surface-displacement cases, run using the pinned Geometry implementation in an isolated GCP container. It compares original poses, ungated proposals and the current policy, and isolates the effect of camera-side surface selection. All cases, coverage tradeoffs and failures are included with four figures. Historical SAM/cache records remain provenance, not quality evidence.
 
 ## 4. Drawing/photo and remaining comparisons
 

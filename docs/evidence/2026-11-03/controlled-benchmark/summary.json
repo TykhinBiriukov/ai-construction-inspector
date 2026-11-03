@@ -1,0 +1,139 @@
+{
+  "pose": {
+    "moderate": {
+      "total": 12,
+      "raw_error": {
+        "accepted": 12,
+        "mean_translation_mm": 70.15734077076004,
+        "max_translation_mm": 98.13401115328328,
+        "mean_rotation_deg": 0.6327061429745932,
+        "outside_threshold": 12
+      },
+      "ungated_error": {
+        "accepted": 12,
+        "mean_translation_mm": 0.09714230173165903,
+        "max_translation_mm": 0.19642490804997917,
+        "mean_rotation_deg": 0.003373375360456195,
+        "outside_threshold": 0
+      },
+      "selected_error": {
+        "accepted": 12,
+        "mean_translation_mm": 5.069292583762669,
+        "max_translation_mm": 59.78802520448165,
+        "mean_rotation_deg": 0.01856036424371087,
+        "outside_threshold": 1
+      }
+    },
+    "clean": {
+      "total": 4,
+      "raw_error": {
+        "accepted": 4,
+        "mean_translation_mm": 0.0,
+        "max_translation_mm": 0.0,
+        "mean_rotation_deg": 0.0,
+        "outside_threshold": 0
+      },
+      "ungated_error": {
+        "accepted": 4,
+        "mean_translation_mm": 0.18228155163389115,
+        "max_translation_mm": 0.21292965894178187,
+        "mean_rotation_deg": 0.003386370683677152,
+        "outside_threshold": 0
+      },
+      "selected_error": {
+        "accepted": 4,
+        "mean_translation_mm": 0.0,
+        "max_translation_mm": 0.0,
+        "mean_rotation_deg": 0.0,
+        "outside_threshold": 0
+      }
+    },
+    "large_drift": {
+      "total": 4,
+      "raw_error": {
+        "accepted": 4,
+        "mean_translation_mm": 300.0,
+        "max_translation_mm": 300.00000000000006,
+        "mean_rotation_deg": 6.000000000000001,
+        "outside_threshold": 4
+      },
+      "ungated_error": {
+        "accepted": 4,
+        "mean_translation_mm": 10.736510444312568,
+        "max_translation_mm": 42.69161311656088,
+        "mean_rotation_deg": 0.44655625704902785,
+        "outside_threshold": 1
+      },
+      "selected_error": {
+        "accepted": 0,
+        "mean_translation_mm": null,
+        "max_translation_mm": null,
+        "mean_rotation_deg": null,
+        "outside_threshold": 0
+      }
+    },
+    "plane_normal": {
+      "total": 4,
+      "raw_error": {
+        "accepted": 4,
+        "mean_translation_mm": 80.0,
+        "max_translation_mm": 80.00000000000001,
+        "mean_rotation_deg": 0.0,
+        "outside_threshold": 4
+      },
+      "ungated_error": {
+        "accepted": 4,
+        "mean_translation_mm": 80.0,
+        "max_translation_mm": 80.00000000000001,
+        "mean_rotation_deg": 0.0,
+        "outside_threshold": 4
+      },
+      "selected_error": {
+        "accepted": 0,
+        "mean_translation_mm": null,
+        "max_translation_mm": null,
+        "mean_rotation_deg": null,
+        "outside_threshold": 0
+      }
+    },
+    "plane_tangential": {
+      "total": 2,
+      "raw_error": {
+        "accepted": 2,
+        "mean_translation_mm": 120.0,
+        "max_translation_mm": 120.0,
+        "mean_rotation_deg": 0.0,
+        "outside_threshold": 2
+      },
+      "ungated_error": {
+        "accepted": 2,
+        "mean_translation_mm": 120.0,
+        "max_translation_mm": 120.0,
+        "mean_rotation_deg": 0.0,
+        "outside_threshold": 2
+      },
+      "selected_error": {
+        "accepted": 2,
+        "mean_translation_mm": 120.0,
+        "max_translation_mm": 120.0,
+        "mean_rotation_deg": 0.0,
+        "outside_threshold": 2
+      }
+    }
+  },
+  "wall": {
+    "nearest_surface": {
+      "n": 18,
+      "mean_absolute_error_mm": 82.22222099701564,
+      "max_absolute_error_mm": 320.000002682209,
+      "above_1mm": 9
+    },
+    "camera_side": {
+      "n": 18,
+      "mean_absolute_error_mm": 6.938893903907228e-15,
+      "max_absolute_error_mm": 2.7755575615628914e-14,
+      "above_1mm": 0
+    }
+  },
+  "input_sha256": "ade6014b2470426daf4725c1ef8e34c6da8fe69b0c66198d9634e688b501c38b"
+}
