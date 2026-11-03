@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/inspector-logo.jpg" alt="Inspector — IA · Inspector Agent" width="640">
+</p>
+
 # AI Construction Inspector
 
 **Turn site photographs, depth captures and building plans into traceable inspection findings.**
@@ -16,7 +20,7 @@ AI Construction Inspector helps a construction team connect what was designed wi
 
 The team knows this problem from work in construction. **Egor Pichugin** worked as a quality-control engineer and regularly inspected work on construction sites. **Oleg Kulikov** held an engineering management role and worked on acceptance of renovation and major refurbishment of premises. **Tykhin Biriukov** worked on solar-panel installation. That experience shaped the project around practical questions: which element needs attention, what evidence supports the finding, and what should be checked next?
 
-[Demo walkthrough](#demo-walkthrough) · [Problem and value](#problem-and-value) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons) · [Reproducible setup](docs/reproducible-setup.md) · [Roadmap](#roadmap)
+[Demo walkthrough](#demo-walkthrough) · [Problem](#problem) · [Value](#value) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons) · [Reproducible setup](docs/reproducible-setup.md) · [Roadmap](#roadmap)
 
 ## Demo walkthrough
 
@@ -36,26 +40,67 @@ In the prepared scan walkthrough, the system reviews a saved reconstruction so t
 
 Demo labels distinguish **real captures**, **saved results** with their original input/result identities, **synthetic or deliberately modified inputs**, and **mock integration fixtures**. A saved result also retains whether its source was real or synthetic; a mock is not an inspection finding.
 
-## Problem and value
+<a id="problem-and-value"></a>
 
-Inspection requires someone to reconcile drawings, revisions, models, site conditions and photographs. Fragmented evidence makes defects harder to identify, explain and revisit. Repeated manual comparison also consumes engineering time that could be spent resolving the actual issue.
+## Problem
 
-PlanGrid and FMI's *Construction Disconnected* study estimated that poor project data and communication accounted for **$31.3 billion in U.S. construction rework in 2018**, or **48% of rework costs**. The study surveyed 599 industry participants. These are historical survey-based industry estimates, not losses attributed specifically to final acceptance and not measured savings from this project. [Study, printed pages 4 and 19–20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
+### A simple question: can the next stage start?
 
-![2018 U.S. construction rework attribution: poor project data 22%, poor communication 26%, other factors 52%. These are industry estimates, not AI Inspector performance.](docs/assets/rework-context.svg)
+A room looks ready. The next crew is scheduled. Before work continues, someone must establish whether what was built matches the design and whether the required checks are complete. The answer may be scattered across drawing revisions, BIM models, site photographs and inspection records.
 
-*Source: [PlanGrid/FMI, Construction Disconnected (2018), printed page 20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf). The categories share one denominator: attributed U.S. rework costs.*
+![Conceptual room illustration: connect a design requirement, site evidence and an inspection finding before deciding what needs checking next. This is not a measured inspection result.](docs/assets/inspection-room-story.svg)
 
-Professional mobile mapping already addresses reality capture. For example, [NavVis VLX 3](https://www.navvis.com/vlx-3) is a wearable system with LiDAR and cameras, while [Leica Pegasus:Backpack](https://leica-geosystems.com/ja-jp/about-us/news-room/customer-magazine/reporter-79/capturing-reality-on-the-go) illustrates backpack-based mapping. Our direction is to make evidence collection and inspection more accessible through LiDAR-equipped consumer devices and, later, autonomous capture equipment. We have not established price or survey-accuracy parity with these systems.
+**While the decision waits, work can wait too.** Coordinating an inspection, resolving missing information and obtaining sign-off can hold up the next stage while project costs continue. New Zealand's building regulator explicitly identifies inspection delays as a source of additional costs and missing information as a reason applications are put on hold. [MBIE: inspection wait-times and requests for information](https://www.building.govt.nz/getting-started/how-the-building-system-protects-you/building-consent-system-performance-monitoring).
 
-| Intended value | Mechanism in this project | How to evaluate it on real projects |
-|---|---|---|
-| Reduce repetitive comparison work | Drawing-derived checklists, reusable requirements and element-linked evidence | Engineer time per accepted finding, including correction and review |
-| Make discrepancies easier to investigate | Source hashes, IFC identities, photos and measurements remain linked | Time to locate and verify the source of a finding |
-| Avoid unsupported certainty | Visibility, correspondence and quality limits stay explicit | False findings, missed findings and useful requests for additional evidence |
-| Make repeated surveys useful | Dated observations and a shared progress viewer | Agreement with independently reviewed site records |
+**A completed inspection can still miss an important detail.** Attention lapses, incomplete evidence and inconsistent checks can leave a defect unnoticed. If it is discovered after subsequent work has covered the area, the team may need to reopen finished work, revise the design or rebuild the affected installation. The [Lean Construction Institute](https://leanconstruction.org/lean-topics/8-wastes-of-lean/) identifies both waiting and defects requiring correction as sources of wasted time and resources.
 
-These are product hypotheses; savings need to be measured on real projects.
+**Some consequences go beyond time and money.** An unresolved defect in a safety-critical system can put people's lives at risk. The [Grenfell Tower Inquiry, Phase 2, Volume 4, §§64.41–64.44](https://assets.publishing.service.gov.uk/media/66d817d9c52d5fb4c82dddf0/CCS0923434692-004_GTI_Phase_2_Volume_4_BOOKMARKED.pdf) documents inspections that failed to detect serious workmanship defects in cavity barriers. It shows why reliable inspection, evidence and follow-through matter beyond project handover.
+
+![31.3 billion U.S. dollars: estimated U.S. construction rework linked to poor project data and communication in 2018. Source: PlanGrid and FMI.](docs/assets/rework-context.svg)
+
+**$31.3 billion** was PlanGrid and FMI's estimate for U.S. construction rework attributable to poor project data and communication in **2018**—48% of estimated rework costs. This historical figure describes the wider industry problem; it is not a total for inspection delays, a valuation of safety harm or a claim about savings from AI Inspector. [Construction Disconnected, pp. 19–20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
+
+## Value
+
+### Bring the evidence into the decision earlier.
+
+AI Inspector helps engineers connect the design requirement, the site observation and the finding in one review. It compares supplied drawings and photographs, reviews scan-to-BIM evidence, and keeps findings linked to their sources. The goal is to reduce the effort needed to prepare a sound decision and make important gaps harder to overlook.
+
+**Help reduce evidence-related waiting.** Put the selected sources and comparison results together so the reviewer can investigate a discrepancy without repeatedly assembling the same context. This targets the preparation and clarification work around a decision; approval schedules and formal sign-off remain with the responsible people and processes.
+
+**Make repeated checks more consistent.** Turn a selected drawing into explicit requirements, reuse compatible checklists for later photographs, and review geometric differences against the selected reference model. Each result shows the evidence and its limits, helping reviewers distinguish a supported discrepancy from an unanswered question.
+
+**Support earlier correction and safer decisions.** Surface potential issues for investigation while work is still accessible. When a detail is hidden or the evidence is insufficient, keep that uncertainty visible so the team can arrange a closer inspection, additional capture or appropriate testing. The intended contribution is better-supported review; the current prototype does not certify building safety or demonstrate a reduction in accidents.
+
+<details>
+<summary>Follow one inspection question</summary>
+
+**Question:** “Does this room match the design, and what still needs checking before the next stage?”
+
+1. **Requirement:** select the relevant drawing or IFC and define the inspection task.
+2. **Observation:** supply the corresponding photograph or complete capture; preserve its source identity.
+3. **Finding:** inspect the comparison and supporting evidence. An observable discrepancy and an unobserved detail remain different outcomes.
+4. **Next action:** the responsible reviewer decides whether to correct work, obtain more evidence or proceed with the applicable acceptance process.
+
+This is an illustrative review workflow, not a recorded result or an automatic authorization to continue construction. Implementation links: [drawing/photo checks](#4-drawingphoto-analysis-service), [Geometry review](#2-geometry-inspector-and-geometry-verifier), [capture and result contract](ai_inspector/docs/capture-to-geometry.md).
+
+</details>
+
+<details>
+<summary>How we will evaluate the value—and make capture more accessible</summary>
+
+| Intended benefit | Evidence needed on real projects |
+|---|---|
+| Less preparation and clarification time | Engineer time per reviewed finding and time spent collecting missing evidence; distinguish these from administrative waiting |
+| Fewer overlooked defects | False and missed findings against independently reviewed cases, including safety-critical cases within the supported scope |
+| More traceable decisions | Time to locate the original source and verify the finding |
+| Useful repeat inspections | Agreement of dated observations with independently reviewed site records |
+
+Professional mobile mapping systems such as [NavVis VLX 3](https://www.navvis.com/vlx-3) and [Leica Pegasus:Backpack](https://leica-geosystems.com/ja-jp/about-us/news-room/customer-magazine/reporter-79/capturing-reality-on-the-go) already support reality capture. Our direction is more accessible collection through compatible LiDAR-equipped consumer devices and, later, autonomous equipment. Price, survey-accuracy parity and project savings still require field evaluation. The [roadmap](#roadmap) separates today's implementation from robot capture and broader autonomy.
+
+The PlanGrid/FMI study surveyed 599 construction industry participants, including 500 in the U.S. Its survey and industry-level estimates establish context, not measured product performance. [Study demographics, p. 4](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
+
+</details>
 
 ## Architecture
 
