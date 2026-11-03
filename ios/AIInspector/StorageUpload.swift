@@ -29,7 +29,7 @@ final class SignedStorageTransport: NSObject, URLSessionTaskDelegate, @unchecked
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
     func put(bytes: Data, plan: UploadPlanResponse.Item) async throws {
-        guard let url = plan.upload_url, url.scheme == "https", url.host == "drzxapqypaxhocrksciq.supabase.co",
+        guard let url = plan.upload_url, url.scheme == "https", ["drzxapqypaxhocrksciq.supabase.co", "mrsiftnkwguehudbbqad.supabase.co"].contains(url.host ?? ""),
               url.user == nil, url.password == nil, url.fragment == nil,
               url.path == "/storage/v1/object/upload/sign/inspection-captures/" + plan.object_key,
               plan.method == "PUT", !plan.headers.keys.contains(where: { ["authorization", "apikey", "host"].contains($0.lowercased()) }),
