@@ -2,7 +2,11 @@ window.DemoComparison={create(host,data,matchedIds){host.innerHTML="<div class=\
 
 const el=id=>host.querySelector('[data-control="'+id+'"]'),canvas=el('view');let disposed=false,raf=0;const schedule=()=>{if(!disposed&&!queued){queued=true;raf=requestAnimationFrame(draw)}};
 const hasRaw=!!data.raw_mesh;if(hasRaw){el('rawTitle').style.display='block';el('rawDivider').style.display='block';el('divider').style.left='33.333%';host.querySelector('.titles').style.right='34%'}
-const center=data.bounds[0].map((v,i)=>(v+data.bounds[1][i])/2),radius=Math.hypot(...data.bounds[0].map((v,i)=>data.bounds[1][i]-v))/2;
+// Use the reference room for the shared orbit pivot. Scan outliers must not
+// move the rotation axis; all three views retain the same world coordinates.
+const referenceLayers=data.layers.filter(l=>l.side==='ifc'&&l.category!=='contour'&&l.bounds);
+const orbitBounds=referenceLayers.length?[0,1].map(k=>[0,1,2].map(i=>(k?Math.max:Math.min)(...referenceLayers.map(l=>l.bounds[k][i])))):data.bounds;
+const center=orbitBounds[0].map((v,i)=>(v+orbitBounds[1][i])/2),radius=Math.max(.001,Math.hypot(...data.bounds[0].map((v,i)=>data.bounds[1][i]-v))/2);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),norm=a=>{let n=Math.hypot(...a)||1;return a.map(x=>x/n)};
 function multiply(a,b){const r=new Float32Array(16);for(let c=0;c<4;c++)for(let row=0;row<4;row++)for(let i=0;i<4;i++)r[c*4+row]+=a[i*4+row]*b[c*4+i];return r}
 function decode(text,Type){const s=atob(text),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return new Type(a.buffer)}
