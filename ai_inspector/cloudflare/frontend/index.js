@@ -13,7 +13,7 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === '/' || url.pathname === '/demo' || url.pathname.startsWith('/ui/')) {
+    if (url.pathname === '/' || url.pathname === '/demo' || url.pathname.startsWith('/ui/') || url.pathname.startsWith('/progress4d/')) {
       if (url.pathname.startsWith('/ui/')) url.pathname = url.pathname.slice(3);
       const asset = await env.ASSETS.fetch(new Request(url, request));
       const response = new Response(asset.body, asset);
