@@ -50,14 +50,19 @@
     if (!response.ok) { if(response.status===401) lock(); const error=new Error(body.message || `Request failed (${response.status})`); error.status=response.status; error.code=body.code; throw error; }
     return body;
   }
+  const voice=window.InspectorVoice({api,button:$("voice-input"),input:$("message"),notify});
+  $("chat-picker").addEventListener("change",()=>voice.cancel());
+  $("new-chat").addEventListener("click",()=>voice.cancel(),true);
+  $("chat-form").addEventListener("submit",()=>voice.cancel(),true);
   function lock() {
+    voice.cancel();$("voice-input").hidden=true;
     closeProgress4d();geometryViewer?.clear();
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
-    $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
+    $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
-  function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
+  function unlock() { voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
     $('chat-picker').disabled=sending||workspaceBusy;
     $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
@@ -67,7 +72,7 @@
     if(chat?.room_id) $('room').value=chat.room_id;
     $('message').disabled=sending || !!pending;
     $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
-    $('send').textContent=sending ? 'Working…' : 'Send ↑';
+    $('send').textContent=sending ? 'Working…' : 'Send';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
     $('run-status').textContent=sending ? 'AI Inspector is working. Progress appears in Work process.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
     const review=chat?.geometry_reviews?.find(r=>!['completed','cancelled'].includes(r.status));
@@ -217,6 +222,7 @@
     const phase=Object.entries(last?.comparison_progress?.phases||{}).find(([name,status])=>comparisonPhaseLabels[name]&&status==='running');
     if(last?.auto_resume&&phase)text=comparisonPhaseLabels[phase[0]];
     $('activity-current').textContent=text;$('process-state').textContent=text;$('activity-open').classList.toggle('working',active);
+    document.querySelector('.conversation').classList.toggle('inspector-working',sending||active);
     $('activity-graph').classList.toggle('live',active);$('activity-feed').classList.toggle('live',active);
     const contextual=live&&last?.document_selection?.file_id===documentOpenId;
     viewer.setActivity(last?.document_selection,!!contextual);
@@ -304,7 +310,7 @@
   }
   function renderConversation() {
     const runs=chat?.runs||[], signature=JSON.stringify([runs,chat?.geometry_reviews,scopedSessions.map(s=>[s.session_id,s.geometry_result?.job_id,s.processing_state])]);
-    $('suggestions').hidden=runs.length>0;
+    $('suggestions').hidden=false;
     if(historySignature!==signature) {
       const follow = $('messages').scrollHeight - $('messages').scrollTop - $('messages').clientHeight < 100;
       historySignature=signature;
@@ -384,8 +390,8 @@
       renderChatPicker();
       workState=workspaceData; scopedSessions = linkedSessions; scopedInspections = linkedInspections;
       geometryViewer?.sync(chat?.chat_id,JSON.stringify([chat?.geometry_reviews,linkedSessions.map(s=>[s.session_id,s.processing_state,s.geometry_result?.job_id])]));
-      if(current!==epoch) return; $('connection').textContent='● Connected'; activitySync=Date.now(); renderRails(); renderConversation(); unlock();
-    } catch(error) { if(current===epoch) { activitySync=0;updateActivityStatus();$('connection').textContent='Connection issue'; notify(`Could not refresh: ${error.message}. Displayed data may be stale.`); } }
+      if(current!==epoch) return; $('connection').hidden=true; activitySync=Date.now(); renderRails(); renderConversation(); unlock();
+    } catch(error) { if(current===epoch) { activitySync=0;updateActivityStatus();$('connection').textContent='Connection lost';$('connection').hidden=false; notify(`Could not refresh: ${error.message}. Displayed data may be stale.`); } }
     finally { refreshing=false; }
   }
   async function send() {
@@ -449,6 +455,7 @@
       const name=node('button','file-name',file.name);name.type='button';name.title='Open document';
       name.append(node('small','',`${file.origin} · ${file.content_available?(file.text_truncated?'AI: text excerpt':'AI: text'):'AI: metadata only'}`));
       name.addEventListener('click',()=>openDocument(file));row.append(name);
+      if(!showTrash){const download=node('button','file-download','↓');download.type='button';download.setAttribute('aria-label',`Download ${file.name}`);download.onclick=()=>downloadFile(file).catch(e=>notify(e.message));row.append(download);}
       const remove=node('button','file-delete',showTrash?'↶':'×');remove.type='button';remove.setAttribute('aria-label',`${showTrash?'Restore':'Delete'} ${file.name}`);
       remove.disabled=workspaceBusy||sending||!!pending;
       remove.addEventListener('click',async()=>{
@@ -559,17 +566,35 @@
   });
 
   let documentContext=null,documentOpenId=null,documentGeneration=0;
+  const viewerHelp=node('details','viewer-help');viewerHelp.hidden=true;
+  viewerHelp.append(node('summary','','? Controls'));
+  const viewerHints=node('div','viewer-hints');viewerHelp.append(viewerHints);
+  $('document-view').after(viewerHelp);
+  const selectionModifier=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
+  function showViewerHelp(file){
+    const ext=file?.name?.split('.').pop().toLowerCase();
+    viewerHelp.hidden=!['ifc','pdf','png','jpg','jpeg','webp'].includes(ext);
+    viewerHints.replaceChildren();if(viewerHelp.hidden)return;
+    viewerHelp.open=true;
+    const hints=ext==='ifc'?[['Drag','Rotate'],['Right-drag','Pan'],['Scroll / pinch','Zoom'],['Click','Select an element'],[selectionModifier+' + click','Add / remove elements']]:[['Drag','Select an area for Inspector'],['Scroll / pinch','Zoom'],['Scrollbars','Move around the enlarged image']];
+    for(const [gesture,action] of hints){const row=node('div','viewer-hint');row.append(node('kbd','',gesture),node('span','',action));viewerHints.append(row);}
+    const actions=node('div','viewer-help-actions');
+    const fit=node('button','quiet','Fit view');fit.type='button';fit.onclick=()=>viewer.zoom(1);actions.append(fit);
+    if(ext==='pdf')for(const [label,delta] of [['Previous page',-1],['Next page',1]]){const b=node('button','quiet',label);b.type='button';b.onclick=()=>viewer.next(delta).catch(e=>notify(e.message));actions.append(b);}
+    viewerHints.append(actions);
+  }
+
   const viewer=new ProjectDocuments.Viewer($('document-view'),context=>{
     if(context&&!chosenFiles.has(context.file_id)&&chosenFiles.size>=8){notify('Select up to 8 files per message. Uncheck a file first.');return;}
     documentContext=context;
     $('document-context').hidden=!context;
     if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
-  },text=>{$('document-status').textContent=text;});
-  function resetDocument(){savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
-  async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  },text=>{$('document-status').textContent=/^(Rotate:|Drag on the drawing)/.test(text)?'':text.replace(' · drag to select an area','');});
+  function resetDocument(){viewerHelp.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
+  async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;viewerHelp.hidden=true;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);if(generation===documentGeneration)showViewerHelp(file);}catch(e){if(generation===documentGeneration)notify(e.message);}}
   let savedDemoCleanup=()=>{};
   async function showSavedDemo(result){
-    const prefix=`/v1/chats/${encodeURIComponent(chat.chat_id)}/saved-demo-assets/`;if(result.viewer?.chat_id!==chat.chat_id||[result.drawing,result.photo,result.model].filter(Boolean).some(path=>!path.startsWith(prefix)||!/^[-a-z]+$/.test(path.slice(prefix.length))))return;
+    const prefix=`/v1/chats/${encodeURIComponent(chat.chat_id)}/saved-demo-assets/`;if(result.viewer?.chat_id!==chat.chat_id||[result.drawing,result.photo,result.model].filter(Boolean).some(path=>!path.startsWith(prefix)||!/^[-a-z0-9]+$/.test(path.slice(prefix.length))))return;
     resetDocument();const generation=documentGeneration;document.querySelector('.document-workspace').classList.add('showing-progress');$('document-name').textContent=result.title;
     const host=node('div','saved-demo-output'),images=node('div','saved-demo-images');host.append(node('p','muted',result.summary),images);$('document-view').replaceChildren(host);
     const urls=[];let model=null;savedDemoCleanup=()=>{for(const url of urls)URL.revokeObjectURL(url);model?.clear?.();};
@@ -582,7 +607,7 @@
   async function showProgressInline(){
     savedDemoCleanup();savedDemoCleanup=()=>{};
     if(!chat?.chat_id)return;
-    const chatId=chat.chat_id,generation=++documentGeneration;
+    viewerHelp.hidden=true;const chatId=chat.chat_id,generation=++documentGeneration;
     viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;
     document.querySelector('.document-workspace').classList.add('showing-progress');
     $('document-name').textContent='Construction progress · 4D';$('document-download').disabled=true;$('document-status').textContent='Loading progress…';
@@ -626,7 +651,19 @@
   const root=document.documentElement;
   const layoutKey='inspector-document-layout';let layout={files:210,dialogue:360,scale:1,composer:80,activity:160,hideFiles:false,hideChat:false};
   try{Object.assign(layout,JSON.parse(read(localStorage,layoutKey)||'{}'));}catch{}
-  function applyLayout(){layout.files=Math.max(150,Math.min(340,Number(layout.files)||210));layout.dialogue=Math.max(280,Math.min(innerWidth*.5,Number(layout.dialogue)||360));layout.scale=Math.max(.85,Math.min(1.3,Number(layout.scale)||1));root.style.setProperty('--files-width',layout.files+'px');root.style.setProperty('--dialogue-width',layout.dialogue+'px');root.style.setProperty('--ui-scale',layout.scale);layout.composer=Math.max(44,Math.min(innerHeight*.36,Number(layout.composer)||80));layout.activity=Math.max(52,Math.min(innerHeight*.32,Number(layout.activity)||160));root.style.setProperty('--composer-height',layout.composer+'px');root.style.setProperty('--activity-height',layout.activity+'px');root.classList.toggle('files-hidden',!!layout.hideFiles);root.classList.toggle('chat-hidden',!!layout.hideChat);for(const [id,key,label] of [['toggle-files','hideFiles','files'],['toggle-chat','hideChat','chat']]){$(id).textContent=label==='files'?(layout[key]?'›':'‹'):(layout[key]?'‹':'›');$(id).title=(layout[key]?'Show ':'Hide ')+label+' panel';$(id).setAttribute('aria-label',$(id).title);$(id).setAttribute('aria-pressed',String(!layout[key]));}for(const [id,key] of [['resize-composer','composer'],['resize-activity','activity']])$(id).setAttribute('aria-valuenow',String(Math.round(layout[key])));$('ui-scale').value=String(layout.scale);write(localStorage,layoutKey,JSON.stringify(layout));}
+  function alignPanelToggles(){
+    for(const [buttonId,dividerId] of [['toggle-files','resize-files'],['toggle-chat','resize-dialogue']]){
+      const button=$(buttonId),divider=$(dividerId),rect=divider.getBoundingClientRect();
+      if(!rect.width||!rect.height){button.style.removeProperty('left');button.style.removeProperty('right');continue;}
+      const line=getComputedStyle(divider,'::after');
+      const center=rect.left+parseFloat(line.left)+parseFloat(line.width)/2;
+      button.style.left=`${center-button.getBoundingClientRect().width/2}px`;
+      button.style.right='auto';
+    }
+  }
+  const panelToggleObserver=new ResizeObserver(alignPanelToggles);
+  for(const id of ['resize-files','resize-dialogue'])panelToggleObserver.observe($(id));
+  function applyLayout(){layout.files=Math.max(150,Math.min(340,Number(layout.files)||210));layout.dialogue=Math.max(280,Math.min(innerWidth*.5,Number(layout.dialogue)||360));layout.scale=Math.max(.85,Math.min(1.3,Number(layout.scale)||1));root.style.setProperty('--files-width',layout.files+'px');root.style.setProperty('--dialogue-width',layout.dialogue+'px');root.style.setProperty('--ui-scale',layout.scale);layout.composer=Math.max(44,Math.min(innerHeight*.36,Number(layout.composer)||80));layout.activity=Math.max(52,Math.min(innerHeight*.32,Number(layout.activity)||160));root.style.setProperty('--composer-height',layout.composer+'px');root.style.setProperty('--activity-height',layout.activity+'px');root.classList.toggle('files-hidden',!!layout.hideFiles);root.classList.toggle('chat-hidden',!!layout.hideChat);for(const [id,key,label] of [['toggle-files','hideFiles','files'],['toggle-chat','hideChat','chat']]){$(id).textContent=label==='files'?(layout[key]?'›':'‹'):(layout[key]?'‹':'›');$(id).title=(layout[key]?'Show ':'Hide ')+label+' panel';$(id).setAttribute('aria-label',$(id).title);$(id).setAttribute('aria-pressed',String(!layout[key]));}for(const [id,key] of [['resize-composer','composer'],['resize-activity','activity']])$(id).setAttribute('aria-valuenow',String(Math.round(layout[key])));$('ui-scale').value=String(layout.scale);write(localStorage,layoutKey,JSON.stringify(layout));requestAnimationFrame(alignPanelToggles);}
   for(const [id,key,direction] of [['resize-files','files',1],['resize-dialogue','dialogue',-1]]){const handle=$(id);let drag=null;handle.onpointerdown=e=>{if(e.button!==0)return;drag={x:e.clientX,width:layout[key]};handle.setPointerCapture(e.pointerId);};handle.onpointermove=e=>{if(!drag)return;layout[key]=drag.width+(e.clientX-drag.x)*direction;applyLayout();};handle.onpointerup=handle.onpointercancel=()=>{drag=null;};handle.onkeydown=e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();layout[key]+=(e.key==='ArrowRight'?20:-20)*direction;applyLayout();};}
   for(const [id,key,direction] of [['resize-composer','composer',-1],['resize-activity','activity',1]]){
     const handle=$(id);let drag=null;
@@ -668,7 +705,7 @@
     $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();
   }
   $('chat-picker').addEventListener('change',()=>switchConversation($('chat-picker').value));
-  $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await refresh(); event.submitter.disabled=false;});
+  $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await startWorkspace(); event.submitter.disabled=false;});
   $('lock').addEventListener('click',lock);
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
@@ -687,5 +724,169 @@
   intro.addEventListener('close',()=>write(sessionStorage,'inspector-demo-intro-v1','seen'));
   $('demo-about').onclick=()=>intro.showModal();
   if(!read(sessionStorage,'inspector-demo-intro-v1'))intro.showModal();
-  if(token) refresh();
+  let demoInstalled=false;
+  async function startWorkspace(){
+    if(demoInstalled){await refresh();return;}
+    let configuration;try{configuration=await api('/v1/demo/config');}catch{await refresh();return;}
+    if(!configuration.enabled){await refresh();return;}
+    demoInstalled=true;
+  // Guided recorded demo, enabled by the authenticated server configuration.
+  const demoCases=[
+    ['geometry','Compare the 3D model with site photos','Open the Photo and 3D demo.'],
+    ['drawing','Check installation against the drawing','Open the Drawing and photo demo.'],
+    ['progress','Review construction progress','Open the Construction progress demo.']
+  ];
+  const openSavedDemo=showSavedDemo;
+  showSavedDemo=async function(result){
+    if(result.geometry_evidence){
+      resetDocument();const generation=documentGeneration;document.querySelector('.document-workspace').classList.add('showing-progress');$('document-name').textContent=result.title;
+      const data=result.geometry_evidence,host=node('div','saved-demo-output geometry-demo');$('document-view').replaceChildren(host);
+      const base=`/v1/chats/${encodeURIComponent(chat.chat_id)}/saved-demo-assets/`,safe=path=>typeof path==='string'&&path.startsWith(base)&&/^geometry-([a-f0-9]+|comparison)$/.test(path.slice(base.length));
+      let comparison=null,epoch=0;const urls=[];
+      savedDemoCleanup=()=>{epoch++;urls.forEach(url=>URL.revokeObjectURL(url));comparison?.destroy();};
+      const modelHost=node('section','comparison-viewer'),loading=node('p','muted','Loading comparison models…');modelHost.append(loading);host.append(modelHost);
+      const objects=data.objects.filter(obj=>obj.match_status==='matched'&&obj.ifc_guid);
+      try{if(!safe(result.comparison))throw Error('Reopen the comparison use case to load its updated models.');const modelData=await api(result.comparison);if(generation!==documentGeneration)return;comparison=DemoComparison.create(modelHost,modelData,objects.map(o=>o.id));}catch(e){loading.textContent='Model comparison unavailable: '+e.message;}
+      const selector=node('div','geometry-object-tabs');selector.setAttribute('aria-label','Matched objects');
+      const measurements=node('div','geometry-measurements'),focus=node('button','quiet','Show in 3D'),frames=node('div','demo-actions'),gallery=node('div','geometry-evidence'),note=node('p','muted','Recorded measurements require review: boundaries and absolute accuracy are not verified. Three-model display uses the supplied HTML; measurements and photos use the saved Geometry report.');
+      host.append(selector,measurements,focus,note,frames,gallery);
+      const labelFor=obj=>{const name=obj.type==='door'?'Door':obj.type==='window'?'Window':'Element';const same=objects.filter(o=>o.type===obj.type);return same.length===1?name:name+' '+(same.indexOf(obj)+1);};
+      async function showFrame(photo,button){
+        const ticket=++epoch;frames.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));gallery.replaceChildren();urls.splice(0).forEach(url=>URL.revokeObjectURL(url));
+        const main=node('figure','evidence-primary'),large=node('img'),largeWrap=node('div','evidence-media'),caption=node('figcaption'),thumbs=node('div','evidence-thumbnails');largeWrap.append(large);main.append(largeWrap,caption);gallery.append(main,thumbs);
+        for(const [key,label] of [['overlay_url','Evidence overlay'],['rgb_url','Original photo'],['mask_url','Segmentation mask']]){
+          if(!safe(photo[key]))continue;
+          try{const blob=await api(photo[key],{blob:true});if(ticket!==epoch||generation!==documentGeneration)return;const url=URL.createObjectURL(blob);urls.push(url);
+            // This saved phone capture uses native sensor buffers; its overlays are already upright.
+            const nativeFrameIds=new Set(['cf50f812-1032-4653-8ec6-098b95c2a165','a1c3bb67-b7e5-493b-9ad7-b1a53d1ac2e9','b19c8eb3-01b1-4e61-bd16-2d4a60d10351','36e302db-ce73-40bc-b517-85820f84534b','cf1369b6-f64f-4790-92d5-b3a58c5f6d15','31827066-f301-40d4-83fd-a7b5fd20ec45','ae3e92a3-2bd8-4f0e-83d8-cdfe4afec24e','19e23887-1ab5-4bd5-8385-a307a5faa5f8']);
+            const rotated=key!=='overlay_url'&&nativeFrameIds.has(photo.frame_id);
+            const orient=(wrap,image)=>{const w=image.naturalWidth,h=image.naturalHeight;if(!w||!h)return;const ratio=rotated?h/w:w/h;wrap.classList.toggle('sensor-rotated',rotated);wrap.style.aspectRatio=String(ratio);wrap.style.setProperty('--image-ratio',String(w/h));wrap.style.setProperty('--upright-ratio',String(ratio));};
+            const thumb=node('button','evidence-thumbnail'),img=node('img'),wrap=node('div','evidence-media');thumb.type='button';img.onload=()=>orient(wrap,img);img.src=url;img.alt=label;wrap.append(img);thumb.append(wrap,node('span','',label));thumb.setAttribute('aria-pressed','false');
+            const select=()=>{large.onload=()=>orient(largeWrap,large);large.src=url;large.alt=label;if(large.complete)orient(largeWrap,large);caption.textContent=label;thumbs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===thumb)));};thumb.onclick=select;thumbs.append(thumb);if(!large.getAttribute('src'))select();
+          }catch(e){thumbs.append(node('p','','Could not load '+label));}
+        }
+      }
+      function selectObject(obj,button){
+        selector.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));measurements.replaceChildren();frames.replaceChildren();
+        const name=labelFor(obj),cm=value=>Number.isFinite(value)?(value>0?'+':'')+(value*100).toFixed(1)+' cm':'Not measured';
+        measurements.append(node('strong','',name+' · Review needed'));
+        const table=node('table'),head=node('tr');for(const text of ['Measurement','Design','Observed','Difference'])head.append(node('th','',text));table.append(head);
+        for(const [key,label] of [['width','Width'],['height','Height']]){const m=obj.dimensions?.[key]||{},row=node('tr');for(const text of [label,Number.isFinite(m.ifc)?(m.ifc*100).toFixed(1)+' cm':'—',Number.isFinite(m.scan)?(m.scan*100).toFixed(1)+' cm':'—',cm(m.difference)])row.append(node('td','',text));table.append(row);}measurements.append(table);
+        const offsets=node('div','geometry-offsets');for(const [key,label] of [['along_wall','Along wall'],['vertical','Vertical'],['normal_to_wall','From wall plane']])offsets.append(node('span','',label+': '+cm(obj.displacement?.[key])));measurements.append(offsets,node('p','muted','Signed differences are scan minus design in the report axes. They do not establish a confirmed installation defect.'));
+        focus.onclick=()=>{if(comparison?.selectPair(obj.id,obj.ifc_guid)){host.scrollTop=0;$('document-view').scrollTop=0;}else notify('This object has no matching pair in the supplied 3D display.');};
+        comparison?.selectPair(obj.id,obj.ifc_guid);
+        obj.photos.forEach((photo,i)=>{const b=node('button','quiet','View '+(i+1));b.type='button';b.onclick=()=>showFrame(photo,b);frames.append(b);});
+        if(obj.photos.length)showFrame(obj.photos[0],frames.firstChild);else gallery.replaceChildren(node('p','','No photo evidence supplied.'));
+      }
+      objects.forEach(obj=>{const b=node('button','quiet',labelFor(obj));b.type='button';b.onclick=()=>selectObject(obj,b);selector.append(b);});
+      if(objects.length)selectObject(objects[0],selector.firstChild);else host.append(node('p','','No matched objects in this result.'));
+      return;
+    }
+    await openSavedDemo(result);
+    if(!result.variants?.length||$('document-name').textContent!==result.title)return;
+    const host=$('document-view').querySelector('.saved-demo-output');if(!host)return;
+    const choices=node('div','demo-actions');choices.setAttribute('aria-label','Comparison photo');
+    for(const variant of result.variants){
+      const button=node('button','quiet',variant.label);button.type='button';
+      button.setAttribute('aria-pressed',String(result.photo===variant.photo));
+      button.onclick=()=>showSavedDemo({...result,photo:variant.photo,report:variant.report});choices.append(button);
+    }
+    host.prepend(choices);
+    const selected=result.variants.find(v=>v.photo===result.photo);
+    const figures=[...host.querySelectorAll('.saved-demo-images figure')];
+    for(const figure of figures){
+      const img=figure.querySelector('img'),wrap=node('div','demo-evidence-image');
+      img.before(wrap);wrap.append(img);figure.querySelector('figcaption').textContent=img.alt==='Photo'?(selected?.label||'Photo'):'Window Drawing.png';
+    }
+    const note=node('p','demo-evidence-note','Select a detail to locate its reference regions. Marks are manually prepared for the demo, not agent-generated evidence.');
+    const table=host.querySelector('table');if(!table)return;table.before(note);
+    const rows=[...table.querySelectorAll('tr')].slice(1);
+    rows.forEach((row,i)=>{
+      const finding=result.report.findings[i],button=node('button','demo-detail-button',finding.criterion);button.type='button';button.setAttribute('aria-pressed','false');row.cells[0].replaceChildren(button);
+      row.cells[1].textContent=({match:'Visual match',mismatch:'Visual difference',inconclusive:'Insufficient evidence'})[finding.verdict]||'Insufficient evidence';
+      const select=()=>{
+        for(const r of rows){r.classList.remove('evidence-selected');r.querySelector('button').setAttribute('aria-pressed','false');}
+        row.classList.add('evidence-selected');button.setAttribute('aria-pressed','true');
+        for(const old of host.querySelectorAll('.demo-evidence-box'))old.remove();
+        for(const figure of figures){
+          const img=figure.querySelector('img'),key=img.alt==='Photo'?'photo':'drawing',wrap=figure.querySelector('.demo-evidence-image');
+          for(const [x,y,w,h] of finding.evidence?.[key]||[]){const box=node('span','demo-evidence-box');box.setAttribute('aria-label',finding.criterion+' — manually marked region');Object.assign(box.style,{left:x*100+'%',top:y*100+'%',width:w*100+'%',height:h*100+'%'});wrap.append(box);}
+        }
+        const missing=['drawing','photo'].filter(key=>!finding.evidence?.[key]?.length);
+        note.textContent=finding.criterion+' · Manually marked demo references.'+(missing.length?' No visible evidence region in '+missing.join(' or ')+'. Hidden construction and measurements cannot be verified from these images.':' Compare the highlighted areas; these are visual observations, not compliance verdicts.');
+        host.querySelector('.saved-demo-images').scrollIntoView({block:'nearest'});
+      };
+      button.onclick=select;row.onclick=e=>{if(!e.target.closest('button'))select();};
+    });
+
+  };
+  let demoBusy=false, demoReady=false;
+  const demoHint=node('p','demo-next','Choose a use case');
+  const demoSteps=node('section','demo-steps');demoSteps.hidden=true;demoSteps.setAttribute('aria-live','polite');
+  $('activity-open').after(demoSteps);
+  const demoTimeline=node('section','demo-steps');demoTimeline.hidden=true;$('activity').before(demoTimeline);
+  const demoActions=node('div','demo-actions');demoActions.id='demo-navigation-actions';
+  const ask=node('button','quiet','Ask about this result');ask.type='button';ask.hidden=true;
+  ask.onclick=()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('message').focus();$('message').placeholder='Ask a question about the current result…';};
+  const reset=node('button','quiet','Back to start');reset.type='button';
+  demoActions.append(ask,reset);$('suggestions').before(demoHint);$('suggestions').after(demoActions);
+  $('suggestions').replaceChildren();
+  function demoControls(){
+    document.querySelector('.conversation').classList.toggle('demo-working',demoBusy);
+    for(const b of $('suggestions').querySelectorAll('button'))b.disabled=demoBusy||!demoReady||sending||!!pending;
+    reset.disabled=demoBusy||sending||!!pending;ask.disabled=demoBusy||sending||!!pending;
+    if(demoBusy){$('new-chat').disabled=true;$('chat-picker').disabled=true;$('message').disabled=true;$('send').disabled=true;}
+  }
+  const originalControls=controls;
+  controls=function(){originalControls();demoControls();};
+  function paintDemoStages(stages,position){
+    demoSteps.hidden=false;demoSteps.replaceChildren(node('strong','','Demo replay · simulated stages'));
+    stages.forEach((label,i)=>demoSteps.append(node('div',i===position?'demo-stage-active':'',`${i<position?'✓':i===position?'◌':'○'} ${label}`)));
+    demoTimeline.hidden=false;demoTimeline.replaceChildren(...[...demoSteps.childNodes].map(n=>n.cloneNode(true)));
+  }
+  async function runDemo(item){
+    if(demoBusy||!demoReady||sending||pending)return;
+    demoBusy=true;workspaceBusy=true;controls();notify();ask.hidden=true;
+    const stages=['Load prepared dataset',item[0]==='progress'?'Read saved weekly analysis':'Read saved comparison','Prepare viewer and findings'];
+    try{
+      for(let i=0;i<stages.length;i++){paintDemoStages(stages,i);await new Promise(resolve=>setTimeout(resolve,650));}
+      // A deterministic local adapter uses the normal persisted chat/tool path.
+      chosenFiles.clear();documentContext=null;$('document-context').hidden=true;
+      renderFiles();$('message').value=item[2];workspaceBusy=false;
+      await send();
+      const last=chat?.runs?.at(-1);
+      if(last?.text!==item[2]||last.status!=='completed'||!last.tool_results?.some(t=>t.result?.viewer))throw new Error(last?.error?.message||'Result not ready. Resume the request or try again.');
+      paintDemoStages(stages,stages.length);
+      demoHint.textContent='Next use case';ask.hidden=false;$('messages').scrollTop=$('messages').scrollHeight;
+    }catch(error){demoHint.textContent='The demo could not finish. You can retry the use case.';notify(error.message);demoSteps.append(node('p','','Replay interrupted.'));}
+    finally{demoBusy=false;workspaceBusy=false;controls();}
+  }
+  for(const item of demoCases){const b=node('button','',item[1]);b.type='button';b.dataset.scenario=item[0];const arrow=node('span','demo-case-arrow','→');arrow.setAttribute('aria-hidden','true');b.append(arrow);b.onclick=()=>runDemo(item);$('suggestions').append(b);}
+  async function startDemo(){
+    if(demoBusy||sending||pending)return;
+    demoReady=false;demoBusy=true;controls();
+    try{
+      $('message').value='';await switchConversation('');
+      await ensureChat();await refresh();
+      layout.hideFiles=false;layout.hideChat=false;applyLayout();
+      presentedProgress.clear();resetDocument();showTrash=false;chosenFiles.clear();renderFiles();
+      demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Choose a use case';ask.hidden=true;
+      $('message').placeholder='Ask Inspector…';
+      write(sessionStorage,'inspector-guided-demo-chat',chat.chat_id);demoReady=true;
+    }catch(error){notify('Could not prepare the demo: '+error.message);}
+    finally{demoBusy=false;controls();}
+  }
+  reset.onclick=startDemo;
+  // New conversation is the same reversible reset; existing chats remain saved.
+  $('new-chat').addEventListener('click',event=>{event.stopImmediatePropagation();startDemo();},true);
+  $('chat-picker').addEventListener('change',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Choose a use case';},true);
+  document.querySelector('.welcome-instruction').textContent='Choose a use case in chat. Stages are simulated and results are saved; no new scan or inspection runs. Follow-up questions use the connected AI.';
+  if(token)(async()=>{
+    await refresh();
+    if(read(sessionStorage,'inspector-guided-demo-chat')===chat?.chat_id){demoReady=true;ask.hidden=!(chat?.runs?.length);if(!ask.hidden)demoHint.textContent='Next use case';controls();}
+    else await startDemo();
+  })();
+
+  }
+  if(token) startWorkspace();
 })();

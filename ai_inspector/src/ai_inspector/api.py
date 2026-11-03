@@ -202,6 +202,33 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     if static_ui:
         app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "web"), name="operator-ui")
 
+    if settings.saved_demo_dir:
+        from .saved_demo import configure
+        configure(app, service)
+
+    @app.get("/v1/demo/config")
+    def demo_config(principal: Annotated[Principal, Depends(operator)]):
+        return {"enabled": bool(settings.saved_demo_dir)}
+
+    @app.get("/v1/voice/config")
+    def voice_config(principal: Annotated[Principal, Depends(operator)]):
+        return {"enabled": bool(settings.voice_enabled and settings.meta_api_key)}
+
+    voice_lock = asyncio.Lock()
+
+    @app.post("/v1/voice/transcribe")
+    async def voice_transcribe(request: Request, principal: Annotated[Principal, Depends(operator)]):
+        from .voice import MAX_AUDIO_BYTES, transcribe
+        if voice_lock.locked():
+            raise APIError(429, "voice_busy", "Another recording is being transcribed")
+        async with voice_lock:
+            chunks = bytearray()
+            async for chunk in request.stream():
+                chunks.extend(chunk)
+                if len(chunks) > MAX_AUDIO_BYTES:
+                    raise APIError(413, "audio_too_large", "Record up to 60 seconds")
+            return {"text": await transcribe(settings, bytes(chunks))}
+
     @app.get("/v1/operator/backlog", tags=["operations"])
     def backlog_list(principal: Annotated[Principal, Depends(operator)]):
         return list_items(service.database, principal.project_id)

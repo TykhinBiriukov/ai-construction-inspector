@@ -33,6 +33,9 @@ def project_for_chat(service, principal, chat_id):
     with service.database.connection() as conn:
         service.workspace.check(conn, principal, chat_id)
     settings = service.settings
+    if settings.saved_demo_dir:
+        from pathlib import Path
+        return json.loads((Path(settings.saved_demo_dir) / 'timeline.json').read_text())['project_id']
     if not settings.progress4d_base_url or not settings.progress4d_service_token:
         raise APIError(503, 'progress4d_unavailable', '4D service is not configured yet.')
     project = json.loads(settings.progress4d_chat_projects_json).get(chat_id)
@@ -46,6 +49,17 @@ async def read_response(settings, project, path, byte_range=None, *, transport=N
     artifact = re.fullmatch(r'jobs/([0-9a-f-]{36})/artifacts/([A-Za-z0-9_.-]{1,160})', path)
     if path not in ('timeline', 'report') and not artifact:
         raise APIError(404, 'not_found', 'Unknown 4D resource')
+    if settings.saved_demo_dir:
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+        root = Path(settings.saved_demo_dir)
+        manifest = json.loads((root / 'progress-assets.json').read_text())
+        if path in ('timeline', 'report'):
+            return FileResponse(root / 'timeline.json', media_type='application/json', headers={'Cache-Control':'private, no-store'})
+        if path not in manifest:
+            raise APIError(404, 'not_found', 'Unknown saved artifact')
+        entry = manifest[path]
+        return FileResponse(root / entry['file'], media_type=entry['mime'], headers={'Cache-Control':'private, no-store'})
     headers = {'Authorization': 'Bearer ' + settings.progress4d_service_token}
     if byte_range:
         match = re.fullmatch(r'bytes=(\d{1,12})-(\d{1,12})', byte_range)
@@ -80,17 +94,21 @@ def agent_result(service, principal, chat_id, expected_project, *, transport=Non
         raise APIError(409, 'progress4d_binding_changed', 'The monitoring project binding changed. Submit a new request.')
     settings = service.settings
     try:
-        with httpx.Client(timeout=30, follow_redirects=False, transport=transport) as client:
-            with client.stream('GET', settings.progress4d_base_url.rstrip('/') + f'/v1/projects/{project}/timeline',
-                               headers={'Authorization': 'Bearer ' + settings.progress4d_service_token}) as response:
-                if response.status_code != 200:
-                    raise APIError(502, 'progress4d_unavailable', 'The connected monitoring result is unavailable', retryable=True)
-                content = bytearray()
-                for chunk in response.iter_bytes():
-                    content.extend(chunk)
-                    if len(content) > 16 * 1024 * 1024:
-                        raise ValueError
-        value = json.loads(content)
+        if settings.saved_demo_dir:
+            from pathlib import Path
+            value=json.loads((Path(settings.saved_demo_dir)/'timeline.json').read_text())
+        else:
+            with httpx.Client(timeout=30, follow_redirects=False, transport=transport) as client:
+                with client.stream('GET', settings.progress4d_base_url.rstrip('/') + f'/v1/projects/{project}/timeline',
+                                   headers={'Authorization': 'Bearer ' + settings.progress4d_service_token}) as response:
+                    if response.status_code != 200:
+                        raise APIError(502, 'progress4d_unavailable', 'The connected monitoring result is unavailable', retryable=True)
+                    content = bytearray()
+                    for chunk in response.iter_bytes():
+                        content.extend(chunk)
+                        if len(content) > 16 * 1024 * 1024:
+                            raise ValueError
+            value = json.loads(content)
         if value.get('project_id') != project or not isinstance(value.get('surveys'), list):
             raise ValueError
         report = value.get('report') or {}

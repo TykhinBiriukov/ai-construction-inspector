@@ -6,7 +6,7 @@ services:
     environment:
       INSPECTOR_REVISION: ${INSPECTOR_REVISION}
     ports: ['127.0.0.1:8200:8200']
-    volumes: ['backend-cache:/data']
+    volumes: ['backend-cache:/data', '/opt/inspector-backend/demo-assets:/demo-assets:ro']
     mem_limit: 1g
     cpus: 0.75
     stop_grace_period: 40s

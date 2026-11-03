@@ -3,8 +3,8 @@ set -euo pipefail
 cd /opt/inspector-backend
 exec 9>update.lock
 flock -n 9 || exit 0
-git -C source fetch origin feat/ai-inspector-development
-revision=$(git -C source rev-parse origin/feat/ai-inspector-development)
+git -C source fetch origin main
+revision=$(git -C source rev-parse origin/main)
 if [ -f deployed-revision ] && [ "$(cat deployed-revision)" = "$revision" ]; then exit 0; fi
 git -C source checkout --detach "$revision"
 docker build -f source/ai_inspector/deploy/gcp/Dockerfile -t "inspector-backend:$revision" source

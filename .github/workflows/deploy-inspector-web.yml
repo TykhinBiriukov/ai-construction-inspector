@@ -2,7 +2,7 @@ name: Deploy Inspector backend and web
 
 on:
   push:
-    branches: [feat/ai-inspector-development]
+    branches: [main]
     paths:
       - ai_inspector/src/ai_inspector/**
       - ai_inspector/cloudflare/**
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/feat/ai-inspector-development'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
