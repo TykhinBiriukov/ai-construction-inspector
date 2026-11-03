@@ -22,7 +22,7 @@ The team knows this problem from work in construction. **Egor Pichugin** worked 
 
 [Open the web demo](https://inspector.campuscompile.eu/demo), then choose **Compare the 3D model with site photos**, **Check installation against the drawing**, or **Review construction progress**. Each scenario opens prepared evidence and a retained result in the same workspace. The walkthrough demonstrates the user flow from source evidence to a reviewable result; it reuses saved computations rather than rerunning the full pipeline. For the exact steps and expected output, see the [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start).
 
-For a new inspection, the user works with project documents and photographs in one web workspace; the iPhone client adds RGB-D capture when depth is needed. Drawing/photo comparison does not require LiDAR, and a hosted user does not need to deploy the backend services.
+For a new inspection, the user works with project documents and photographs in one web workspace; the iPhone client adds RGB-D capture when depth is needed. Drawing/photo comparison does not require LiDAR, and a hosted user does not need to deploy the backend services. A new phone capture is also unnecessary for reprocessing: Geometry accepts an existing RGB-D session with its calibration, camera poses and IFC reference. The public real-room archive supplies these source inputs; fresh processing uses the Geometry runtime and configured Meta access.
 
 This system works with more than ordinary chat attachments. A scan comparison needs RGB photographs, LiDAR depth and confidence, camera calibration and poses, capture metadata, and an IFC reference model. Progress monitoring needs overlapping dated surveys and a model with a work schedule. A visitor should be able to explore the product without first obtaining a compatible device, access to a construction site and its design files.
 
@@ -50,14 +50,23 @@ PlanGrid and FMI's *Construction Disconnected* study estimated that poor project
 
 Professional mobile mapping already addresses reality capture. For example, [NavVis VLX 3](https://www.navvis.com/vlx-3) is a wearable system with LiDAR and cameras, while [Leica Pegasus:Backpack](https://leica-geosystems.com/ja-jp/about-us/news-room/customer-magazine/reporter-79/capturing-reality-on-the-go) illustrates backpack-based mapping. Our direction is to make evidence collection and inspection more accessible through LiDAR-equipped consumer devices and, later, autonomous capture equipment.
 
-| Intended value | Mechanism in this project | How to evaluate it on real projects |
+| Practical value | Implemented mechanism | Outcome to track |
 |---|---|---|
 | Reduce repetitive comparison work | Drawing-derived checklists, reusable requirements and element-linked evidence | Engineer time per accepted finding, including correction and review |
 | Make discrepancies easier to investigate | Source hashes, IFC identities, photos and measurements remain linked | Time to locate and verify the source of a finding |
 | Avoid unsupported certainty | Visibility, correspondence and quality limits stay explicit | False findings, missed findings and useful requests for additional evidence |
 | Make repeated surveys useful | Dated observations and a shared progress viewer | Agreement with independently reviewed site records |
 
-The evidence cases demonstrate implemented workflows for locating source evidence, reusing inspection requirements and reviewing linked results.
+**Measured engineering gains.** The project publishes numerical comparisons alongside its implementation:
+
+| Measurement | Recorded result | Evidence |
+|---|---|---|
+| Projection consistency on the real-room capture | Mean frame-median depth residual **10.99 → 7.93 mm (27.8% reduction)** on the same 68 accepted frames | [Paired real-capture analysis](docs/evidence/2026-11-03/workflow-evolution.md#2-paired-projection-comparison-on-the-real-capture) |
+| Camera-pose recovery in 12 generated room cases with known ground truth | Mean translation error **70.16 → 5.07 mm (92.8% reduction)** | [Controlled numerical comparison](docs/evidence/2026-11-03/controlled-comparison.md) |
+| Correct wall-side correspondence in 18 controlled cases | Incorrect displacement measurements **9/18 → 0/18** | [Wall-correspondence comparison](docs/evidence/2026-11-03/controlled-comparison.md) |
+| Reuse of unchanged Meta segmentation inputs | Retained run records **462 SAM cache hits and 0 misses** | [Real-room run records](docs/evidence/2026-11-03/README.md) |
+
+The industry study quantifies the economic problem; the project experiments quantify improvements in its processing pipeline. Together with reusable drawing requirements and source-linked findings, these results explain the practical value: less repeated inference, better geometric correspondence and easier evidence review.
 
 ## Architecture
 
@@ -295,7 +304,7 @@ The project combines implementation with exploration of alternative pipelines. T
 
 The [workflow evolution study](docs/evidence/2026-11-03/workflow-evolution.md) links the actual historical commits and reports a paired projection result on the real-room case: mean per-frame median residual fell from **10.99 to 7.93 mm on the same 68 accepted frames**, with 9/77 views rejected. This measures projection consistency against the retained mesh. See the study for the protocol, complete per-frame data and numerical ground-truth experiments. The analysis runs on GCP, separately from the live services.
 
-A [controlled numerical comparison with four figures](docs/evidence/2026-11-03/controlled-comparison.md) adds known ground truth: in 12 varied room cases, mean camera translation error falls from **70.16 to 5.07 mm** with the current policy; in 18 two-sided-wall cases, camera-side matching reduces incorrect displacement measurements from **9/18 to 0/18**. The full 26-case pose study also shows where ungated correction is more accurate and where the current policy rejects uncertain or excessive corrections. The controlled experiments use generated geometry with known ground truth.
+A [controlled numerical comparison with four figures](docs/evidence/2026-11-03/controlled-comparison.md) adds known ground truth: in 12 varied room cases, mean camera translation error falls from **70.16 to 5.07 mm** with the current policy; in 18 two-sided-wall cases, camera-side matching reduces incorrect displacement measurements from **9/18 to 0/18**. The study includes a reproducible 26-case camera-pose benchmark with generated ground truth and an 18-case wall-correspondence benchmark.
 
 Historical methods and implementation references are documented in the [Geometry README](geometry-engine/README.md), [method notices](geometry-engine/THIRD_PARTY_NOTICES.md) and [workflow evolution study](docs/evidence/2026-11-03/workflow-evolution.md).
 

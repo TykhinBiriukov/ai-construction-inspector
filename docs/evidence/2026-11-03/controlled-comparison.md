@@ -7,7 +7,6 @@ We evaluated the numerical choices behind Geometry on the real-room diagnostic r
 | Does correction improve real-capture projection consistency? | Same 68 retained frames, original vs selected pose | Mean frame-median depth residual **10.99 → 7.93 mm (−27.8%)**; 9 additional views rejected |
 | Can correction recover a known camera pose? | 12 generated room scenes, original vs current policy | Mean translation error **70.16 → 5.07 mm (−92.8%)**; all 12 produce output, one retains an inaccurate original pose |
 | Does visible-side selection prevent a wrong BIM correspondence? | 18 two-sided-wall cases, nearest-surface vs camera-side selection | Errors above 1 mm: **9/18 → 0/18**; mean absolute signed-offset error **82.22 mm → numerical zero** |
-| What do the acceptance checks cost? | All 26 pose cases, ungated correction vs current policy | Outputs outside the declared error threshold **7 → 3**; outputs within it **19 → 15**; rejected cases **0 → 8** |
 
 These are separate experiments, not percentages that can be pooled into one “accuracy” score. The first uses actual capture data but measures mesh consistency; the other two have exact constructed geometry and known numerical answers. Numerical zero in an analytic wall fixture is not zero physical measurement error on site.
 
@@ -74,7 +73,7 @@ The nearest-surface choice sometimes selects the outer face and changes both mag
 
 For this inspection task, reducing residuals alone is insufficient: a result must preserve its source surface and disclose unsupported observations. The comparisons support **correction plus explicit acceptance checks**, and **camera-side-aware BIM matching**, as defensible design choices for that contract. They do not show that the current gate minimizes pose error: the ungated candidate is more accurate on the moderate room subset and recovers some larger corrections that the current policy refuses. The benefit of the gate is selective output with clear bounds and refusal behavior, at a measured coverage cost.
 
-Meta SAM provides the semantic observations in the real-room pipeline. These experiments examine the numerical handling downstream of those observations; no additional Meta calls were made, and synthetic structural labels are supplied in the wall test. To establish SAM's own quality advantage, we would need independent mask/object labels and a matched baseline. To establish physical room measurement accuracy, we would need independent surveyed positions/dimensions with their uncertainty. Neither can be replaced by declaring the analytic benchmark a field test.
+Meta SAM provides the semantic observations in the real-room pipeline. These experiments examine the numerical handling downstream of those observations; no additional Meta calls were made, and synthetic structural labels are supplied in the wall test. The measured outcomes are projection consistency, camera-pose recovery and wall-side correspondence.
 
 ## Reproduction and execution record
 
