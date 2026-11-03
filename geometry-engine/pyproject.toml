@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geometry-engine"
+version = "0.1.0"
+description = "RGB-D reconstruction, segmentation and scan-vs-BIM comparison for AI Construction Inspector"
+readme = "README.md"
+license-files = ["THIRD_PARTY_NOTICES.md"]
+requires-python = ">=3.11"
+dependencies = ["numpy==2.4.3", "scipy==1.17.1", "Pillow==12.1.1"]
+
+[project.optional-dependencies]
+reconstruction = ["open3d==0.20.0"]
+scan-vs-bim = ["open3d==0.20.0", "ifcopenshell==0.9.0.post1"]
+server = ["fastapi==0.162.0", "uvicorn==0.54.0", "httpx==0.28.1", "supabase==2.33.0", "python-dotenv==1.2.4", "SQLAlchemy==2.0.55", "alembic==1.20.1", "psycopg[binary]==3.3.6"]
+segmentation = ["httpx==0.28.1", "python-dotenv==1.2.4", "meta-sam-parser==0.1.0"]
+
+all = ["geometry-engine[server,reconstruction,scan-vs-bim,segmentation]"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["geometry_engine", "geometry_engine.*", "geometry_engine_api", "geometry_engine_api.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"geometry_engine.visualization" = ["model_comparison_viewer.html"]
+"geometry_engine_api.database" = ["migrations/env.py", "migrations/script.py.mako", "migrations/versions/*.py"]
