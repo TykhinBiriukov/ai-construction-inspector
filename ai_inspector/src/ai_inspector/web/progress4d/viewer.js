@@ -1,7 +1,7 @@
 'use strict';
 const el = id => document.getElementById(id);
 const project = new URLSearchParams(location.search).get('project');
-const embeddedChat = location.pathname.startsWith('/ui/progress4d/') ? new URLSearchParams(location.search).get('chat') : null;
+const embeddedChat = /^\/(?:ui\/)?progress4d\//.test(location.pathname) ? new URLSearchParams(location.search).get('chat') : null;
 const embedded = /^[0-9a-f-]{36}$/i.test(embeddedChat || '');
 if(embedded)document.documentElement.classList.add('embedded');
 const key = `progress4d:view:${project}`;
