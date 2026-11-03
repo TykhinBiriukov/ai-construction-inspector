@@ -22,19 +22,17 @@ The team knows this problem from work in construction. **Egor Pichugin** worked 
 
 This system works with more than ordinary chat attachments. A scan comparison needs RGB photographs, LiDAR depth and confidence, camera calibration and poses, capture metadata, and an IFC reference model. Progress monitoring needs overlapping dated surveys and a model with a work schedule. A visitor should be able to explore the product without first obtaining a compatible device, access to a construction site and its design files.
 
-The intended web demo therefore uses prepared inputs and, where appropriate, saved computation results. **The public demo link and the final published dataset inventory are pending.** The scenarios below describe the planned walkthrough using implemented entry points.
+The demo uses prepared inputs and saved computation results. Start with the [versioned evidence cases](docs/evidence/2026-11-03/README.md): the primary case is a completed Geometry reconstruction from **99 real-room RGB-D observations**, with the reference IFC, point cloud, meshes and image-linked comparison results available as a [downloadable package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03).
 
-| Experience | Prepared inputs | What the visitor does | What the result should make visible |
-|---|---|---|---|
-| Scan versus BIM | Reference IFC; complete RGB-D capture; a committed Geometry result for the same capture/reference | Open a chat, provide the prepared capture session ID, and request review of the saved result | Element-linked observations, measured differences where available, original/overlay/mask views and evidence limitations |
-| Photograph versus drawing | One explicitly selected detail drawing or PDF page and a photograph of the corresponding assembly | Ask a question about the visible installation; compare another photo against the same drawing if desired | A drawing-derived checklist, separate findings by requirement, evidence regions and unresolved questions |
-| Construction progress | An IFC work schedule, dated overlapping photo surveys, and processed results linked to the chat | Ask about progress and open the weekly-model viewer | Survey dates, reconstructed surfaces, observed/unknown product counts and conditional schedule scenarios |
+| Case | Available evidence | What it establishes |
+|---|---|---|
+| Real-room scan versus BIM | 396 capture files, pinned IFC, point cloud, reconstructed/segmented meshes, 12 stage manifests and comparison reports | Completed Geometry computation; 6 object candidates, 5 observed surfaces and traceable source frames |
+| Photograph versus drawing | Same-input legacy/staged reports; three frozen-checklist runs with audit diagnostics and evidence regions | Historical live model analyses, requirement reuse and retained uncertainty; the edited-gap case did not obtain its expected mismatch |
+| Construction progress | Six dated development evaluation records and the saved seven-week walkthrough | Recorded monitoring behavior and coverage limits; the seventh scene is prepared visualization |
 
-The planned geometry story uses rooms **B01 and B02**: a baseline comparison, a deliberately introduced window discrepancy, and a door whose visibility is insufficient. The planned drawing story concerns a window detail and a potentially missing membrane. These are demonstration scenarios, not measured results in this README. Exact files, hashes, modifications and accepted outputs must accompany the published demo. A hidden membrane cannot be declared absent from a photograph.
+The [case guide](docs/evidence/2026-11-03/README.md) distinguishes source provenance, saved results, fresh analysis and remaining validation. Geometry object matches are associations, not certified acceptance decisions. The real-room output has not been independently surveyed for measurement accuracy, and a final Inspector/Verifier review is not established by the Geometry result alone.
 
-In the prepared scan walkthrough, the system reviews a saved reconstruction so the visitor can focus on findings without waiting for the scan to be processed again. For a drawing comparison, select the drawing, its page if needed, and the photograph to inspect. The progress walkthrough opens a previously processed survey project linked to the conversation. The technical details of these modes are documented below.
-
-Demo labels distinguish **real captures**, **saved results** with their original input/result identities, **synthetic or deliberately modified inputs**, and **mock integration fixtures**. A saved result also retains whether its source was real or synthetic; a mock is not an inspection finding.
+For the interactive workspace, follow the [guided demo](ai_inspector/docs/guided-demo.md). Selecting a saved scenario reads retained results; it does not perform a new reconstruction. Model follow-up questions and fresh analysis are separate paths. A reviewer can inspect the release package without a running service or model credentials.
 
 ## Problem and value
 
@@ -332,7 +330,7 @@ OpenMVS hole closing and artificial tower points are disabled; incomplete covera
 
 ### Evidence needed for quantitative comparisons
 
-The repository describes synthetic evaluations and maintains validation code, but no reviewed, common-input old/new accuracy/latency/cost results are supplied with this README. A future benchmark should publish input identities and provenance, model/prompt/algorithm versions, hardware, repetitions, failures and abstentions. Useful measures include registration error against an independent reference, false/missed findings, material versus geometry verdict quality, model calls, elapsed time and engineer review time. Runtime limits and configuration values above must not be presented as benchmark scores.
+The repository includes validation code and a [saved same-input drawing/photo comparison](docs/evidence/2026-11-03/README.md#same-input-legacystaged-run) that supplies per-run time, calls and judgments. It has no independent accuracy labels or repeated trials. A future benchmark should publish input identities and provenance, model/prompt/algorithm versions, hardware, repetitions, failures and abstentions. Useful measures include registration error against an independent reference, false/missed findings, material versus geometry verdict quality, model calls, elapsed time and engineer review time. Runtime limits and configuration values above must not be presented as benchmark scores.
 
 ## Reproducible setup
 
@@ -348,7 +346,7 @@ Start with the [step-by-step setup guide](docs/reproducible-setup.md). It covers
 | Capture on a phone | [iOS](ios/README.md) | macOS/Xcode, real compatible iPhone, configured Inspector and upload storage |
 | Use the restricted spatial solver | [Localization](localization_service/deploy/README.md) | Supported IFC, service/database setup and session-bound phone integration |
 
-Components do not share one Python environment or a universal key. No production credentials, raw private captures or complete demo dataset are distributed in this repository. Local `.env` files do not configure deployed services. Consolidating code on `main` does not deploy it or change a host's selected branch.
+Components do not share one Python environment or a universal key. No production credentials are distributed. The [versioned Geometry evidence release](docs/evidence/2026-11-03/README.md) contains the selected real-room capture and results; other private captures and the full Progress4D development dataset are not distributed in the clone. Local `.env` files do not configure deployed services. Consolidating code on `main` does not deploy it or change a host's selected branch.
 
 ## Verification and current boundaries
 
@@ -360,7 +358,7 @@ Material limits are intentional and visible: incomplete coverage, unvalidated ro
 
 ## Roadmap
 
-1. **Publish the reproducible demo package.** Add the demo URL, exact dataset inventory, provenance, expected scenarios and recorded/live boundaries; publish reviewed comparison results for the implemented pipeline variants.
+1. **Complete independent reproduction of the evidence package.** The real-room capture/result package and saved drawing/photo comparisons are linked above. Remaining work includes a terminal Geometry agent review, exact historical runtime revision recovery and a clean-environment reproduction by someone outside the team.
 2. **Validate on real projects.** Calibrate measurement uncertainty and acceptance rules with domain experts, collect held-out site evidence, and measure false findings, abstentions and time saved.
 3. **Broaden spatial and inspection coverage.** Extend supported IFC layouts and room validation, improve coverage/registration evidence, and complete the general clarification and follow-up workflow.
 4. **Automate capture with a robot dog or another mobile platform.** The existing separation between capture, source validation, computation and inspection gives a useful integration boundary. A robot adapter would still need compatible calibrated RGB-D/pose data, device authentication, safe navigation, repeatable coverage and field validation. Hardware design and robot integration are future work.
