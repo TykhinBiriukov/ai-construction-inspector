@@ -17,10 +17,10 @@
 .evidence-media.sensor-rotated img{inset:auto;left:50%;top:50%;width:calc(100% * var(--image-ratio))!important;height:calc(100% / var(--image-ratio))!important;transform:translate(-50%,-50%) rotate(90deg)}
 
 .demo-scenarios{position:relative;margin:0 0 10px}
-.demo-scenarios.is-guided .suggestions{outline:2px solid #a1b977;outline-offset:5px;border-radius:5px}
-.demo-coachmark{position:absolute;bottom:calc(100% + 12px);right:0;width:min(360px,100%);padding:16px 18px;background:#edf3e6;color:#30482e;border:1px solid #b8c9a1;border-radius:12px;box-shadow:0 8px 28px #263e3020;z-index:10}
+.demo-scenarios.is-guided .suggestions{outline:2px solid #c98984;outline-offset:5px;border-radius:5px}
+.demo-coachmark{position:fixed;width:360px;max-width:calc(100vw - 32px);padding:18px 20px;background:#fff3f0;color:#68443f;border:2px solid #c98984;border-radius:12px;box-shadow:0 10px 32px #70454024;z-index:90}
 .demo-coachmark[hidden]{display:none}
-.demo-coachmark:after{content:'';position:absolute;bottom:-7px;right:28px;width:12px;height:12px;background:#edf3e6;border-right:1px solid #b8c9a1;border-bottom:1px solid #b8c9a1;transform:rotate(45deg)}
+.demo-coachmark:after{content:'';position:absolute;bottom:-7px;right:28px;width:12px;height:12px;background:#fff3f0;border-right:2px solid #c98984;border-bottom:2px solid #c98984;transform:rotate(45deg)}
 .demo-coachmark p{font-size:13px;line-height:1.55;margin:0 0 12px}
-.demo-coachmark button{background:#fafcf7}
+.demo-coachmark button{background:#fffaf8;border-color:#d7aaa5;color:#68443f}
 .chat-hidden .demo-scenarios{display:none}

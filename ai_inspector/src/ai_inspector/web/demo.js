@@ -835,14 +835,29 @@
   const scenarioGroup=node('div','demo-scenarios');demoHint.before(scenarioGroup);scenarioGroup.append(demoHint,$('suggestions'));
   const coach=node('aside','demo-coachmark');coach.hidden=true;coach.setAttribute('role','note');coach.setAttribute('aria-label','About demo scenarios');
   coach.append(node('p','','These scenario shortcuts are just for this demo. In the product, describe what you need in chat and attach your documents or share links to them.'));
-  const gotIt=node('button','quiet','Got it');gotIt.type='button';coach.append(gotIt);scenarioGroup.append(coach);
-  const dismissGuide=()=>{coach.hidden=true;scenarioGroup.classList.remove('is-guided');write(localStorage,'inspector-scenario-guide-v1','seen');write(sessionStorage,'inspector-guide-requested',null);};
+  const gotIt=node('button','quiet','Got it');gotIt.type='button';coach.append(gotIt);document.body.append(coach);
+  const dismissGuide=()=>{coach.hidden=true;scenarioGroup.classList.remove('is-guided');write(localStorage,'inspector-scenario-guide-v2','seen');write(sessionStorage,'inspector-guide-requested',null);};
   gotIt.onclick=dismissGuide;
-  scenarioGroup.addEventListener('keydown',event=>{if(event.key==='Escape')dismissGuide();});
+  coach.addEventListener('keydown',event=>{if(event.key==='Escape')dismissGuide();});
   $('suggestions').addEventListener('click',()=>{if(!coach.hidden)dismissGuide();});
+  function positionScenarioGuide(){
+    if(coach.hidden)return;
+    const collapsed=!!document.querySelector('.chat-hidden');
+    coach.style.visibility=collapsed||intro.open?'hidden':'visible';
+    const target=scenarioGroup.getBoundingClientRect(),divider=$('resize-dialogue').getBoundingClientRect();
+    const width=Math.min(360,window.innerWidth-32);
+    coach.style.width=width+'px';
+    const center=divider.width&&divider.height?divider.left+divider.width/2:target.left+target.width/2;
+    coach.style.left=Math.max(16,Math.min(window.innerWidth-width-16,center-width/2))+'px';
+    coach.style.top=Math.max(16,Math.min(window.innerHeight-coach.offsetHeight-16,target.top-coach.offsetHeight-16))+'px';
+  }
+  const guideResize=new ResizeObserver(positionScenarioGuide);
+  guideResize.observe(scenarioGroup);guideResize.observe(document.querySelector('.conversation'));
+  window.addEventListener('resize',positionScenarioGuide);
+  document.addEventListener('scroll',positionScenarioGuide,true);
   showScenarioGuide=()=>{
-    if(demoReady&&!demoBusy&&!intro.open&&read(sessionStorage,'inspector-guide-requested')&&!read(localStorage,'inspector-scenario-guide-v1')){
-      coach.hidden=false;scenarioGroup.classList.add('is-guided');
+    if(demoReady&&!demoBusy&&!intro.open&&read(sessionStorage,'inspector-guide-requested')&&!read(localStorage,'inspector-scenario-guide-v2')){
+      coach.hidden=false;scenarioGroup.classList.add('is-guided');positionScenarioGuide();
     }
   };
   $('suggestions').replaceChildren();
