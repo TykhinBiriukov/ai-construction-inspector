@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: drawing-photo-minion
+    name: drawing-analysis-agent
     runtime: docker
     plan: free
     region: frankfurt
-    branch: feat/drawing-photo-minion
+    branch: feat/ai-inspector-development
     dockerfilePath: ./drawing_photo_service/Dockerfile
     dockerContext: .
     healthCheckPath: /healthz

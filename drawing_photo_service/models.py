@@ -28,9 +28,15 @@ class TaskRequest(StrictModel):
     context: Annotated[str, Field(max_length=8000)] = ""
     assets: Annotated[list[Asset], Field(min_length=1, max_length=8)]
     parent_task_id: UUID | None = None
+    workflow: Literal["legacy", "staged"] = "legacy"
+    checklist_task_id: UUID | None = None
 
     @model_validator(mode="after")
     def check_assets(self):
+        if self.workflow == "staged" and any(sum(a.kind == kind for a in self.assets) > 1 for kind in ("drawing", "photo")):
+            raise ValueError("Staged analysis requires at most one drawing and one photo")
+        if self.checklist_task_id and (self.workflow != "staged" or self.parent_task_id):
+            raise ValueError("Checklist reuse requires staged workflow and no clarification parent")
         if len({a.asset_id for a in self.assets}) != len(self.assets):
             raise ValueError("Asset IDs must be unique")
         if sum(len(a.data_base64) for a in self.assets) > 20_000_000:
