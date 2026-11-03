@@ -6,6 +6,7 @@
   const write = (store, key, value) => { try { if (value == null) store.removeItem(key); else store.setItem(key,value); } catch {} };
   let token = read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
   let scopedSessions = [], scopedInspections = [];
+  let geometryViewer=null;
   let chatChoices=null;
   let workState=null,workspaceBusy=false,showTrash=false,uploadQueue=[],planEditing=null,observationEditing=null,importRequest=null;
   const chosenFiles=new Set();
@@ -49,6 +50,7 @@
     return body;
   }
   function lock() {
+    geometryViewer?.clear();
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
@@ -89,7 +91,7 @@
     selected=session.session_id; const box=$('selection'); box.hidden=false; box.className='selection';
     box.replaceChildren(node('h3','',`Task · ${session.room_id}`),node('p','',session.capture_task?.text || 'Capture assignment'),node('p','',`Capture: ${session.capture_state}\nProcessing: ${session.processing_state}`),node('p','',`Created ${timestamp(session.created_at)}`));
     if(session.error) box.append(node('p','',session.error.message || 'Processing error reported'));
-    if(session.geometry_result) { const detail=node('details'); detail.append(node('summary','','Geometry result'),node('pre','',JSON.stringify(session.geometry_result,null,2))); box.append(detail); }
+    if(session.geometry_result) box.append(geometryResultCard(session.session_id));
     box.append(node('p','',`Session ${session.session_id}`));
   }
   function bar(label,value,max,unit) {
@@ -278,7 +280,7 @@
     }
   }
   function renderConversation() {
-    const runs=chat?.runs||[], signature=JSON.stringify(runs);
+    const runs=chat?.runs||[], signature=JSON.stringify([runs,chat?.geometry_reviews,scopedSessions.map(s=>[s.session_id,s.geometry_result?.job_id,s.processing_state])]);
     $('suggestions').hidden=runs.length>0;
     if(historySignature!==signature) {
       const follow = $('messages').scrollHeight - $('messages').scrollTop - $('messages').clientHeight < 100;
@@ -296,11 +298,13 @@
             const artifact=renderArtifact(item);if(artifact)grid.append(artifact);
           }
           for(const result of comparisons)grid.append(renderComparison(result,chat.chat_id));
+          if(run.continuation&&run.session_id&&scopedSessions.some(s=>s.session_id===run.session_id&&s.geometry_result))grid.append(geometryResultCard(run.session_id));
           if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
         }
       } else {
         const welcome=node('div','welcome'); welcome.append(node('div','hero-icon','✳'),node('p','','Attach files or send a message.')); $('messages').replaceChildren(welcome);
       }
+      for(const session of scopedSessions.filter(s=>s.geometry_result&&!runs.some(r=>r.continuation&&r.session_id===s.session_id)))$('messages').append(geometryResultCard(session.session_id));
       if(follow) $('messages').scrollTop=$('messages').scrollHeight;
     }
     renderActivity(runs);
@@ -343,6 +347,7 @@
       if(chat?.chat_id&&!chatChoices.some(c=>c.chat_id===chat.chat_id))chatChoices.unshift(chat);
       renderChatPicker();
       workState=workspaceData; scopedSessions = linkedSessions; scopedInspections = linkedInspections;
+      geometryViewer?.sync(chat?.chat_id,JSON.stringify([chat?.geometry_reviews,linkedSessions.map(s=>[s.session_id,s.processing_state,s.geometry_result?.job_id])]));
       if(current!==epoch) return; $('connection').textContent='● Connected'; activitySync=Date.now(); renderRails(); renderConversation(); unlock();
     } catch(error) { if(current===epoch) { activitySync=0;updateActivityStatus();$('connection').textContent='Connection issue'; notify(`Could not refresh: ${error.message}. Displayed data may be stale.`); } }
     finally { refreshing=false; }
@@ -525,7 +530,14 @@
     if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
   },text=>{$('document-status').textContent=text;});
   function resetDocument(){documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
-  async function openDocument(file,inspect=false){if(file.deleted||(!inspect&&(sending||pending)))return;const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  async function openDocument(file,inspect=false){if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  geometryViewer=new InspectionViewer($('geometry-dialog'),api);
+  function geometryResultCard(sessionId){
+    const card=node('section','geometry-result-card');card.append(node('h4','','Captured geometry and inspection results'),node('p','','Explore the model, review decisions and the captured evidence.'));
+    const actions=node('div','geometry-result-actions'),chatId=chat.chat_id;
+    for(const [scope,label] of [['model','Open model'],['findings','View findings and evidence']]){const button=node('button','quiet',label);button.type='button';button.onclick=()=>geometryViewer.open(chatId,{sessionId,scope});actions.append(button);}
+    card.append(actions);return card;
+  }
   $('clear-document-context').onclick=()=>{if(documentContext)chosenFiles.delete(documentContext.file_id);viewer.clearSelection();renderFiles();};
   $('multi-select').onclick=()=>{viewer.multiSelect=!viewer.multiSelect;$('multi-select').setAttribute('aria-pressed',String(viewer.multiSelect));};
   $('document-download').onclick=()=>{const file=workState?.files?.find(f=>f.file_id===documentOpenId);if(file)downloadFile(file).catch(e=>notify(e.message));};
@@ -560,7 +572,7 @@
     if(sending||workspaceBusy)return;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
     remember(); // Keep the exact frozen payload in the old chat, including document selection.
-    epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
+    geometryViewer?.clear();epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
     if(id){try{pending=JSON.parse(read(sessionStorage,chatPendingKey(id))||'null');}catch{}}
     workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];showTrash=false;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
     $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();

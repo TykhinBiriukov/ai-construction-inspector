@@ -11,3 +11,12 @@ also builds this directory. Output is committed in ../src/ai_inspector/web/vendo
 Bundled license notices and full upstream licenses ship beside the assets.
 Unmodified upstream package sources are available from the npm versions in
 package-lock.json. Project integration source is viewer.js.
+
+`Viewer` remains the document-selection component. `GeometryModel` shares its
+IFC renderer, lifecycle and controls, and adds bounded PLY mesh/point-cloud
+previews. IFC review markers and focus resolve exact GlobalIds in the reference
+model. Separate scan sources do not imply a verified coordinate transform.
+
+The inspection shell lives in `web/geometry-viewer.js` and
+`web/geometry-viewer.css`. Its API and evidence constraints are documented in
+[capture-to-geometry](../docs/capture-to-geometry.md#inspection-results-viewer).

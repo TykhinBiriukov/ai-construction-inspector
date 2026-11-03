@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
+import {PLYLoader} from 'three/examples/jsm/loaders/PLYLoader.js';
 import {IfcAPI} from 'web-ifc';
 import * as pdfjs from 'pdfjs-dist';
 pdfjs.GlobalWorkerOptions.workerSrc='/ui/vendor/pdf.worker.min.mjs';
@@ -21,7 +22,7 @@ export class Viewer {
   if(selection.kind==='ifc'&&this.model){const ids=new Set(selection.elements?.length?selection.elements.map(e=>e.express_id):[selection.express_id]);this.activityMeshes=this.model.children.filter(m=>ids.has(m.userData.expressID)).map(m=>[m,m.material.emissive.clone()]);}
  }
  clearSelection(){this.deselect?.();this.onSelect(null);}
- clear(){this.setActivity(null,false);this.restoreIfc=null;this.deselect=null;this.generation++;this.renderTask?.cancel();this.renderTask=null;this.pdf?.destroy();this.pdf=null;this.cleanup?.();this.cleanup=null;this.scene=null;this.renderer=null;this.file=null;this.source=null;this.host.replaceChildren();this.onSelect(null);}
+ clear(){this.setActivity(null,false);this.restoreIfc=null;this.focusGlobalId=null;this.bindFindings=null;this.markerKey=null;this.deselect=null;this.generation++;this.renderTask?.cancel();this.renderTask=null;this.pdf?.destroy();this.pdf=null;this.cleanup?.();this.cleanup=null;this.scene=null;this.renderer=null;this.file=null;this.source=null;this.wrap=null;this.host.replaceChildren();this.onSelect(null);}
  async open(file,blob){this.clear();const generation=this.generation;this.file=file;this.scale=1;this.page=1;this.status('Loading '+file.name+'…');try{
  const ext=file.name.split('.').pop().toLowerCase();
  if(ext==='ifc'){await this.ifc(new Uint8Array(await blob.arrayBuffer()),generation);}
@@ -44,7 +45,14 @@ export class Viewer {
  async ifc(data,generation){const api=new IfcAPI();api.SetWasmPath('/ui/vendor/',true);await api.Init();if(generation!==this.generation)return;const id=api.OpenModel(data,{COORDINATE_TO_ORIGIN:true});if(id<0)throw Error('Unsupported IFC');const scene=new THREE.Scene();scene.background=new THREE.Color('#eef0e9');const model=new THREE.Group();scene.add(model);scene.add(new THREE.HemisphereLight(0xffffff,0x65715a,2));const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(5,10,8);scene.add(light);let vertices=0;
  try{api.StreamAllMeshes(id,mesh=>{for(let i=0;i<mesh.geometries.size();i++){const placed=mesh.geometries.get(i),g=api.GetGeometry(id,placed.geometryExpressID);try{const v=api.GetVertexArray(g.GetVertexData(),g.GetVertexDataSize());vertices+=v.length/6;if(vertices>1500000)throw Error('Model too complex for this browser viewer');const geometry=new THREE.BufferGeometry();const pos=new Float32Array(v.length/2),norm=new Float32Array(v.length/2);for(let j=0,k=0;j<v.length;j+=6,k+=3){pos.set(v.subarray(j,j+3),k);norm.set(v.subarray(j+3,j+6),k);}geometry.setAttribute('position',new THREE.BufferAttribute(pos,3));geometry.setAttribute('normal',new THREE.BufferAttribute(norm,3));geometry.setIndex(new THREE.BufferAttribute(api.GetIndexArray(g.GetIndexData(),g.GetIndexDataSize()).slice(),1));const c=placed.color;const material=new THREE.MeshStandardMaterial({color:new THREE.Color(c.x,c.y,c.z),side:THREE.DoubleSide,roughness:.8,transparent:c.w<1,opacity:Math.max(.3,c.w)});const object=new THREE.Mesh(geometry,material);object.applyMatrix4(new THREE.Matrix4().fromArray(placed.flatTransformation));object.userData.expressID=mesh.expressID;model.add(object);}finally{g.delete();}}});}catch(error){api.CloseModel(id);model.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});throw error;}
  if(!model.children.length){api.CloseModel(id);throw Error('No displayable geometry in IFC');}
- const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));const camera=new THREE.PerspectiveCamera(45,1,.01,10000);this.host.replaceChildren(renderer.domElement);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;this.scene=scene;this.model=model;this.renderer=renderer;this.camera=camera;this.controls=controls;this.resize3d();this.fit();let raf;const draw=()=>{controls.update();const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;for(const [mesh] of this.activityMeshes||[])mesh.material.emissive.setRGB(.08,.13+(reduced?0:.06*Math.sin(performance.now()/450)),.025);renderer.render(scene,camera);raf=requestAnimationFrame(draw);};draw();const ray=new THREE.Raycaster();let down,highlight=[],selected=new Map();this.deselect=()=>{highlight.forEach(m=>m.material.emissive.set(0));highlight=[];selected.clear();};
+ const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));const camera=new THREE.PerspectiveCamera(45,1,.01,10000);this.host.replaceChildren(renderer.domElement);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;this.scene=scene;this.model=model;this.renderer=renderer;this.camera=camera;this.controls=controls;this.resize3d();this.fit();let markers=[],markerLayer;
+ this.bindFindings=(rows,current)=>{
+  const key=JSON.stringify([rows.map(r=>[r.id,r.guid,r.status,r.label]),current]);if(this.markerKey===key)return;this.markerKey=key;
+  markerLayer?.remove();markerLayer=document.createElement('div');markerLayer.className='gv-model-markers';this.host.append(markerLayer);markers=[];
+  const groups=new Map();for(const row of rows){if(!row.guid)continue;if(!groups.has(row.guid))groups.set(row.guid,[]);groups.get(row.guid).push(row);}
+  for(const [guid,group] of groups){const eid=Number(api.GetExpressIdFromGuid(id,guid));if(!Number.isInteger(eid))continue;const meshes=model.children.filter(m=>m.userData.expressID===eid);if(!meshes.length)continue;const box=new THREE.Box3();for(const mesh of meshes)box.union(new THREE.Box3().setFromObject(mesh));const point=box.getCenter(new THREE.Vector3()),button=document.createElement('button');button.type='button';button.className='gv-model-marker';button.dataset.status=group.length===1?group[0].status:'unreviewed';button.textContent=group.length>1?'…':({confirmed:'!',needs_more_data:'?',rejected:'−'}[group[0].status]||'?');button.setAttribute('aria-label',group.length===1?group[0].label:group.length+' entries for this IFC element');button.setAttribute('aria-pressed',String(group.some(r=>r.id===current)));button.onclick=()=>this.onPick?.(guid);markerLayer.append(button);markers.push({point,button});}
+ };
+ let raf;const draw=()=>{controls.update();const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;for(const [mesh] of this.activityMeshes||[])mesh.material.emissive.setRGB(.08,.13+(reduced?0:.06*Math.sin(performance.now()/450)),.025);renderer.render(scene,camera);for(const marker of markers){const p=marker.point.clone().project(camera);marker.button.hidden=p.z< -1||p.z>1||Math.abs(p.x)>1||Math.abs(p.y)>1;marker.button.style.left=(p.x+1)*50+'%';marker.button.style.top=(1-p.y)*50+'%';}raf=requestAnimationFrame(draw);};draw();const ray=new THREE.Raycaster();let down,highlight=[],selected=new Map();this.deselect=()=>{highlight.forEach(m=>m.material.emissive.set(0));highlight=[];selected.clear();};
  renderer.domElement.onpointerdown=e=>{down=[e.clientX,e.clientY];};renderer.domElement.onpointerup=e=>{
  if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;
  const r=renderer.domElement.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);
@@ -53,13 +61,50 @@ export class Viewer {
  if(!additive)selected.clear();
  if(additive&&selected.has(express_id))selected.delete(express_id);
  else{if(selected.size>=20){this.status('Select up to 20 elements. Click a selected element to remove it.');return;}
- const line=api.GetLine(id,express_id,false),type=api.GetNameFromTypeCode(line.type),properties={};for(const key of ['Name','Description','ObjectType','Tag','PredefinedType']){const value=line[key]?.value;if(value!=null)properties[key]=String(value).slice(0,500);}
+ const line=api.GetLine(id,express_id,false),type=api.GetNameFromTypeCode(line.type),properties={};this.onPick?.(line.GlobalId?.value||null);for(const key of ['Name','Description','ObjectType','Tag','PredefinedType']){const value=line[key]?.value;if(value!=null)properties[key]=String(value).slice(0,500);}
  selected.set(express_id,{express_id,global_id:line.GlobalId?.value||null,label:`${type} · ${properties.Name||'#'+express_id}`,properties});}
  highlight.forEach(m=>m.material.emissive.set(0));highlight=model.children.filter(m=>selected.has(m.userData.expressID));highlight.forEach(m=>m.material.emissive.set('#547e36'));renderer.render(scene,camera);
  const elements=[...selected.values()];this.onSelect(elements.length?{file_id:this.file.file_id,kind:'ifc',...elements[0],label:elements.length===1?elements[0].label:`${elements.length} BIM elements selected`,elements,image_data:this.image(renderer.domElement)}:null);
  };
 
  this.restoreIfc=elements=>{this.deselect();const ids=new Set(elements.map(e=>e.express_id));highlight=model.children.filter(m=>ids.has(m.userData.expressID));highlight.forEach(m=>m.material.emissive.set('#547e36'));renderer.render(scene,camera);};
+ this.focusGlobalId=guid=>{
+  if(!guid)return false;
+  const eid=Number(api.GetExpressIdFromGuid(id,guid));if(!Number.isInteger(eid))return false;
+  const matches=model.children.filter(m=>m.userData.expressID===eid);if(!matches.length)return false;
+  this.deselect();highlight=matches;highlight.forEach(m=>m.material.emissive.set('#85641e'));
+  const box=new THREE.Box3();for(const mesh of matches)box.union(new THREE.Box3().setFromObject(mesh));
+  const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3()).length();controls.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(1,.6,1).normalize().multiplyScalar(Math.max(.5,size)*1.6));controls.update();this.status('Showing the IFC reference element. Scan-to-IFC alignment is not supplied.');return true;
+ };
  this.cleanup=()=>{cancelAnimationFrame(raf);controls.dispose();model.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});renderer.dispose();api.CloseModel(id);};this.status('Rotate: drag · pan: right-drag · zoom: scroll · select: click · add/remove: Shift + click');
+ }
+}
+
+// Reuses document rendering/lifecycle. Geometry preview never changes model
+// coordinates or infers segment positions from a compact-result object name.
+export class GeometryModel extends Viewer {
+ constructor(host,onPick,onStatus){super(host,()=>{},onStatus);this.onPick=onPick;}
+ setFindings(rows,current){this.bindFindings?.(rows,current);}
+ async openArtifact(kind,blob){
+  if(kind==='ifc'){await this.open({file_id:'geometry-reference',name:'reference.ifc'},blob);return;}
+  this.clear();const generation=this.generation;
+  const bytes=await blob.arrayBuffer();if(generation!==this.generation)return;
+  const header=new TextDecoder().decode(bytes.slice(0,32000)),count=header.match(/element vertex (\d+)/),faces=header.match(/element face (\d+)/);
+  if(!header.startsWith('ply')||!header.includes('end_header')||!count||Number(count[1])<1||Number(count[1])>1500000||(faces&&Number(faces[1])>3000000))throw Error('Model exceeds the supported PLY preview limits');
+  const geometry=new PLYLoader().parse(bytes),position=geometry.getAttribute('position');
+  if(!position||!position.count||position.count>1500000||!position.array.every(Number.isFinite)){geometry.dispose();throw Error('Model contains invalid positions');}
+  const scene=new THREE.Scene();scene.background=new THREE.Color('#eef0e9');const model=new THREE.Group();scene.add(model);
+  const hasFaces=kind!=='point_cloud'&&!!geometry.index;
+  let object;
+  if(hasFaces){geometry.computeVertexNormals();object=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:geometry.hasAttribute('color')?0xffffff:0x71a9a2,vertexColors:geometry.hasAttribute('color'),side:THREE.DoubleSide,roughness:.9}));scene.add(new THREE.HemisphereLight(0xffffff,0x65715a,2));}
+  else object=new THREE.Points(geometry,new THREE.PointsMaterial({size:.025,vertexColors:geometry.hasAttribute('color'),color:geometry.hasAttribute('color')?0xffffff:0x358b85,sizeAttenuation:true}));
+  model.add(object);
+  const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  const camera=new THREE.PerspectiveCamera(45,1,.001,10000);camera.up.set(0,0,1);
+  const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+  this.host.replaceChildren(renderer.domElement);Object.assign(this,{scene,model,renderer,camera,controls});this.resize3d();this.fit();
+  let raf;const draw=()=>{controls.update();renderer.render(scene,camera);raf=requestAnimationFrame(draw);};draw();
+  this.cleanup=()=>{cancelAnimationFrame(raf);controls.dispose();geometry.dispose();object.material.dispose();renderer.dispose();};
+  this.status('Scan coordinates as supplied. Scan-to-IFC alignment and per-segment mesh bindings are not supplied.');
  }
 }

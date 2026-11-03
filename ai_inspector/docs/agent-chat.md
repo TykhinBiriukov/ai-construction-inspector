@@ -147,6 +147,14 @@ Plan imports validate all rows before atomic request-ID replay. Plan edits requi
 
 The demo uses the existing operator API and separates its chat pointer from Control room. Pending request ID/body is retained in sessionStorage for same-tab retry; history stays on the server. New chats use an internal unspecified room placeholder. Linked session/history projections do not represent all Storage contents. Viewer formats/build/licenses are in [viewer README](../viewer/README.md).
 
+Capture results open a shared **Whole model / Findings** viewer, also available
+from the saved Geometry review file. The selected entry links IFC markers,
+accepted decisions, original/overlay/mask images and additional evidence requests.
+Unreviewed observations remain distinct from decisions. Opening or navigating the
+viewer sends no model message and starts no capture. The read-only API, source
+bindings, preview limits and missing alignment/camera-data boundaries are in the
+[Geometry viewer contract](capture-to-geometry.md#inspection-results-viewer).
+
 Public runs expose safe delegation summaries, active_tool and bounded activity_events for actual model/tool attempts, including attempt links, timestamps and measured duration. Unknown historical/interrupted durations are not invented. These are operational events, not internal model reasoning or progress guarantees.
 
 An assistant may emit a validated inspector-ui JSON block for metric/bar_chart/table artifacts. [artifacts.py](../src/ai_inspector/artifacts.py) defines shapes/limits; reply remains unchanged for older clients, while display_reply/artifacts are additive. Render typed DOM only, never model HTML/JS/SVG or executable URLs. Attribution text is not independent evidence and no widget adds a measurement capability.
