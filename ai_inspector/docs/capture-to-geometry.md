@@ -95,3 +95,45 @@ The capture queue waits without model calls, imports a bounded evidence subset, 
 Each internal batch deterministically delegates through the registered Geometry Inspector → Geometry Verifier chain; its accepted report is checked again by Bob's backend. Internal batch runs remain durable but do not create intermediate chat replies. A separate continuation summarizes all accepted batches once, with the complete JSON available as `geometry-review-report.json` in chat Files. Pending active user messages delay admission without changing the frozen request. A changed chat session or cancelled review cannot publish its old continuation. Missing configuration is visible and retryable; profile changes hold the saved workflow until restoration.
 
 `GET /v1/chats/{chat_id}` includes safe `geometry_reviews` status/count/file references. `POST /v1/chats/{chat_id}/geometry-review/{review_id}/cancel` fences that review's local executions and future publication; it does not claim to cancel an already running external Geometry or verifier task. Capture abort cancels its pending review wait. Native capture workers and Cloudflare process/cron drive the same queue without a browser. Unrequested Geometry jobs never trigger a model automatically.
+
+## Inspection results viewer
+
+The workspace opens one viewer from capture tasks, chat result cards and the saved
+`geometry-review-report.json`. **Whole model** shows the model with selectable
+review markers; **Findings** keeps the selected entry, explanation and evidence
+together. Model, Photos and Next steps share that selection. Reviewed decisions
+and all Geometry observations have separate lists; unmatched objects, processing
+tolerance and partial surface statistics do not become inspection verdicts.
+
+Operator-authenticated, read-only routes:
+
+- `GET /v1/chats/{chat_id}/geometry-view?session_id=<UUID>` returns the current or
+  historically linked session's accepted source projection, all object/surface
+  observations, available model descriptors and server-accepted case decisions.
+  It preserves original case IDs, frame/role mappings, quality flags, reported
+  units/sign and separate processing/acceptance tolerance. Cancelled reviews do
+  not present their partial decisions as a published result.
+- `GET /v1/chats/{chat_id}/geometry-view/{session_id}/images/{image_id}` returns an
+  image from the accepted private photo receipt. IDs bind stage/path/hash, never
+  an arbitrary URL. Length/hash checks and the existing identity-preserving link
+  refresh apply. Original, overlay and mask remain views of the same frame;
+  legacy images with missing associations are explicitly unreported.
+- `GET /v1/chats/{chat_id}/geometry-view/{session_id}/models/{artifact_id}` serves
+  only `ifc`, `mesh`, `segmented_mesh` or `point_cloud`. IFC comes from the pinned
+  Inspector model store. Scan artifacts retain their accepted Geometry identity
+  across link refresh. Previews are bounded by the smaller of 32 MiB and
+  `max_capture_file_bytes`; oversized models fail explicitly without upstream IO.
+
+These routes enforce operator/project/chat/session/source/model/job bindings and
+never dispatch work or call a model. Signed URLs and service credentials remain
+server-only. Requests and unavailable evidence have visible retry states. Closing
+the viewer or switching chats invalidates pending display loads and releases
+image URLs and 3D resources without cancelling the underlying inspection.
+
+IFC markers/focus use exact GlobalIds resolved in the loaded reference model.
+An unresolved or ambiguous binding never creates a guessed marker. Scan meshes
+and point clouds render as separate sources: compact 2.0 supplies neither the
+scan-to-IFC transform nor per-segment mesh membership, so overlay and scan-element
+focus are not asserted. The Next steps view displays accepted `data_requests`;
+it does not infer calibrated camera positions or automatically request capture.
+Photos remain accessible when a model is missing, too large or fails to render.

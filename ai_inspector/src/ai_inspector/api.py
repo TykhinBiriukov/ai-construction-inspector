@@ -27,6 +27,7 @@ from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
 from .agent import CreateChatRequest, ChatMessageRequest
 from .geometry_review import GeometryReviewRequest
+from .geometry_view import GeometryView
 from .errors import APIError
 from .schemas import (
     Acknowledgement, AcknowledgeRequest, AssignmentList, CaptureStartReceipt,
@@ -290,6 +291,24 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
             rows = connection.execute("SELECT data FROM chats WHERE project_id=?", (principal.project_id,)).fetchall()
         chats = sorted((json.loads(row['data']) for row in rows), key=lambda chat: chat['created_at'], reverse=True)[:100]
         return {"chats": [{key: chat[key] for key in ('chat_id','room_id','created_at')} for chat in chats]}
+
+    @app.get('/v1/chats/{chat_id}/geometry-view', tags=['workspace'])
+    def geometry_view(chat_id: UUID, principal: Annotated[Principal, Depends(operator)], session_id: UUID | None = None):
+        return GeometryView(service).snapshot(principal, str(chat_id), str(session_id) if session_id else None)
+
+    @app.get('/v1/chats/{chat_id}/geometry-view/{session_id}/images/{image_id}', tags=['workspace'])
+    def geometry_view_image(chat_id: UUID, session_id: UUID, image_id: str,
+                            principal: Annotated[Principal, Depends(operator)]):
+        content, media_type = GeometryView(service).image(principal, str(chat_id), str(session_id), image_id)
+        return Response(content, media_type=media_type, headers={'Cache-Control': 'private, no-store',
+                        'X-Content-Type-Options': 'nosniff'})
+
+    @app.get('/v1/chats/{chat_id}/geometry-view/{session_id}/models/{artifact_id}', tags=['workspace'])
+    def geometry_view_model(chat_id: UUID, session_id: UUID, artifact_id: str,
+                            principal: Annotated[Principal, Depends(operator)]):
+        content = GeometryView(service).artifact(principal, str(chat_id), str(session_id), artifact_id)
+        return Response(content, media_type='application/octet-stream', headers={'Cache-Control': 'private, no-store',
+                        'X-Content-Type-Options': 'nosniff'})
 
     @app.get("/v1/chats/{chat_id}/workspace", tags=["workspace"])
     def workspace_state(chat_id: UUID, principal: Annotated[Principal, Depends(operator)]):
