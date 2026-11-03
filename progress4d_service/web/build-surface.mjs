@@ -8,4 +8,4 @@ await copyFile(new URL('../../ai_inspector/viewer/node_modules/three/LICENSE',di
 const {mkdir}=await import('node:fs/promises');
 const embedded=new URL('../../ai_inspector/src/ai_inspector/web/progress4d/',dir);
 await mkdir(embedded,{recursive:true});
-for(const file of ['viewer.html','viewer.css','viewer.js','surface.bundle.js','surface.bundle.js.LEGAL.txt','three-LICENSE.txt']) await copyFile(new URL(file,dir),new URL(file,embedded));
+for(const file of ['select-chevron.svg','viewer.html','viewer.css','viewer.js','surface.bundle.js','surface.bundle.js.LEGAL.txt','three-LICENSE.txt']) await copyFile(new URL(file,dir),new URL(file,embedded));

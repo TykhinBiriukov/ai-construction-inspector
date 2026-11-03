@@ -23,7 +23,7 @@ DO queue. Removing the origin restores the previous DO routing for rollback;
 stop the native queue first. Assets and public domain remain in Cloudflare.
 
 Git polling: checkout `/opt/inspector-backend/source`, branch
-`feat/ai-inspector-development`, `update.sh` and the supplied systemd timer. Build
+`main`, `update.sh` and the supplied systemd timer. Build
 before restart, then check authenticated health before recording the revision.
 Keep the previous image for rollback. Docker cache is disposable; authoritative
 files/history remain in Supabase. The old Python Worker stays available for

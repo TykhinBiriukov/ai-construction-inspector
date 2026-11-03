@@ -14,3 +14,15 @@ for (const [status, method, expected] of [[202,'POST',1],[401,'POST',0],[200,'GE
     assert.equal(processed,expected);
   });
 }
+
+for (const path of ['/ui/progress4d/viewer.html', '/progress4d/viewer', '/progress4d/viewer.js']) {
+  test(`embedded viewer asset: ${path}`, async () => {
+    const env = {ASSETS:{fetch:async request => {
+      assert.ok(new URL(request.url).pathname.startsWith('/progress4d/'));
+      return new Response('viewer asset');
+    }}};
+    const response=await gateway.fetch(new Request('https://inspector.example'+path),env,{});
+    assert.equal(await response.text(),'viewer asset');
+    assert.match(response.headers.get('content-security-policy'),/frame-ancestors 'self'/);
+  });
+}

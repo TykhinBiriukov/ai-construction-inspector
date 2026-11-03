@@ -4,7 +4,7 @@
 <header><div><h1>Construction progress</h1></div></header>
 <p id="status" role="status">Loading…</p>
 <section class="viewer-panel">
-<div class="view-toolbar"><label>Survey <select id="survey" aria-label="Survey date"></select></label><div><label>View <select id="view-mode" aria-label="View mode"><option value="surface">Survey</option><option value="combined">Design + survey</option><option value="project">Design</option></select></label> <label><input id="cutaway" type="checkbox" checked> Hide ceiling</label> <button id="reset-view">Reset view</button></div></div>
+<div class="view-toolbar"><label>Survey <select id="survey" aria-label="Survey date"></select></label><div><label>View <select id="view-mode" aria-label="View mode"><option value="surface">Survey</option><option value="combined">Design + survey</option><option value="project">Design</option></select></label> <label class="ceiling-toggle"><input id="cutaway" type="checkbox" checked> Hide ceiling</label> <button id="reset-view">Reset view</button></div></div>
 <div class="view"><canvas id="surface" aria-label="3D model for the selected week" hidden></canvas><canvas id="cloud" aria-label="3D viewport"></canvas><p id="empty">Select a survey</p><span class="view-hint">Drag to rotate · Scroll to zoom</span></div>
 </section>
 <div class="timeline-controls" id="week-navigation"><button id="play">▶ Play weeks</button><nav id="week-tabs" aria-label="Project weeks"></nav></div>

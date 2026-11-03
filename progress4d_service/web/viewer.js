@@ -1,12 +1,12 @@
 'use strict';
 const el = id => document.getElementById(id);
 const project = new URLSearchParams(location.search).get('project');
-const embeddedChat = location.pathname.startsWith('/ui/progress4d/') ? new URLSearchParams(location.search).get('chat') : null;
+const embeddedChat = /^\/(?:ui\/)?progress4d\//.test(location.pathname) ? new URLSearchParams(location.search).get('chat') : null;
 const embedded = /^[0-9a-f-]{36}$/i.test(embeddedChat || '');
 if(embedded)document.documentElement.classList.add('embedded');
 const key = `progress4d:view:${project}`;
 const incoming = new URLSearchParams(location.hash.slice(1)).get('access');
-let token = embedded ? sessionStorage.getItem('inspector-operator-session') || '' : incoming || sessionStorage.getItem(key) || '';
+let token = embedded ? sessionStorage.getItem('inspector-demo-session') || sessionStorage.getItem('inspector-operator-session') || '' : incoming || sessionStorage.getItem(key) || '';
 if (incoming && !embedded) { sessionStorage.setItem(key, incoming); history.replaceState(null, '', location.pathname + location.search); }
 let poller=null,activeTask=null,activeElement=null;
 const phaseNames={frame:'Framing',services:'Services',boards:'Boarding',finish:'Wall finishes',floor:'Flooring',door:'Doors'};
@@ -48,7 +48,7 @@ async function get(path, binary=false) {
   if (!response.ok) throw new Error(`Result unavailable (${response.status}).`);
   if(binary){try{return await response.blob();}catch(error){throw new Error('Reading file ('+response.status+'): '+error.message);}}return response.json();
 }
-const base = () => embedded ? `/v1/chats/${encodeURIComponent(embeddedChat)}/progress4d/data` : `../v1/projects/${encodeURIComponent(project)}`;
+const base = () => embedded ? `${sessionStorage.getItem('inspector-demo-api-prefix')||''}/v1/chats/${encodeURIComponent(embeddedChat)}/progress4d/data` : `../v1/projects/${encodeURIComponent(project)}`;
 function date(value) { return new Date(value).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'}); }
 function draw(){}
 async function select() {
