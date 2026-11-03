@@ -776,7 +776,7 @@
         for(const [key,label] of [['width','Width'],['height','Height']]){const m=obj.dimensions?.[key]||{},row=node('tr');for(const text of [label,Number.isFinite(m.ifc)?(m.ifc*100).toFixed(1)+' cm':'—',Number.isFinite(m.scan)?(m.scan*100).toFixed(1)+' cm':'—',cm(m.difference)])row.append(node('td','',text));table.append(row);}measurements.append(table);
         const offsets=node('div','geometry-offsets');for(const [key,label] of [['along_wall','Along wall'],['vertical','Vertical'],['normal_to_wall','From wall plane']])offsets.append(node('span','',label+': '+cm(obj.displacement?.[key])));measurements.append(offsets,node('p','muted','Signed differences are scan minus design in the report axes. They do not establish a confirmed installation defect.'));
         focus.onclick=()=>{if(comparison?.selectPair(obj.id,obj.ifc_guid)){host.scrollTop=0;$('document-view').scrollTop=0;}else notify('This object has no matching pair in the supplied 3D display.');};
-        comparison?.selectPair(obj.id,obj.ifc_guid);
+        comparison?.selectPair(obj.id,obj.ifc_guid,{focusView:false});
         obj.photos.forEach((photo,i)=>{const b=node('button','quiet','View '+(i+1));b.type='button';b.onclick=()=>showFrame(photo,b);frames.append(b);});
         if(obj.photos.length)showFrame(obj.photos[0],frames.firstChild);else gallery.replaceChildren(node('p','','No photo evidence supplied.'));
       }
