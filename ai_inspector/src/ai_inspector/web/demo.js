@@ -50,7 +50,7 @@
     return body;
   }
   function lock() {
-    geometryViewer?.clear();
+    closeProgress4d();geometryViewer?.clear();
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
@@ -58,6 +58,7 @@
   }
   function unlock() { $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
+    $('progress4d-open').disabled=!chat?.chat_id;
     $('chat-picker').disabled=sending||workspaceBusy;
     $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
     $('new-chat').disabled= !token || sending || workspaceBusy;
@@ -553,6 +554,22 @@
   },text=>{$('document-status').textContent=text;});
   function resetDocument(){documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
   async function openDocument(file,inspect=false){if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  let progress4dGeneration=0;
+  function closeProgress4d(){progress4dGeneration++;$('progress4d-dialog').close();$('progress4d-frame').removeAttribute('src');}
+  $('progress4d-close').onclick=closeProgress4d;
+  $('progress4d-dialog').addEventListener('cancel',event=>{event.preventDefault();closeProgress4d();});
+  $('progress4d-open').onclick=async()=>{
+    if(!chat?.chat_id)return;
+    const generation=++progress4dGeneration;
+    $('progress4d-dialog').showModal();$('progress4d-status').textContent='Loading 4D result…';
+    try{
+      const result=await api(`/v1/chats/${chat.chat_id}/progress4d`);
+      if(generation!==progress4dGeneration)return;
+      const url=new URL(result.viewer_path,location.origin);
+      if(url.origin!==location.origin||url.pathname!=='/ui/progress4d/viewer.html')throw new Error('Invalid 4D viewer address');
+      $('progress4d-frame').src=url.href;$('progress4d-status').textContent='';
+    }catch(error){if(generation===progress4dGeneration)$('progress4d-status').textContent=error.message;}
+  };
   geometryViewer=new InspectionViewer($('geometry-dialog'),api);
   function geometryResultCard(sessionId){
     const card=node('section','geometry-result-card');card.append(node('h4','','Captured geometry and inspection results'),node('p','','Explore the model, review decisions and the captured evidence.'));
@@ -594,7 +611,7 @@
     if(sending||workspaceBusy)return;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
     remember(); // Keep the exact frozen payload in the old chat, including document selection.
-    geometryViewer?.clear();epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
+    closeProgress4d();geometryViewer?.clear();epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
     if(id){try{pending=JSON.parse(read(sessionStorage,chatPendingKey(id))||'null');}catch{}}
     workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];showTrash=false;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
     $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();

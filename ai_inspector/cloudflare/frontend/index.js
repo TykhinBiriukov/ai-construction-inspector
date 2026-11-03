@@ -18,6 +18,7 @@ export default {
       const asset = await env.ASSETS.fetch(new Request(url, request));
       const response = new Response(asset.body, asset);
       for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value);
+      if (url.pathname.startsWith('/progress4d/')) response.headers.set('Content-Security-Policy', SECURITY_HEADERS['Content-Security-Policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'").replace("connect-src 'self'", "connect-src 'self' blob:"));
       return response;
     }
     if (env.INSPECTOR_BACKEND_ORIGIN) {
