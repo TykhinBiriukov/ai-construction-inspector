@@ -719,8 +719,9 @@
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);
   setInterval(()=>{if(token)updateActivityStatus();},1000);
   const intro=$('demo-welcome');
+  let showScenarioGuide=()=>{};
   const dismissIntro=()=>intro.close();
-  $('demo-welcome-close').onclick=dismissIntro;$('demo-welcome-start').onclick=dismissIntro;
+  $('demo-welcome-close').onclick=dismissIntro;$('demo-welcome-start').onclick=()=>{dismissIntro();write(sessionStorage,'inspector-guide-requested','1');showScenarioGuide();};
   intro.addEventListener('close',()=>write(sessionStorage,'inspector-demo-intro-v1','seen'));
   $('demo-about').onclick=()=>intro.showModal();
   if(!read(sessionStorage,'inspector-demo-intro-v1'))intro.showModal();
@@ -821,7 +822,7 @@
 
   };
   let demoBusy=false, demoReady=false;
-  const demoHint=node('p','demo-next','Choose a use case');
+  const demoHint=node('p','demo-next','Demo scenarios');
   const demoSteps=node('section','demo-steps');demoSteps.hidden=true;demoSteps.setAttribute('aria-live','polite');
   $('activity-open').after(demoSteps);
   const demoTimeline=node('section','demo-steps');demoTimeline.hidden=true;$('activity').before(demoTimeline);
@@ -830,8 +831,22 @@
   ask.onclick=()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('message').focus();$('message').placeholder='Ask a question about the current result…';};
   const reset=node('button','quiet','Back to start');reset.type='button';
   demoActions.append(ask,reset);$('suggestions').before(demoHint);$('suggestions').after(demoActions);
+  const scenarioGroup=node('div','demo-scenarios');demoHint.before(scenarioGroup);scenarioGroup.append(demoHint,$('suggestions'));
+  const coach=node('aside','demo-coachmark');coach.hidden=true;coach.setAttribute('role','note');coach.setAttribute('aria-label','About demo scenarios');
+  coach.append(node('p','','These scenario shortcuts are just for this demo. In the product, describe what you need in chat and attach your documents or share links to them.'));
+  const gotIt=node('button','quiet','Got it');gotIt.type='button';coach.append(gotIt);scenarioGroup.append(coach);
+  const dismissGuide=()=>{coach.hidden=true;scenarioGroup.classList.remove('is-guided');write(localStorage,'inspector-scenario-guide-v1','seen');write(sessionStorage,'inspector-guide-requested',null);};
+  gotIt.onclick=dismissGuide;
+  scenarioGroup.addEventListener('keydown',event=>{if(event.key==='Escape')dismissGuide();});
+  $('suggestions').addEventListener('click',()=>{if(!coach.hidden)dismissGuide();});
+  showScenarioGuide=()=>{
+    if(demoReady&&!demoBusy&&!intro.open&&read(sessionStorage,'inspector-guide-requested')&&!read(localStorage,'inspector-scenario-guide-v1')){
+      coach.hidden=false;scenarioGroup.classList.add('is-guided');
+    }
+  };
   $('suggestions').replaceChildren();
   function demoControls(){
+    showScenarioGuide();
     document.querySelector('.conversation').classList.toggle('demo-working',demoBusy);
     for(const b of $('suggestions').querySelectorAll('button'))b.disabled=demoBusy||!demoReady||sending||!!pending;
     reset.disabled=demoBusy||sending||!!pending;ask.disabled=demoBusy||sending||!!pending;
@@ -857,7 +872,7 @@
       const last=chat?.runs?.at(-1);
       if(last?.text!==item[2]||last.status!=='completed'||!last.tool_results?.some(t=>t.result?.viewer))throw new Error(last?.error?.message||'Result not ready. Resume the request or try again.');
       paintDemoStages(stages,stages.length);
-      demoHint.textContent='Next use case';ask.hidden=false;$('messages').scrollTop=$('messages').scrollHeight;
+      demoHint.textContent='Demo scenarios';ask.hidden=false;$('messages').scrollTop=$('messages').scrollHeight;
     }catch(error){demoHint.textContent='The demo could not finish. You can retry the use case.';notify(error.message);demoSteps.append(node('p','','Replay interrupted.'));}
     finally{demoBusy=false;workspaceBusy=false;controls();}
   }
@@ -870,7 +885,7 @@
       await ensureChat();await refresh();
       layout.hideFiles=false;layout.hideChat=false;applyLayout();
       presentedProgress.clear();resetDocument();showTrash=false;chosenFiles.clear();renderFiles();
-      demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Choose a use case';ask.hidden=true;
+      demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Demo scenarios';ask.hidden=true;
       $('message').placeholder='Ask Inspector…';
       write(sessionStorage,'inspector-guided-demo-chat',chat.chat_id);demoReady=true;
     }catch(error){notify('Could not prepare the demo: '+error.message);}
@@ -879,11 +894,11 @@
   reset.onclick=startDemo;
   // New conversation is the same reversible reset; existing chats remain saved.
   $('new-chat').addEventListener('click',event=>{event.stopImmediatePropagation();startDemo();},true);
-  $('chat-picker').addEventListener('change',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Choose a use case';},true);
+  $('chat-picker').addEventListener('change',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Demo scenarios';},true);
   document.querySelector('.welcome-instruction').textContent='Choose a use case in chat. Stages are simulated and results are saved; no new scan or inspection runs. Follow-up questions use the connected AI.';
   if(token)(async()=>{
     await refresh();
-    if(read(sessionStorage,'inspector-guided-demo-chat')===chat?.chat_id){demoReady=true;ask.hidden=!(chat?.runs?.length);if(!ask.hidden)demoHint.textContent='Next use case';controls();}
+    if(read(sessionStorage,'inspector-guided-demo-chat')===chat?.chat_id){demoReady=true;ask.hidden=!(chat?.runs?.length);if(!ask.hidden)demoHint.textContent='Demo scenarios';controls();}
     else await startDemo();
   })();
 

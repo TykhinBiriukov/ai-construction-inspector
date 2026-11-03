@@ -1,8 +1,17 @@
 /* Dictation creates an editable draft; it never submits a message. */
 window.InspectorVoice = function ({api, button, input, notify}) {
-  let recorder, stream, timer, busy=false, generation=0;
-  const label = text => {button.textContent=text;button.setAttribute('aria-label',text);};
-  const release = () => {clearTimeout(timer);stream?.getTracks().forEach(t=>t.stop());stream=null;};
+  let recorder, stream, timer, ticker, startedAt=0, busy=false, generation=0;
+  const microphone='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3m-4 0h8"/></svg>';
+  const status=document.createElement('span');status.className='voice-recording-status';status.hidden=true;status.setAttribute('role','status');button.before(status);
+  const label = text => {
+    const recording=text==='Stop recording',processing=text==='Transcribing…';
+    button.dataset.state=recording?'recording':processing?'processing':'idle';
+    button.innerHTML=recording?'<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>':microphone;
+    button.setAttribute('aria-label',text==='Voice'?'Start voice input':text);button.title=button.getAttribute('aria-label');button.setAttribute('aria-pressed',String(recording));
+    status.hidden=!(recording||processing);if(processing)status.textContent='Transcribing…';
+  };
+  label('Voice');
+  const release = () => {clearTimeout(timer);clearInterval(ticker);stream?.getTracks().forEach(t=>t.stop());stream=null;};
   const cancel = () => {generation++;if(recorder?.state==='recording')recorder.stop();release();busy=false;button.disabled=false;label('Voice');};
   const wav = async blob => {
     const context=new AudioContext();
@@ -43,7 +52,7 @@ window.InspectorVoice = function ({api, button, input, notify}) {
         } catch(error){if(own===generation)notify(error.message||'Could not transcribe recording');}
         finally{if(own===generation){busy=false;button.disabled=false;label('Voice');}}
       };
-      recorder.start();label('Stop recording');timer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();release();},60000);
+      recorder.start();startedAt=Date.now();status.textContent='Recording · 0:00';label('Stop recording');ticker=setInterval(()=>{const seconds=Math.floor((Date.now()-startedAt)/1000);status.textContent='Recording · '+Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');},1000);timer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();release();},60000);
     } catch(error){release();busy=false;label('Voice');notify(error.name==='NotAllowedError'?'Allow microphone access to use voice input.':error.message||'Microphone unavailable');}
   };
   window.addEventListener('pagehide',cancel);

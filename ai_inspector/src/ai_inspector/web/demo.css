@@ -120,3 +120,15 @@ button.quiet,.send,.primary,.suggestions button,.gv-tab{border-radius:999px;padd
 .conversation:not(.inspector-working):not(.demo-working) .workspace-panels>:not(#activity-open){display:none!important}
 .conversation:is(.inspector-working,.demo-working) .workspace-panels{flex:1 1 0;min-height:0;overflow:auto}
 .conversation:is(.inspector-working,.demo-working) #messages,.conversation:is(.inspector-working,.demo-working) #suggestions,.conversation:is(.inspector-working,.demo-working) .demo-next,.conversation:is(.inspector-working,.demo-working) #demo-navigation-actions{display:none!important}
+
+/* Keep dictation beside Send, with recording feedback in the same control row. */
+.composer-bottom{justify-content:flex-end}
+.composer-bottom .attach-button{margin-right:auto}
+#voice-input{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--ink);flex:none}
+#voice-input[hidden]{display:none}
+#voice-input:hover{background:#eef1e8}
+#voice-input[data-state="recording"]{color:#a43732;background:#fae9e6}
+#voice-input[data-state="processing"]{opacity:.55}
+.voice-recording-status{font-size:11px;color:#7d4b44;white-space:nowrap}
+.voice-recording-status[hidden]{display:none}
+.chat-hidden .voice-recording-status{max-width:115px;overflow:hidden;text-overflow:ellipsis}
