@@ -1,0 +1,5 @@
+**
+!localization_service/
+!localization_service/**
+localization_service/**/__pycache__/
+localization_service/tests/

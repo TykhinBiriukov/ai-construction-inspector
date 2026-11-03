@@ -1,0 +1,5 @@
+numpy==2.3.5
+ifcopenshell==0.8.3.post2
+Pillow==12.3.0
+
+psycopg[binary]==3.3.6
