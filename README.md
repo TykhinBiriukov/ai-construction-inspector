@@ -10,7 +10,7 @@ AI Construction Inspector helps a construction team connect what was designed wi
 | Track | Track 2 |
 | Hackathon dates | 26 October–4 November 2026, as published by the organizer |
 | Team development period | |
-| Web demo | |
+| Web demo | [Open AI Inspector](https://inspector.campuscompile.eu/demo) — explore three guided scenarios with prepared data; no phone or local installation needed for the walkthrough |
 | Creators | Tykhin Biriukov, Egor Pichugin and Oleg Kulikov |
 | Meta models in the implementation | Muse Spark 1.3 and SAM 3.1 |
 
@@ -19,6 +19,10 @@ The team knows this problem from work in construction. **Egor Pichugin** worked 
 [Demo walkthrough](#demo-walkthrough) · [Problem and value](#problem-and-value) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons) · [Reproducible setup](docs/reproducible-setup.md) · [Roadmap](#roadmap)
 
 ## Demo walkthrough
+
+[Open the web demo](https://inspector.campuscompile.eu/demo), then choose **Compare the 3D model with site photos**, **Check installation against the drawing**, or **Review construction progress**. Each scenario opens prepared evidence and a retained result in the same workspace. The walkthrough demonstrates the user flow from source evidence to a reviewable result; it reuses saved computations rather than rerunning the full pipeline. For the exact steps and expected output, see the [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start).
+
+For a new inspection, the user works with project documents and photographs in one web workspace; the iPhone client adds RGB-D capture when depth is needed. Drawing/photo comparison does not require LiDAR, and a hosted user does not need to deploy the backend services.
 
 This system works with more than ordinary chat attachments. A scan comparison needs RGB photographs, LiDAR depth and confidence, camera calibration and poses, capture metadata, and an IFC reference model. Progress monitoring needs overlapping dated surveys and a model with a work schedule. A visitor should be able to explore the product without first obtaining a compatible device, access to a construction site and its design files.
 
@@ -53,11 +57,13 @@ Professional mobile mapping already addresses reality capture. For example, [Nav
 | Avoid unsupported certainty | Visibility, correspondence and quality limits stay explicit | False findings, missed findings and useful requests for additional evidence |
 | Make repeated surveys useful | Dated observations and a shared progress viewer | Agreement with independently reviewed site records |
 
-These are product hypotheses; savings need to be measured on real projects.
+For this hackathon prototype, the evidence cases demonstrate implemented workflows and retained results. Reduced lookup and comparison effort is the intended user benefit; no percentage reduction in engineer time or project cost is claimed.
 
 ## Architecture
 
 Users interact with one **AI Inspector**. Internally, conversation, durable workflow ownership, numerical computation and evidence review have separate responsibilities.
+
+**AI validation is implemented.** Geometry Inspector delegates candidate decisions to a separate Geometry Verifier agent, which reviews the pinned evidence and can request more data or reject an unsupported candidate. The staged Drawing/Photo workflow also reviews the draft against both original images while keeping the drawing-derived requirements fixed. Deterministic validation checks report identities, evidence references and the required schema. These are explicit review mechanisms; their existence does not by itself establish independent physical measurement accuracy.
 
 ```mermaid
 flowchart TB
