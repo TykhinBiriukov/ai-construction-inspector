@@ -12,7 +12,7 @@ def upload_plan(settings, principal, session_id, request, *, store=None):
         raise APIError(422, "unsupported_kind", "Standalone capture accepts files and a manifest")
     # Never accept a caller-supplied prefix or grant access to assigned captures.
     prefix = f"standalone/{quote(principal.project_id, safe='')}/{quote(principal.device_id, safe='')}/{session_id}/"
-    store = store or SupabaseCaptureSourceStore(settings)
+    store = store or SupabaseCaptureSourceStore(settings.geometry_storage_settings())
     objects = request.model_dump(mode="json")["objects"]
     for item in objects:
         maximum = settings.max_manifest_bytes if item["name"].endswith("json") else settings.max_capture_file_bytes

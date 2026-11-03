@@ -62,3 +62,5 @@ The assigned device or matching operator may POST `.../abort`. Ownership is chec
 Objects are scoped to standalone/{project}/{device}/{session_id}/, using content-addressed observation/manifests keys and immutable upload plans. Upload standalone_capture_v1 manifest last, after verifying all referenced uploads. Its standalone inspection/project markers are not Inspector entities; ownership comes from the authenticated prefix. Discover a completed manifest instead of assuming a partial folder is complete. Incorporating this data into an inspection requires a separately implemented validated import.
 
 Native/cloud setup and optional test tools are in [backend README](../README.md). Operator intake and reference-BIM semantics are in [web integration](web-integration.md).
+
+Standalone upload plans use the configured Geometry Supabase storage (`INSPECTOR_GEOMETRY_SUPABASE_*`), falling back to primary storage when no separate Geometry storage is configured. Assigned captures and BIM storage remain unchanged. Existing standalone files are not migrated; retries check and upload the complete local inventory to the current destination.
