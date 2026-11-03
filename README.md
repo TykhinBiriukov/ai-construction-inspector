@@ -16,7 +16,7 @@ AI Construction Inspector helps a construction team connect what was designed wi
 
 The team knows this problem from work in construction. **Egor Pichugin** worked as a quality-control engineer and regularly inspected work on construction sites. **Oleg Kulikov** held an engineering management role and worked on acceptance of renovation and major refurbishment of premises. **Tykhin Biriukov** worked on solar-panel installation. That experience shaped the project around practical questions: which element needs attention, what evidence supports the finding, and what should be checked next?
 
-[Demo walkthrough](#demo-walkthrough) · [Problem and value](#problem-and-value) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons) · [Reproducible setup](docs/reproducible-setup.md) · [Roadmap](#roadmap)
+[Demo walkthrough](#demo-walkthrough) · [Problem and value](#problem-and-value) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons) · [Reproducible setup](docs/reproducible-setup.md)
 
 ## Demo walkthrough
 
@@ -358,14 +358,6 @@ Each service has its own environment and scoped credentials. The [Geometry evide
 ## Verification
 
 Source and maintained contracts are linked above. Generated `/docs`, `/openapi.json` and `/contracts` describe the service schemas. Component tests cover deterministic behavior and service contracts; the [evidence cases](docs/evidence/2026-11-03/README.md) document recorded model runs and numerical experiments. See [backend verification](ai_inspector/README.md#verification) for the test workflow.
-
-## Roadmap
-
-1. **Streamline reproduction.** Package the evidence cases and reviewer workflow for convenient setup and repeatable comparison.
-2. **Extend inspection coverage.** Support more IFC layouts, richer room context and additional construction tasks.
-3. **Develop field applications.** Work with engineers on practical inspection workflows and domain-specific evaluation.
-4. **Automate capture with a robot dog or another mobile platform.** Build on the existing separation of capture, source validation, geometry computation and AI inspection.
-5. **Combine autonomous and human-assisted operation.** Support routine evidence collection alongside engineer review and follow-up observations.
 
 ## Component and license references
 
