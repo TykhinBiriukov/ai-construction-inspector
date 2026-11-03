@@ -58,6 +58,7 @@ class Settings:
     database_url: str = field(default="", repr=False)
     bim_storage: str = "local"
     meta_base_url: str = "https://api.meta.ai/v1"
+    public_demo_enabled: bool = False
     saved_demo_dir: str = ""
     voice_enabled: bool = False
     meta_model: str = "muse-spark-1.3"
@@ -201,6 +202,7 @@ class Settings:
         return cls(
             observability=ObservabilityConfig.from_mapping(values),
             meta_base_url=get("INSPECTOR_META_BASE_URL", "https://api.meta.ai/v1"),
+            public_demo_enabled=get("INSPECTOR_PUBLIC_DEMO_ENABLED", "false").lower() == "true",
             saved_demo_dir=get("INSPECTOR_SAVED_DEMO_DIR", ""),
             voice_enabled=get("INSPECTOR_VOICE_ENABLED", "false").lower() == "true",
             meta_model=get("INSPECTOR_META_MODEL", "muse-spark-1.3"),

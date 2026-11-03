@@ -1,10 +1,11 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  const authKey = 'inspector-operator-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
+  const authKey = 'inspector-demo-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
   const read = (store, key) => { try { return store.getItem(key); } catch { return null; } };
   const write = (store, key, value) => { try { if (value == null) store.removeItem(key); else store.setItem(key,value); } catch {} };
   let token = read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
+  let apiPrefix=read(sessionStorage,'inspector-demo-api-prefix')||'';
   let scopedSessions = [], scopedInspections = [];
   let geometryViewer=null;
   const presentedProgress=new Set();
@@ -44,7 +45,7 @@
     write(sessionStorage,pendingKey,pending || create ? JSON.stringify({pending,create,chat_id:chat?.chat_id,project_id:overview?.project_id}) : null);
   }
   async function api(path, options={}) {
-    const response=await fetch(path,{...options,headers:{...options.headers,Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(60000)});
+    const response=await fetch(apiPrefix+path,{...options,headers:{...options.headers,Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(60000)});
     if(response.ok && options.blob) return response.blob();
     let body; try { body=await response.json(); } catch { body={}; }
     if (!response.ok) { if(response.status===401) lock(); const error=new Error(body.message || `Request failed (${response.status})`); error.status=response.status; error.code=body.code; throw error; }
@@ -62,7 +63,7 @@
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
-  function unlock() { voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value=''; write(sessionStorage,authKey,token); }
+  function unlock() { voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=!!apiPrefix; $('token').value=''; write(sessionStorage,authKey,token); }
   function controls() {
     $('chat-picker').disabled=sending||workspaceBusy;
     $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
@@ -102,7 +103,7 @@
     const updated=review?.updated_at||run?.updated_at;if(updated)panel.append(node('small','',`Last update: ${new Date(updated).toLocaleTimeString()}`));
   }
   function renderRails() {
-    $('project-name').textContent=overview.project_id;
+    $('project-name').textContent=apiPrefix?'Demo project':overview.project_id;
     renderFiles();renderProgress();
     $('tasks').replaceChildren(); $('task-count').textContent=scopedSessions.length;
     for(const session of scopedSessions) {
@@ -903,5 +904,19 @@
   })();
 
   }
-  if(token) startWorkspace();
+  async function beginDemo(){
+    if(token.startsWith('demo.')&&Number(token.split('.')[2])*1000<=Date.now()){token='';write(sessionStorage,authKey,null);}
+    if(!token){
+      try{
+        const response=await fetch('/v1/demo/session',{method:'POST'});
+        if(!response.ok)throw Error('The demo is temporarily unavailable. Please retry.');
+        const session=await response.json();
+        if(session.api_prefix!=='/public-demo'||typeof session.token!=='string')throw Error('Invalid demo session');
+        token=session.token;apiPrefix=session.api_prefix;write(sessionStorage,authKey,token);write(sessionStorage,'inspector-demo-api-prefix',apiPrefix);
+      }catch(error){notify(error.message);return;}
+    }
+    await startWorkspace();
+  }
+  $('demo-retry').onclick=()=>beginDemo();
+  beginDemo();
 })();

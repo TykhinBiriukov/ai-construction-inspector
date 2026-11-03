@@ -202,6 +202,14 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     if static_ui:
         app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "web"), name="operator-ui")
 
+    if settings.public_demo_enabled and settings.saved_demo_dir:
+        from .public_demo import PublicDemo, mint
+        app.add_middleware(PublicDemo, settings=settings)
+
+        @app.post('/v1/demo/session')
+        def new_demo_session():
+            return {'token': mint(settings), 'api_prefix': '/public-demo'}
+
     if settings.saved_demo_dir:
         from .saved_demo import configure
         configure(app, service)

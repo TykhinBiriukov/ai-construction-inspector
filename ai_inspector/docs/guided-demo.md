@@ -2,8 +2,12 @@
 
 Production frontend deploys from `main` through `deploy-inspector-web.yml`.
 The existing GCP backend polls `main` with `inspector-backend-update.timer`.
-The deployment uses the existing operator authentication; no operator token is
-embedded in JavaScript or exposed by the demo configuration endpoint.
+With `INSPECTOR_PUBLIC_DEMO_ENABLED=true`, the demo automatically issues a signed
+24-hour visitor session. Each visitor has a separate local SQLite workspace under
+the backend cache volume; production DB/storage/device credentials are not inherited.
+No operator token is embedded in JavaScript or returned to visitors. Normal operator
+API routes retain their original authentication. Guest API requests use the
+`/public-demo` prefix; the same-origin viewer shares the guest session.
 
 Set `INSPECTOR_SAVED_DEMO_DIR=/demo-assets` to enable the three guided scenarios.
 The read-only mount comes from `/opt/inspector-backend/demo-assets` and contains:
