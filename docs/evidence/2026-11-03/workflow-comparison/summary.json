@@ -1,0 +1,118 @@
+{
+  "kind": "descriptive_reanalysis_of_saved_diagnostics",
+  "execution": {
+    "platform": "Linux",
+    "machine": "x86_64",
+    "python": "3.11.2"
+  },
+  "input_sha256": {
+    "analyze.py": "b2bcc27ec61c6ffc94c057204f61d6eca470be6664772373766a6fac3d54ccdf",
+    "cameras.json": "8066cc4aa7b6bccab46b9ebf9578a83168b1ac060dc6b5ea0704ce7e49fb9208",
+    "history.json": "d3cc7c713836aa7afc91d94691eaac144053c5c8aa47f4c302ab753e91a84eb4",
+    "protocol.txt": "46ba961679c6598bae5cc1634b101b9c89b7890a965c3a57e5803f29d0963bd6",
+    "sam-final.json": "6ff5ea40be8d349faf33286be8f8437800f47531f88cb8be1b3d371bf31cb859",
+    "sam-first.json": "38681cb37179268508feeaaab98672bfed9088b558492cd40e28e600550cf750"
+  },
+  "projection": {
+    "counts": {
+      "accepted_raw": 50,
+      "accepted_refined": 18,
+      "rejected": 9
+    },
+    "retained_fraction": 0.8831168831168831,
+    "raw_all_frames": {
+      "n_frames": 77,
+      "mean_frame_median_mm": 13.897649266503075,
+      "median_frame_median_mm": 9.462356567382812,
+      "mean_frame_p90_mm": 48.54645876987995,
+      "mean_frame_agreement": 0.9399483750734918
+    },
+    "same_retained_frames_raw": {
+      "n_frames": 68,
+      "mean_frame_median_mm": 10.992812321466557,
+      "median_frame_median_mm": 9.002387523651123,
+      "mean_frame_p90_mm": 35.61465986593462,
+      "mean_frame_agreement": 0.9663273375322479
+    },
+    "same_retained_frames_selected": {
+      "n_frames": 68,
+      "mean_frame_median_mm": 7.932925925535313,
+      "median_frame_median_mm": 7.56680965423584,
+      "mean_frame_p90_mm": 29.979091760812,
+      "mean_frame_agreement": 0.976146909144663
+    },
+    "refined_subset_raw": {
+      "n_frames": 18,
+      "mean_frame_median_mm": 18.198053042093914,
+      "median_frame_median_mm": 17.059236764907837,
+      "mean_frame_p90_mm": 50.13932220430838,
+      "mean_frame_agreement": 0.9348139280109408
+    },
+    "refined_subset_selected": {
+      "n_frames": 18,
+      "mean_frame_median_mm": 6.638482213020325,
+      "median_frame_median_mm": 6.333976984024048,
+      "mean_frame_p90_mm": 28.849398251622915,
+      "mean_frame_agreement": 0.9719100874356199
+    },
+    "rejected_subset_raw": {
+      "n_frames": 9,
+      "mean_frame_median_mm": 35.845306184556755,
+      "median_frame_median_mm": 26.263117790222168,
+      "mean_frame_p90_mm": 146.25338382191129,
+      "mean_frame_agreement": 0.7406406587184469
+    },
+    "rejected_subset_proposals": {
+      "n_frames": 9,
+      "mean_frame_median_mm": 7.641858524746365,
+      "median_frame_median_mm": 7.343947887420654,
+      "mean_frame_p90_mm": 74.25708737638261,
+      "mean_frame_agreement": 0.9086270878756201
+    }
+  },
+  "sam": {
+    "equal_fields": [
+      "model",
+      "parameters",
+      "source_manifest_sha256",
+      "detection_count",
+      "class_counts",
+      "selected_count",
+      "processed_count"
+    ],
+    "first_cache": {
+      "hits": 0,
+      "misses": 462,
+      "prefetched": 0,
+      "invalidated": 0
+    },
+    "final_cache": {
+      "hits": 462,
+      "misses": 0,
+      "prefetched": 462,
+      "invalidated": 0
+    },
+    "timings": {
+      "e25b6cb6-5b41-41ae-ace0-0bb225acdf78": {
+        "total_seconds": 4238.525528,
+        "segmentation_stage_seconds": 3668.473201
+      },
+      "4129394c-0d20-4c1c-98f1-30d472ab9191": {
+        "total_seconds": 197.651536,
+        "segmentation_stage_seconds": null
+      },
+      "54a47af7-ec32-4275-aee2-d07bd92550b1": {
+        "total_seconds": 818.094529,
+        "segmentation_stage_seconds": 161.21002
+      }
+    }
+  },
+  "limits": [
+    "One development capture; 77 correlated frames, not 77 independent trials",
+    "Held-out pixels share the reconstruction source; residual is not independent physical accuracy",
+    "Retained cohort is selected by gates; report coverage and rejected rows alongside improvement",
+    "Not a rerun of the full historical pipeline; saved raw/selected diagnostic branches",
+    "Historical cold/warm timings do not isolate all environmental factors"
+  ],
+  "detail_records": "../experiment-data-manifest.json"
+}

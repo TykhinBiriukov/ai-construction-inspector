@@ -31,14 +31,14 @@ The [earlier mask-projection implementation](https://github.com/TykhinBiriukov/a
 
 The [protocol](workflow-comparison/protocol.txt) was fixed before aggregation. A standalone [analysis script](workflow-comparison/analyze.py) processed all 77 retained diagnostic rows on the existing GCP `e2-standard-2` VM, in an isolated temporary directory with Linux x86-64 / Python 3.11.2. It used only Python's standard library, made no model calls and did not change services, source geometry or databases. Heavy processing was not run on the local Mac.
 
-Inputs and script hashes are pinned in [metrics.json](workflow-comparison/metrics.json). The [77 complete diagnostic rows](workflow-comparison/cameras.json), rejected cases and all per-frame outcomes are included. To recompute the aggregation in any disposable environment:
+Inputs and script hashes are pinned in [metrics.json](data-access.md#experiment-records). The [77 complete diagnostic rows](data-access.md#experiment-records), rejected cases and all per-frame outcomes are included. First follow the [data extraction instructions](data-access.md#reproduce-the-projection-summary). Copy the unchanged analysis script and protocol beside the extracted data. To recompute in that disposable directory:
 
 ```sh
-cd docs/evidence/2026-11-03/workflow-comparison
+cd "$evidence_dir/experiment-records-v1/workflow-comparison"
 python3 analyze.py
 ```
 
-The command writes `metrics.json` in that directory; retain the checked-in result if comparing executions. Platform/Python fields may differ on another host. No provider key is needed.
+The command writes `metrics.json` in the extracted data directory; retain the archived original if comparing executions. The compact [projection summary](workflow-comparison/summary.json) remains readable in Git. Platform/Python fields may differ on another host. No provider key is needed.
 
 Each metric uses reserved validation pixels (`held_out` in the source record), rather than the pixels used to fit that correction. However, the same capture contributed to the fused mesh: these are **not independent ground-truth observations or held-out scenes**. Values are internal consistency diagnostics, not physical measurement error. Frames are weighted equally; a mean of frame-level P90 values is not a pooled P90 over all points.
 

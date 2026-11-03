@@ -1,5 +1,7 @@
 # Evidence cases — 3 November 2026
 
+[Download the evidence and reproduce the results](data-access.md). Git retains methods, protocols, scripts, figures and compact summaries; detailed JSON and source data are versioned Release assets.
+
 Start with the real-room Geometry case. It connects a device capture to a completed reconstruction, an IFC reference and image-linked comparison results. Drawing/photo and Progress4D provide complementary evidence about requirement handling and dated observations.
 
 For the recovered algorithm history and quantitative comparison, see [Geometry workflow evolution](workflow-evolution.md): paired projection diagnostics and controlled numerical comparisons calculated on GCP.
@@ -8,7 +10,7 @@ For the recovered algorithm history and quantitative comparison, see [Geometry w
 
 ## 1. Real-room Geometry: capture → reconstruction → IFC comparison
 
-[Download the real-room capture and results](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03). The [package manifest](geometry-case-manifest.json) records file hashes, provenance and verification boundaries. The compact [comparison result](geometry-result.json) is readable directly in the repository.
+[Download the real-room capture and results](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03). The [package manifest](geometry-case-manifest.json) records file hashes, provenance and verification boundaries. The [comparison result](data-access.md#geometry-reports) is included in the downloadable records archive.
 
 | Item | Recorded evidence |
 |---|---|
@@ -43,7 +45,7 @@ flowchart LR
     Compare --> Evidence[Image-linked objects and surface reports]
 ```
 
-The reconstruction report identifies **Open3D VoxelBlockGrid TSDF 0.20.0 on CPU**, ARKit coordinates and metre units. It integrates **99/99 frames**, skips none, and produces **469,270 surface points, 466,800 vertices and 896,924 triangles**. The point cloud is extracted from the fused TSDF surface; it is not a concatenation of raw depth samples. These counts describe output size, not accuracy. The [reconstruction report](geometry-reports/reconstruction.json), [first SAM report](geometry-reports/segmentation-first-run.json), [final SAM report](geometry-reports/segmentation.json), [mesh-label report](geometry-reports/mesh_segmentation.json) and [numerical comparison](geometry-reports/scan_vs_bim.json) can also be read directly in Git.
+The reconstruction report identifies **Open3D VoxelBlockGrid TSDF 0.20.0 on CPU**, ARKit coordinates and metre units. It integrates **99/99 frames**, skips none, and produces **469,270 surface points, 466,800 vertices and 896,924 triangles**. The point cloud is extracted from the fused TSDF surface; it is not a concatenation of raw depth samples. These counts describe output size, not accuracy. The [reconstruction report](data-access.md#geometry-reports), [first SAM report](data-access.md#geometry-reports), [final SAM report](data-access.md#geometry-reports), [mesh-label report](data-access.md#geometry-reports) and [numerical comparison](data-access.md#geometry-reports) are included in the downloadable records archive, with their exact paths listed in the data guide.
 
 Our pipeline then selects RGB views, obtains SAM masks, checks image/geometry projection, combines depth-supported views into mesh labels, derives opening-boundary candidates, registers observed geometry to the IFC and computes surface/opening comparisons. The mesh-label report records 449,584 labelled faces and 447,331 unknown faces after preprocessing, using a minimum of two supporting views and class purity 0.65. It retains 238 supported and 46 unconfirmed image observations; its 30 candidate groups are not guaranteed distinct physical objects. Unknown surface labels are preserved rather than filled by the model. Original RGB frames, segmentation masks and overlays remain linked through stable frame IDs. This separates Meta's semantic segmentation from numerical measurement and explicit visibility/alignment gates.
 
@@ -65,7 +67,7 @@ These are stage timestamps from the retained job, including stage I/O, not isola
 
 ### First SAM run and subsequent reuse
 
-The [database run/stage history](geometry-run-history.json) records three completed jobs for this same capture on 1 November:
+The [database run/stage history](data-access.md#geometry-reports) records three completed jobs for this same capture on 1 November:
 
 | Job | Total elapsed | Segmentation stage | Interpretation |
 |---|---:|---:|---|
@@ -104,7 +106,7 @@ The implementation evolved from a single shared conversation into three isolated
 
 ### Same-input legacy/staged run
 
-The [complete saved reports and audit diagnostics](drawing-workflow-comparison.json) include matching input hashes and separate prompt versions.
+The [complete saved reports and audit diagnostics](data-access.md#drawing-and-progress) include matching input hashes and separate prompt versions.
 
 | Recorded run | Prompt | Time | Model calls | Findings |
 |---|---|---:|---:|---|
@@ -115,7 +117,7 @@ Both use Muse Spark 1.3. This is one development comparison, not a repeated or h
 
 ### Frozen checklist and replacement observations
 
-The [saved 0.3.0 records](drawing-frozen-checklist.json) contain three completed analyses with the same 11-item checklist, prompt/config hashes, evidence regions and task identities:
+The [saved 0.3.0 records](data-access.md#drawing-and-progress) contain three completed analyses with the same 11-item checklist, prompt/config hashes, evidence regions and task identities:
 
 | Observation | Time | Match | Inconclusive | Mismatch |
 |---|---:|---:|---:|---:|

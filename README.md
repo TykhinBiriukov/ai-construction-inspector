@@ -22,7 +22,7 @@ The team knows this problem from work in construction. **Egor Pichugin** worked 
 
 This system works with more than ordinary chat attachments. A scan comparison needs RGB photographs, LiDAR depth and confidence, camera calibration and poses, capture metadata, and an IFC reference model. Progress monitoring needs overlapping dated surveys and a model with a work schedule. A visitor should be able to explore the product without first obtaining a compatible device, access to a construction site and its design files.
 
-The demo uses prepared inputs and saved computation results. Start with the [versioned evidence cases](docs/evidence/2026-11-03/README.md): the primary case is a completed Geometry reconstruction from **99 real-room RGB-D observations**, with public numerical reports, source hashes and image-reference identities. The complete [IFC/capture/mesh archive is available in the evidence release](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03).
+The demo uses prepared inputs and saved computation results. Start with the [versioned evidence cases](docs/evidence/2026-11-03/README.md): the primary case is a completed Geometry reconstruction from **99 real-room RGB-D observations**, with public numerical reports, source hashes and image-reference identities. The [evidence download guide](docs/evidence/2026-11-03/data-access.md) links the detailed experiment records and verification instructions. The complete [IFC/capture/mesh archive is available in the evidence release](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03).
 
 | Case | Available evidence | What it establishes |
 |---|---|---|
@@ -350,7 +350,7 @@ Start with the [step-by-step setup guide](docs/reproducible-setup.md). It covers
 | Capture on a phone | [iOS](ios/README.md) | macOS/Xcode, real compatible iPhone, configured Inspector and upload storage |
 | Use the restricted spatial solver | [Localization](localization_service/deploy/README.md) | Supported IFC, service/database setup and session-bound phone integration |
 
-Components do not share one Python environment or a universal key. No production credentials are distributed. The [Geometry evidence guide](docs/evidence/2026-11-03/README.md) links public reports and the manifest of the prepared source archive. The selected capture/mesh archive is publicly available; other private captures and the full Progress4D development dataset are not distributed in the clone. Local `.env` files do not configure deployed services. Consolidating code on `main` does not deploy it or change a host's selected branch.
+Components do not share one Python environment or a universal key. No production credentials are distributed. The [Geometry evidence guide](docs/evidence/2026-11-03/README.md) links compact summaries and manifests; full records and source assets are downloadable Release packages. The selected capture/mesh archive is publicly available; other private captures and the full Progress4D development dataset are not distributed in the clone. Local `.env` files do not configure deployed services. Consolidating code on `main` does not deploy it or change a host's selected branch.
 
 ## Verification and current boundaries
 

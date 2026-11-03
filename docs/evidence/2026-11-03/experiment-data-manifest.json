@@ -1,0 +1,25 @@
+{
+  "version": "experiment-records-v1",
+  "source_commit": "b393bcc07b63115ab0efba4809457abdb0191878",
+  "release_url": "https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03",
+  "archive": {
+    "name": "experiment-records-v1.zip",
+    "url": "https://github.com/TykhinBiriukov/ai-construction-inspector/releases/download/evidence-2026-11-03/experiment-records-v1.zip",
+    "bytes": 348450,
+    "sha256": "f7f02aa4630a84953a9436097c48857792f9d1fa34f99354d444c39e9b3da3cf",
+    "json_files": 26,
+    "root": "experiment-records-v1",
+    "checksums": "SHA256SUMS"
+  },
+  "contents": {
+    "controlled-benchmark/results.json": "All 26 pose cases and 18 wall cases, transforms and execution identities",
+    "workflow-comparison/cameras.json": "All 77 original diagnostic rows",
+    "workflow-comparison/metrics.json": "Full per-frame and aggregate metrics",
+    "workflow-comparison/sam-artifact-comparison.json": "Complete artifact indexes",
+    "drawing-frozen-checklist.json": "Three full staged analyses",
+    "drawing-workflow-comparison.json": "Full same-input legacy/staged analyses",
+    "geometry-reports/": "Detailed computation reports"
+  },
+  "access": "Public release asset; no GitHub login or service credentials required",
+  "integrity": "All archived JSON bytes verified identical to source commit files; package SHA256SUMS includes every JSON."
+}
