@@ -28,37 +28,15 @@ MODEL_API_KEY=YOUR_META_API_KEY
 
 ## Local PostgreSQL
 
-Install and start [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) with Linux containers. From `geometry-engine`, use the PostgreSQL settings in `.env` and run:
+Use a running PostgreSQL server reachable from the API and worker environments. This component does not include a Docker Compose manifest or start a database automatically. A local installation, an independently managed container or an existing hosted database must be configured separately.
 
-```powershell
-docker compose up -d --wait db
-docker compose ps
-```
+Set `DATABASE_URL` privately in `.env` for the selected server/database. A nonempty `DATABASE_URL` overrides the separate connection settings. Otherwise configure `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`; host/port/database/user default to `127.0.0.1`, `5432`, `geometry_engine` and `geometry_engine`, while the password must be supplied. These settings configure the Python connection; they do not create a server, database or role.
 
-The database listens on `127.0.0.1`, using `POSTGRES_PORT` from `.env` (default `5432`). Database name, username and password are `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` from `.env`. Only these database settings are passed to the container; Supabase and Meta credentials are not passed through.
-
-Check SQL access:
-
-```powershell
-docker compose exec db psql -U geometry_engine -d geometry_engine -c "SELECT 1;"
-```
-
-This SQL command uses the default database and username; adjust them if you change those settings in `.env`.
-
-View logs or stop the container:
-
-```powershell
-docker compose logs --tail 50 db
-docker compose stop db
-```
-
-Database files persist in the named `postgres_data` volume across container recreation. `docker compose down` removes the container but keeps that volume. Adding `--volumes` would also delete database contents. Credentials initialize a new volume; editing them in `.env` does not change credentials inside an existing database.
-
-The API can run in `myenv` and connect to this database. If port `5432` is occupied by another project, set `POSTGRES_PORT=5433` in `.env` before starting this container. `DATABASE_URL`, when nonempty, overrides the separate connection settings; otherwise `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` are used.
+Use a dedicated server-side database identity with the permissions required by the migrations and worker. Keep database credentials separate from Supabase Storage and Meta credentials, and retain existing database volumes/data when changing how the server is hosted. Verify connectivity to the selected database before starting the API or worker.
 
 Run `python main.py` to apply Alembic migrations and start the local API. It fails before serving requests if migrations fail. `alembic upgrade head` or `python -m geometry_engine_api.database.migrate` can also apply them explicitly. For deployment, run migrations once as a release step, then start API replicas with `python -m uvicorn geometry_engine_api.app:app --host 0.0.0.0 --port 8000`. Importing the app does not connect to the database or run migrations. PostgreSQL advisory transaction locks serialize concurrent migration runners.
 
-Official references: [PostgreSQL image](https://hub.docker.com/_/postgres), [Compose startup](https://docs.docker.com/reference/cli/docker/compose/up/).
+For an independently managed database container, see the [official PostgreSQL image](https://hub.docker.com/_/postgres). Its lifecycle and persistent volume are separate from this component's Python startup.
 
 ## Project structure
 
