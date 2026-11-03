@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
-from . import drawing_photo, progress4d, demo_modes
+from . import drawing_photo, progress4d
 from .workspace import WorkItem, Observation, ImportPlan
 from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
@@ -311,10 +311,6 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         content = GeometryView(service).artifact(principal, str(chat_id), str(session_id), artifact_id)
         return Response(content, media_type='application/octet-stream', headers={'Cache-Control': 'private, no-store',
                         'X-Content-Type-Options': 'nosniff'})
-
-    @app.get('/v1/demo-modes', tags=['workspace'])
-    def demo_mode_list(principal: Annotated[Principal, Depends(operator)]):
-        return demo_modes.available(service, principal)
 
     @app.get('/v1/chats/{chat_id}/progress4d', tags=['workspace'])
     def progress4d_view(chat_id: UUID, principal: Annotated[Principal, Depends(operator)]):

@@ -71,3 +71,42 @@ async def read_response(settings, project, path, byte_range=None, *, transport=N
                 return Response(bytes(content), status_code=response.status_code, headers=outgoing)
     except httpx.HTTPError:
         raise APIError(502, 'progress4d_unavailable', '4D service is temporarily unavailable.') from None
+
+
+def agent_result(service, principal, chat_id, expected_project, *, transport=None):
+    """Read the bound saved result; never treat new attachments as processed input."""
+    project = project_for_chat(service, principal, chat_id)
+    if project != expected_project:
+        raise APIError(409, 'progress4d_binding_changed', 'The monitoring project binding changed. Submit a new request.')
+    settings = service.settings
+    try:
+        with httpx.Client(timeout=30, follow_redirects=False, transport=transport) as client:
+            with client.stream('GET', settings.progress4d_base_url.rstrip('/') + f'/v1/projects/{project}/timeline',
+                               headers={'Authorization': 'Bearer ' + settings.progress4d_service_token}) as response:
+                if response.status_code != 200:
+                    raise APIError(502, 'progress4d_unavailable', 'The connected monitoring result is unavailable', retryable=True)
+                content = bytearray()
+                for chunk in response.iter_bytes():
+                    content.extend(chunk)
+                    if len(content) > 16 * 1024 * 1024:
+                        raise ValueError
+        value = json.loads(content)
+        if value.get('project_id') != project or not isinstance(value.get('surveys'), list):
+            raise ValueError
+        report = value.get('report') or {}
+        surveys = value['surveys']
+        tasks = [{k: v for k, v in task.items() if k != 'evidence'} for task in report.get('tasks', [])]
+        snapshots = report.get('snapshots') or []
+        latest = [{k: v for k, v in task.items() if k not in ('evidence', 'known_present_product_ids', 'observed_removals')} for task in (snapshots[-1].get('tasks', []) if snapshots else [])]
+        return {'latest_progress': latest, 'project_id': project, 'source': 'saved_monitoring_result', 'new_analysis': False,
+                'survey_count': len(surveys), 'as_of': report.get('as_of'), 'tasks': tasks,
+                'surveys': [{'captured_at': s['captured_at'], 'status': s['status'],
+                             'source_kind': s.get('source_kind'),
+                             'visualization': (s.get('result') or {}).get('visualization')} for s in surveys],
+                'limitations': report.get('limitations', []),
+                'viewer': {'kind': 'progress4d', 'chat_id': chat_id},
+                'input_notice': 'These are previously processed project observations, not analysis of new uploads or external folder links.'}
+    except httpx.HTTPError:
+        raise APIError(503, 'progress4d_unavailable', 'Monitoring service is temporarily unavailable', retryable=True) from None
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise APIError(502, 'progress4d_invalid_result', 'Monitoring service returned an invalid result') from None

@@ -1,16 +1,16 @@
 # 4D progress viewer integration
 
-The workspace's **4D progress** button opens the existing weekly viewer in an
-Inspector dialog. It retains surfaces, project overlays, stage filters, the sticky
-week selector, evidence and report download. The standalone viewer also remains
+The assistant reply's **Open progress and weekly models** button opens the existing weekly viewer in an
+Inspector document panel, with a full-screen dialog option. It retains surfaces,
+project overlays, stage filters and the sticky week selector. The standalone viewer also remains
 available. No service credential or short-lived project URL reaches the browser.
 
 ## Configure an existing result
 
 Run [Progress4D](../../progress4d_service/README.md) separately with durable storage,
 its native CPU dependencies and a dedicated service token. Submit surveys with its
-CLI or server-side client; this integration reads existing results and does not
-start reconstruction, add an LLM tool, or introduce a new upload workflow.
+CLI or server-side client; the orchestrator tool reads existing results and does not
+start reconstruction or introduce a new upload workflow.
 
 Configure the native Inspector backend:
 
@@ -61,23 +61,22 @@ Synthetic visualization provenance and inconclusive analysis remain in the servi
 JSON. The embedded UI consumes the same results as the standalone viewer and does
 not promote a synthetic scene to photographic evidence.
 
-## One workspace, three demo modes
+## Orchestrator-driven output
 
-The existing workspace header has a **Mode** selector. The same selector is present
-inside the model and 4D dialogs, so switching does not require closing a viewer.
-The existing document panel, chat, files, evidence and model viewers are preserved.
-The supplied Inspector logo is served locally as `/ui/inspector-logo.jpeg`.
+Users stay in one conversation: attach documents, describe the task, then ask
+follow-up questions. There is no manual demo-mode selector. The supplied Inspector
+logo remains in the workspace header.
 
-Set `INSPECTOR_DEMO_MODE_CHATS_JSON` to a server-owned JSON map with keys `geometry`,
-`drawing` and `monitoring` and distinct existing Inspector chat UUIDs as values.
-The monitoring chat must also appear in `INSPECTOR_PROGRESS4D_CHAT_PROJECTS_JSON`.
-Use a geometry chat with an accepted saved model result and a drawing chat with a
-saved drawing/photo comparison. No demo data is created or analysis launched by
-selecting a mode. The authenticated `/v1/demo-modes` response exposes only chats the
-operator may access. Unconfigured modes show a connection message instead of
-opening another demo. Normal conversation selection remains available.
+When the chat has a server-owned monitoring project binding, the orchestrator is
+offered `progress4d_result`. It reads the saved timeline and returns compact task
+states, dates and provenance, plus a typed `progress4d` viewer reference. The
+persisted tool result creates an **Open progress and weekly models** card in the
+assistant reply and opens the viewer beside the conversation. A **Full screen**
+action retains the larger dialog view. Reopening the chat restores the card. The viewer uses the same
+chat authorization; the model cannot supply a URL, secret or arbitrary project ID.
 
-Selecting a mode switches to its saved conversation and opens the existing result:
-geometry model viewer, drawing comparison and document, or 4D viewer. **Open demo**
-reopens it after closing. Reload retains the conversation and selected mode through
-the existing workspace persistence. Unsaved-message confirmation is preserved.
+This tool reads an existing report; it does not download folder links or process
+new uploads. Its output explicitly retains `new_analysis=false` and source
+provenance. A later installation question uses the existing drawing/photo or
+geometry workflow, or asks for missing inputs. Progress is not an installation
+verdict. Manual demo mappings from the earlier prototype are no longer used.

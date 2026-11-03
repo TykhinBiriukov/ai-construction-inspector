@@ -1,19 +1,19 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ход работ · 4D</title><link rel="stylesheet" href="viewer.css?v=20261103-seven1"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Construction progress · 4D</title><link rel="stylesheet" href="viewer.css?v=20261103-layout2"></head>
 <body><main>
-<header><div><span class="eyebrow">4D · Мониторинг проекта</span><h1>Ход работ</h1></div><div class="header-actions"><button id="refresh">Обновить</button><button id="download" disabled>Скачать отчёт</button></div></header>
-<p id="status" role="status">Загрузка…</p>
+<header><div><h1>Construction progress</h1></div></header>
+<p id="status" role="status">Loading…</p>
 <section class="viewer-panel">
-<div class="view-toolbar"><label>Съёмка <select id="survey" aria-label="Дата съёмки"></select></label><div><label>Вид <select id="view-mode" aria-label="Режим просмотра"><option value="surface">Съёмка</option><option value="combined">Проект + съёмка</option><option value="project">Проект</option></select></label> <label><input id="cutaway" type="checkbox" checked> Без потолка</label> <button id="reset-view">Общий вид</button></div></div>
-<div class="view"><canvas id="surface" aria-label="Трёхмерная модель выбранной недели" hidden></canvas><canvas id="cloud" aria-label="Область трёхмерного просмотра"></canvas><p id="empty">Выберите съёмку</p><span class="view-hint">Вращайте · Приближайте</span></div>
+<div class="view-toolbar"><label>Survey <select id="survey" aria-label="Survey date"></select></label><div><label>View <select id="view-mode" aria-label="View mode"><option value="surface">Survey</option><option value="combined">Design + survey</option><option value="project">Design</option></select></label> <label><input id="cutaway" type="checkbox" checked> Hide ceiling</label> <button id="reset-view">Reset view</button></div></div>
+<div class="view"><canvas id="surface" aria-label="3D model for the selected week" hidden></canvas><canvas id="cloud" aria-label="3D viewport"></canvas><p id="empty">Select a survey</p><span class="view-hint">Drag to rotate · Scroll to zoom</span></div>
 </section>
-<div class="timeline-controls" id="week-navigation"><button id="play">▶ Все недели</button><nav id="week-tabs" aria-label="Недели проекта"></nav></div>
-<p id="quality"></p><div id="selection-bar" hidden><span id="selection-label"></span><button id="clear-selection">Все этапы</button></div>
-<section id="summary" class="summary" aria-label="Сводка прогресса"></section>
-<section><div class="section-heading"><h2>Прогресс по этапам</h2><span>По фотографиям и истории наблюдений</span></div><div id="phase-cards" class="phase-grid"></div></section>
-<section id="element-panel" hidden><h2 id="element-title"></h2><label>Показать <select id="element-filter"><option value="all">Все элементы этапа</option><option value="present">Видно сейчас</option><option value="retained">Ранее подтверждено</option><option value="unknown">Неизвестно</option><option value="absent">Отсутствует</option></select></label><div id="element-list"></div></section><p id="delay-summary"></p>
-<section class="activity-panel"><h2>Активность по неделям</h2><canvas id="activity" height="220" aria-label="Изменение количества установленных элементов между съёмками"></canvas><p id="activity-note"></p></section>
-<details id="plan-details"><summary>План, прогноз и подробности</summary><p id="report-date"></p><table><thead><tr><th>Работа</th><th>Плановое окончание</th><th>Видно сейчас</th><th>Ранее подтверждено</th><th>Неизвестно</th><th>Прогноз / сценарий</th></tr></thead><tbody id="tasks"></tbody></table></details>
-<details id="evidence-details"><summary>Фото-доказательства</summary><p id="evidence-date"></p><select id="evidence-select" aria-label="Элемент проекта"></select><p id="evidence-reason"></p><img id="evidence-image" alt="Два фото с проекцией расположения элемента IFC" hidden></details>
-<p id="limits">Прогресс основан на элементах проекта с фото-доказательствами. Скрытые работы сохраняют дату прошлого наблюдения. Неопределённые участки не считаются выполненными.</p>
-</main><script src="surface.bundle.js?v=20261103-seven1"></script><script src="viewer.js?v=20261103-seven1" defer></script></body></html>
+<div class="timeline-controls" id="week-navigation"><button id="play">▶ Play weeks</button><nav id="week-tabs" aria-label="Project weeks"></nav></div>
+<p id="quality"></p><div id="selection-bar" hidden><span id="selection-label"></span><button id="clear-selection">All stages</button></div>
+<section id="summary" class="summary" aria-label="Progress summary"></section>
+<section><div class="section-heading"><h2>Progress by stage</h2><span>From photographs and observation history</span></div><div id="phase-cards" class="phase-grid"></div></section>
+<section id="element-panel" hidden><h2 id="element-title"></h2><label>Show <select id="element-filter"><option value="all">All stage elements</option><option value="present">Observed now</option><option value="retained">Previously confirmed</option><option value="unknown">Unknown</option><option value="absent">Absent</option></select></label><div id="element-list"></div></section><p id="delay-summary"></p>
+<section class="activity-panel"><h2>Weekly activity</h2><canvas id="activity" height="220" aria-label="Changes in installed element counts between surveys"></canvas><p id="activity-note"></p></section>
+<details id="plan-details"><summary>Schedule, forecast and details</summary><p id="report-date"></p><table><thead><tr><th>Task</th><th>Planned completion</th><th>Observed now</th><th>Previously confirmed</th><th>Unknown</th><th>Forecast / scenario</th></tr></thead><tbody id="tasks"></tbody></table></details>
+
+
+</main><script src="surface.bundle.js?v=20261103-layout2"></script><script src="viewer.js?v=20261103-layout2" defer></script></body></html>

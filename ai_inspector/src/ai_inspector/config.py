@@ -28,7 +28,6 @@ class Settings:
     max_capture_files: int = 40000
     max_capture_bytes: int = 50 * 1024**3
     source_url_lifetime_s: int = 900
-    demo_mode_chats_json: str = "{}"
     progress4d_base_url: str = ""
     progress4d_service_token: str = field(default="", repr=False)
     progress4d_chat_projects_json: str = "{}"
@@ -134,8 +133,6 @@ class Settings:
                 parsed.port  # Validate port syntax even though URL construction preserves it.
         from .progress4d import validate_config
         validate_config(self)
-        from .demo_modes import validate_modes
-        validate_modes(self.demo_mode_chats_json)
         if self.geometry_base_url:
             parsed = urlsplit(self.geometry_base_url)
             if parsed.scheme != 'https' and parsed.hostname not in ('localhost', '127.0.0.1', '::1'):
@@ -223,7 +220,6 @@ class Settings:
             max_capture_files=int(get("INSPECTOR_MAX_CAPTURE_FILES", "40000")),
             max_capture_bytes=int(get("INSPECTOR_MAX_CAPTURE_BYTES", "53687091200")),
             source_url_lifetime_s=int(get("INSPECTOR_SOURCE_URL_LIFETIME_S", "900")),
-            demo_mode_chats_json=get("INSPECTOR_DEMO_MODE_CHATS_JSON", "{}"),
             progress4d_base_url=get("INSPECTOR_PROGRESS4D_BASE_URL", ""),
             progress4d_service_token=get("INSPECTOR_PROGRESS4D_SERVICE_TOKEN", ""),
             progress4d_chat_projects_json=get("INSPECTOR_PROGRESS4D_CHAT_PROJECTS_JSON", "{}"),
