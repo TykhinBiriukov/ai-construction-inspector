@@ -1,0 +1,37 @@
+{
+  "version": "geometry-real-room-v1",
+  "assembled_on": "2026-11-03",
+  "source_kind": "real_room_device_rgbd",
+  "capture_session_id": "2b6b4560-c2d5-482d-880b-21f34502b9f2",
+  "geometry_job_id": "54a47af7-ec32-4275-aee2-d07bd92550b1",
+  "pipeline_version": "mesh-contours-v1",
+  "historical_runtime_git_sha": null,
+  "implementation_fingerprint": "b38dd4054a666a5de28354ecb3d4aafa68c8df5c4a860552e7b4c4f1d3720b44",
+  "source_review_revision": "e3e0f21c55a1a85b3bc264fe9bf6d97e3b7692cc",
+  "source_review_revision_is_runtime_revision": false,
+  "result_manifest_sha256": "e391ca94ecf25cd110fb2974cfce11e88cb4e212f42a493d3baa1eb4cc60b3d8",
+  "ifc_sha256": "4a618081be81cad4b7bba0eec22486038bc96d37e4778276d2f20a7d8143c51d",
+  "archive": {
+    "name": "geometry-real-room-v1.zip",
+    "bytes": 135086811,
+    "sha256": "e9e1a60ef783563c80c489f429155ab8fc996c8b748cdd539ca485c76d3e41bb",
+    "url": "https://github.com/TykhinBiriukov/ai-construction-inspector/releases/download/evidence-2026-11-03/geometry-real-room-v1.zip"
+  },
+  "file_count": 506,
+  "verification": {
+    "capture_files_hash_and_size": 396,
+    "stage_manifest_hashes": 12,
+    "output_ply_hashes": 3,
+    "demo_assets_matching_stage_hashes": 60,
+    "unique_evidence_frames_resolved_to_capture": 16,
+    "read_only_source_access": true,
+    "new_model_calls": 0
+  },
+  "limitations": [
+    "Historical runtime Git SHA not recorded; implementation field is a fingerprint",
+    "No independent physical measurement reference",
+    "Source agent_review.executed is false; retained Inspector review is cancelled",
+    "Not an independent clean-environment rerun",
+    "Original stage manifests include references to artifacts not all copied; retained numerical reports, primary outputs and demo evidence are packaged"
+  ]
+}

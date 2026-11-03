@@ -1,0 +1,2338 @@
+{
+  "legacy": {
+    "workflow": "legacy",
+    "input_sha256": "2bce38a7f1ba4f5fd0905988c13c0a16d4753e236f48b6acb7a9f575fa42c8db",
+    "source_task_id": "71355d96-7e3f-55c1-843f-c31e46c3af6f",
+    "audit": [
+      {
+        "event": "model_call",
+        "step": 0,
+        "phase": "analysis",
+        "duration_ms": 6609,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "tool_calls",
+          "usage": {
+            "completion_tokens": 773,
+            "prompt_tokens": 5234,
+            "total_tokens": 6007,
+            "reasoning_tokens": 664
+          }
+        }
+      },
+      {
+        "event": "crop_region",
+        "step": 0,
+        "view_id": "crop-1",
+        "asset_id": "drawing",
+        "source_view": "drawing",
+        "selected_cells": [
+          "D1",
+          "G6"
+        ],
+        "original_pixel_bounds": [
+          142,
+          0,
+          334,
+          336
+        ],
+        "grid": "NEW local A-J / 1-10 grid. Use this view_id for local evidence cells."
+      },
+      {
+        "event": "model_call",
+        "step": 1,
+        "phase": "analysis",
+        "duration_ms": 4723,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "tool_calls",
+          "usage": {
+            "completion_tokens": 508,
+            "prompt_tokens": 5646,
+            "total_tokens": 6154,
+            "reasoning_tokens": 394
+          }
+        }
+      },
+      {
+        "event": "crop_region",
+        "step": 1,
+        "view_id": "crop-2",
+        "asset_id": "photo",
+        "source_view": "photo",
+        "selected_cells": [
+          "E1",
+          "I5"
+        ],
+        "original_pixel_bounds": [
+          511,
+          0,
+          1151,
+          615
+        ],
+        "grid": "NEW local A-J / 1-10 grid. Use this view_id for local evidence cells."
+      },
+      {
+        "event": "model_call",
+        "step": 2,
+        "phase": "analysis",
+        "duration_ms": 9253,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "tool_calls",
+          "usage": {
+            "completion_tokens": 1278,
+            "prompt_tokens": 6589,
+            "total_tokens": 7867,
+            "reasoning_tokens": 1166
+          }
+        }
+      },
+      {
+        "event": "crop_region",
+        "step": 2,
+        "view_id": "crop-3",
+        "asset_id": "photo",
+        "source_view": "photo",
+        "selected_cells": [
+          "E6",
+          "H8"
+        ],
+        "original_pixel_bounds": [
+          511,
+          615,
+          1023,
+          984
+        ],
+        "grid": "NEW local A-J / 1-10 grid. Use this view_id for local evidence cells."
+      },
+      {
+        "event": "model_call",
+        "step": 3,
+        "phase": "analysis",
+        "duration_ms": 14442,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "usage": {
+            "completion_tokens": 3117,
+            "prompt_tokens": 7180,
+            "total_tokens": 10297,
+            "reasoning_tokens": 1835
+          }
+        }
+      },
+      {
+        "event": "evidence_resolution",
+        "step": 3,
+        "references": [
+          {
+            "criterion": "Masonry substrate - hollow blocks",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "D1",
+              "bottom_right": "E4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.29831932773109243,
+                0.0,
+                0.20168067226890757,
+                0.4
+              ]
+            }
+          },
+          {
+            "criterion": "Masonry substrate - hollow blocks",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-1",
+              "top_left": "B2",
+              "bottom_right": "E7"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.3382352941176471,
+                0.05892857142857143,
+                0.16176470588235295,
+                0.3625
+              ]
+            }
+          },
+          {
+            "criterion": "Masonry substrate - hollow blocks",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "C1",
+              "bottom_right": "E9"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5,
+                0.0,
+                0.15023474178403756,
+                0.4504065040650406
+              ]
+            }
+          },
+          {
+            "criterion": "External insulation - pink board",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F2",
+              "bottom_right": "F6"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.1,
+                0.10084033613445378,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "External insulation - pink board",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-1",
+              "top_left": "F1",
+              "bottom_right": "G10"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.0,
+                0.0819327731092437,
+                0.6
+              ]
+            }
+          },
+          {
+            "criterion": "External insulation - pink board",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "E1",
+              "bottom_right": "G10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.6001564945226917,
+                0.0,
+                0.15023474178403756,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "E1",
+              "bottom_right": "F2"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.39915966386554624,
+                0.0,
+                0.20168067226890757,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "E5",
+              "bottom_right": "F5"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.39915966386554624,
+                0.4,
+                0.20168067226890757,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-3",
+              "top_left": "D3",
+              "bottom_right": "H5"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5195618153364632,
+                0.5593495934959349,
+                0.20109546165884193,
+                0.0910569105691057
+              ]
+            }
+          },
+          {
+            "criterion": "Reinforcing mesh on insulation face",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F1",
+              "bottom_right": "G4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.0,
+                0.20168067226890757,
+                0.4
+              ]
+            }
+          },
+          {
+            "criterion": "Reinforcing mesh on insulation face",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-1",
+              "top_left": "H1",
+              "bottom_right": "I10"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5798319327731093,
+                0.0,
+                0.0819327731092437,
+                0.6
+              ]
+            }
+          },
+          {
+            "criterion": "Reinforcing mesh on insulation face",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "G1",
+              "bottom_right": "H10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.7003129890453834,
+                0.0,
+                0.10015649452269171,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "Outer render build-up",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F1",
+              "bottom_right": "G4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.0,
+                0.20168067226890757,
+                0.4
+              ]
+            }
+          },
+          {
+            "criterion": "Outer render build-up",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "H1",
+              "bottom_right": "J10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.7503912363067292,
+                0.0,
+                0.15023474178403756,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "D6",
+              "bottom_right": "E8"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.29831932773109243,
+                0.5,
+                0.20168067226890757,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "H5",
+              "bottom_right": "I7"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6995798319327731,
+                0.4,
+                0.20168067226890757,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "D5",
+              "bottom_right": "F6"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.2996870109546166,
+                0.4,
+                0.3004694835680751,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-3",
+              "top_left": "E8",
+              "bottom_right": "G10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5594679186228482,
+                0.7097560975609756,
+                0.12128325508607199,
+                0.09024390243902439
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "event": "model_call",
+        "step": 4,
+        "phase": "evidence_review",
+        "duration_ms": 11321,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "usage": {
+            "completion_tokens": 2312,
+            "prompt_tokens": 11573,
+            "total_tokens": 13885,
+            "reasoning_tokens": 1030
+          }
+        }
+      },
+      {
+        "event": "evidence_resolution",
+        "step": 4,
+        "references": [
+          {
+            "criterion": "Masonry substrate - hollow blocks",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "D1",
+              "bottom_right": "E4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.29831932773109243,
+                0.0,
+                0.20168067226890757,
+                0.4
+              ]
+            }
+          },
+          {
+            "criterion": "Masonry substrate - hollow blocks",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-1",
+              "top_left": "B2",
+              "bottom_right": "E7"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.3382352941176471,
+                0.05892857142857143,
+                0.16176470588235295,
+                0.3625
+              ]
+            }
+          },
+          {
+            "criterion": "Masonry substrate - hollow blocks",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "C1",
+              "bottom_right": "E9"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5,
+                0.0,
+                0.15023474178403756,
+                0.4504065040650406
+              ]
+            }
+          },
+          {
+            "criterion": "External insulation - pink board",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F2",
+              "bottom_right": "F6"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.1,
+                0.10084033613445378,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "External insulation - pink board",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-1",
+              "top_left": "F1",
+              "bottom_right": "G10"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.0,
+                0.0819327731092437,
+                0.6
+              ]
+            }
+          },
+          {
+            "criterion": "External insulation - pink board",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "E1",
+              "bottom_right": "G10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.6001564945226917,
+                0.0,
+                0.15023474178403756,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "E1",
+              "bottom_right": "F2"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.39915966386554624,
+                0.0,
+                0.20168067226890757,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "E5",
+              "bottom_right": "F5"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.39915966386554624,
+                0.4,
+                0.20168067226890757,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-3",
+              "top_left": "D3",
+              "bottom_right": "H5"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5195618153364632,
+                0.5593495934959349,
+                0.20109546165884193,
+                0.0910569105691057
+              ]
+            }
+          },
+          {
+            "criterion": "Reinforcing mesh on insulation face",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F1",
+              "bottom_right": "G4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.0,
+                0.20168067226890757,
+                0.4
+              ]
+            }
+          },
+          {
+            "criterion": "Reinforcing mesh on insulation face",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-1",
+              "top_left": "H1",
+              "bottom_right": "I10"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5798319327731093,
+                0.0,
+                0.0819327731092437,
+                0.6
+              ]
+            }
+          },
+          {
+            "criterion": "Reinforcing mesh on insulation face",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "G1",
+              "bottom_right": "H10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.7003129890453834,
+                0.0,
+                0.10015649452269171,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "Outer render build-up",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F1",
+              "bottom_right": "G4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.0,
+                0.20168067226890757,
+                0.4
+              ]
+            }
+          },
+          {
+            "criterion": "Outer render build-up",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "H1",
+              "bottom_right": "J10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.7503912363067292,
+                0.0,
+                0.15023474178403756,
+                0.5
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "D6",
+              "bottom_right": "E8"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.29831932773109243,
+                0.5,
+                0.20168067226890757,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "H5",
+              "bottom_right": "I7"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6995798319327731,
+                0.4,
+                0.20168067226890757,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "D5",
+              "bottom_right": "F6"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.2996870109546166,
+                0.4,
+                0.3004694835680751,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Window/slab junction perforated profile",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "crop-3",
+              "top_left": "E8",
+              "bottom_right": "G10"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5594679186228482,
+                0.7097560975609756,
+                0.12128325508607199,
+                0.09024390243902439
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "event": "evidence_review_completed",
+        "step": 4,
+        "note": "Model reviewed extracted evidence; this is not independent ground truth."
+      }
+    ],
+    "provenance": {
+      "mode": "live",
+      "model": "muse-spark-1.3",
+      "prompt_version": "drawing-photo-0.2.3",
+      "prompt_sha256": "1fd0c1ec9347fb54549ea446e44021add1ed7f96e3f88581b32675433a50e580",
+      "tools_sha256": "1db69e888e7842028f12b2565d7a651c4fc14855fd399d28f3f93ec02351f9ee",
+      "max_completion_tokens": 12000,
+      "max_calls": 9,
+      "reasoning_effort": "medium",
+      "task_seconds": 240,
+      "evidence_coordinates": "grid-view-to-original-pixels-v1"
+    },
+    "report": {
+      "status": "completed",
+      "findings": [
+        {
+          "criterion": "Masonry substrate - hollow blocks",
+          "design_claim": {
+            "text": "Drawing shows orange hollow-block masonry inside the insulation line.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.29831932773109243,
+                  0.0,
+                  0.20168067226890757,
+                  0.4
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.3382352941176471,
+                  0.05892857142857143,
+                  0.16176470588235295,
+                  0.3625
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows reddish hollow blocks with rectangular voids behind pink board.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.5,
+                  0.0,
+                  0.15023474178403756,
+                  0.4504065040650406
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Both show hollow clay blocks directly behind the pink insulation in the same wall sequence.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Block voids and stacking visible in both sources align in position behind insulation. Finish color difference is rendering style, not construction difference.",
+          "limitations": [
+            "Drawing is schematic section, photo is perspective cutaway"
+          ]
+        },
+        {
+          "criterion": "External insulation - pink board",
+          "design_claim": {
+            "text": "Drawing shows pink dotted insulation layer outside masonry and concrete.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5,
+                  0.1,
+                  0.10084033613445378,
+                  0.5
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5,
+                  0.0,
+                  0.0819327731092437,
+                  0.6
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows thick pink beaded insulation board outside the blocks.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.6001564945226917,
+                  0.0,
+                  0.15023474178403756,
+                  0.5
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Both show continuous pink beaded board applied externally over masonry.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Position, continuity and pink beaded depiction correspond to the pink board in the photo. Product brand or grade cannot be confirmed visually.",
+          "limitations": [
+            "Material grade and adhesive cannot be verified from images"
+          ]
+        },
+        {
+          "criterion": "Mechanical fixing - dowel",
+          "design_claim": {
+            "text": "Drawing shows dowel symbols fixing insulation to masonry and slab.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.39915966386554624,
+                  0.0,
+                  0.20168067226890757,
+                  0.2
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.39915966386554624,
+                  0.4,
+                  0.20168067226890757,
+                  0.1
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows metal dowel with round plate through pink board.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.5195618153364632,
+                  0.5593495934959349,
+                  0.20109546165884193,
+                  0.0910569105691057
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Both show dowel anchors passing through insulation into substrate with plate on insulation face.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Fixing path through insulation and washer/plate location correspond. Exact dowel type not distinguishable beyond observed shape.",
+          "limitations": []
+        },
+        {
+          "criterion": "Reinforcing mesh on insulation face",
+          "design_claim": {
+            "text": "Drawing shows thin mesh and coat layers outside the pink insulation.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5,
+                  0.0,
+                  0.20168067226890757,
+                  0.4
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5798319327731093,
+                  0.0,
+                  0.0819327731092437,
+                  0.6
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows white grid mesh over the pink board face.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.7003129890453834,
+                  0.0,
+                  0.10015649452269171,
+                  0.5
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Both show white grid mesh on outer face of pink insulation under outer coats.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Mesh position on insulation outer face matches in both. Number of coats not countable from photo.",
+          "limitations": []
+        },
+        {
+          "criterion": "Outer render build-up",
+          "design_claim": {
+            "text": "Drawing shows grey and finish layers outside mesh.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5,
+                  0.0,
+                  0.20168067226890757,
+                  0.4
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows grey coat with beige finish outside mesh.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.7503912363067292,
+                  0.0,
+                  0.15023474178403756,
+                  0.5
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Both show grey base plus light finish over mesh, preserving same outward sequence.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Layer order insulation-mesh-grey-finish is visible in both. Texture names cannot be proven from photo alone.",
+          "limitations": [
+            "Render product names on drawing not visually verifiable"
+          ]
+        },
+        {
+          "criterion": "Window/slab junction perforated profile",
+          "design_claim": {
+            "text": "Drawing shows window frame below slab and perforated drip profile detail.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.29831932773109243,
+                  0.5,
+                  0.20168067226890757,
+                  0.3
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.6995798319327731,
+                  0.4,
+                  0.20168067226890757,
+                  0.3
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows white window profiles and perforated metal angle at slab edge.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.2996870109546166,
+                  0.4,
+                  0.3004694835680751,
+                  0.2
+                ]
+              },
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.5594679186228482,
+                  0.7097560975609756,
+                  0.12128325508607199,
+                  0.09024390243902439
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Both show window frames meeting slab with perforated angle/profile at insulation base.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "White frame sections above and below concrete and perforated metal angle correspond in location. Functional ventilation claim distinguished from observed shape.",
+          "limitations": []
+        }
+      ],
+      "questions": []
+    },
+    "wall_seconds": 46.448
+  },
+  "staged": {
+    "workflow": "staged",
+    "input_sha256": "2bce38a7f1ba4f5fd0905988c13c0a16d4753e236f48b6acb7a9f575fa42c8db",
+    "source_task_id": "71355d96-7e3f-55c1-843f-c31e46c3af6f",
+    "audit": [
+      {
+        "event": "phase_started",
+        "phase": "drawing_checklist"
+      },
+      {
+        "event": "model_call",
+        "phase": "drawing_checklist",
+        "step": 0,
+        "duration_ms": 5191,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "tool_calls",
+          "usage": {
+            "completion_tokens": 761,
+            "prompt_tokens": 2300,
+            "total_tokens": 3061,
+            "reasoning_tokens": 650
+          }
+        }
+      },
+      {
+        "event": "crop_region",
+        "phase": "drawing_checklist",
+        "view_id": "crop-1",
+        "asset_id": "drawing",
+        "original_pixel_bounds": [
+          95,
+          0,
+          334,
+          112
+        ]
+      },
+      {
+        "event": "model_call",
+        "phase": "drawing_checklist",
+        "step": 1,
+        "duration_ms": 2760,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "tool_calls",
+          "usage": {
+            "completion_tokens": 387,
+            "prompt_tokens": 2555,
+            "total_tokens": 2942,
+            "reasoning_tokens": 275
+          }
+        }
+      },
+      {
+        "event": "crop_region",
+        "phase": "drawing_checklist",
+        "view_id": "crop-2",
+        "asset_id": "drawing",
+        "original_pixel_bounds": [
+          238,
+          0,
+          476,
+          280
+        ]
+      },
+      {
+        "event": "model_call",
+        "phase": "drawing_checklist",
+        "step": 2,
+        "duration_ms": 16089,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "usage": {
+            "completion_tokens": 2676,
+            "prompt_tokens": 2250,
+            "total_tokens": 4926,
+            "reasoning_tokens": 1893
+          }
+        }
+      },
+      {
+        "event": "phase_completed",
+        "phase": "drawing_checklist",
+        "duration_ms": 24061
+      },
+      {
+        "event": "checklist",
+        "value": {
+          "status": "completed",
+          "items": [
+            {
+              "criterion": "Adhesive layer - WDVS Kleber",
+              "design_claim": {
+                "text": "Drawing annotates bonding layer as BAUMIT Лепило WDVS Kleber on the brick wall build-up.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D4",
+                    "bottom_right": "J4"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "F2",
+                    "bottom_right": "J2"
+                  }
+                ]
+              },
+              "limitations": [
+                "Product qualifier spelling transliterated from low-resolution annotation; exact punctuation uncertain."
+              ]
+            },
+            {
+              "criterion": "Thermal insulation - EPS-F boards",
+              "design_claim": {
+                "text": "Drawing annotates thermal insulation as BAUMIT EPS-F boards, with vertical BAUMIT EPS-F shown at concrete slab edge.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D5",
+                    "bottom_right": "J5"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "E2",
+                    "bottom_right": "G5"
+                  }
+                ]
+              },
+              "limitations": [
+                "Board thickness dimension at top edge not reliably legible and not stated."
+              ]
+            },
+            {
+              "criterion": "Base coat and mesh reinforcement",
+              "design_claim": {
+                "text": "Drawing annotates outer render build-up to include BAUMIT putty/shpaklovka layer and BAUMIT glass-textile mesh.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D6",
+                    "bottom_right": "J6"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "F3",
+                    "bottom_right": "J4"
+                  }
+                ]
+              },
+              "limitations": [
+                "Second word of putty product name not fully certain at this resolution; not quoted verbatim beyond BAUMIT Shpaklovka."
+              ]
+            },
+            {
+              "criterion": "Primer and structural finish",
+              "design_claim": {
+                "text": "Drawing annotates finish layers as BAUMIT Universal primer and BAUMIT structural plaster.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D7",
+                    "bottom_right": "J8"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "F3",
+                    "bottom_right": "J4"
+                  }
+                ]
+              },
+              "limitations": [
+                "Color, grain size and application thickness not annotated in legible region."
+              ]
+            },
+            {
+              "criterion": "Mechanical fixing - dowel",
+              "design_claim": {
+                "text": "Drawing annotates BAUMIT dowel fixing through insulation into brick masonry and into concrete slab edge.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D8",
+                    "bottom_right": "J9"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "E4",
+                    "bottom_right": "H5"
+                  }
+                ]
+              },
+              "limitations": [
+                "Dowel type, length, spacing and number per m2 not legible in supplied views."
+              ]
+            },
+            {
+              "criterion": "Profiles at slab-window junction",
+              "design_claim": {
+                "text": "Drawing annotates Zatvaryasht vodokapvasht profil and BAUMIT window profile Standard at the slab to window opening junction, with enlarged details at bottom of sheet.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D9",
+                    "bottom_right": "J10"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "E6",
+                    "bottom_right": "H7"
+                  }
+                ]
+              },
+              "limitations": [
+                "Small leader text in circular details at bottom is not reliably legible; profile dimensions and material not stated.",
+                "No photo comparison made; this is drawing-only requirement extraction."
+              ]
+            }
+          ],
+          "questions": []
+        }
+      },
+      {
+        "event": "phase_started",
+        "phase": "photo_inspection"
+      },
+      {
+        "event": "model_call",
+        "phase": "photo_inspection",
+        "step": 3,
+        "duration_ms": 24058,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "usage": {
+            "completion_tokens": 5512,
+            "prompt_tokens": 5159,
+            "total_tokens": 10671,
+            "reasoning_tokens": 3463
+          }
+        }
+      },
+      {
+        "event": "phase_completed",
+        "phase": "photo_inspection",
+        "duration_ms": 24109
+      },
+      {
+        "event": "photo_inspection_draft",
+        "value": {
+          "status": "completed",
+          "findings": [
+            {
+              "criterion": "Adhesive layer - WDVS Kleber",
+              "design_claim": {
+                "text": "Drawing annotates bonding layer as BAUMIT Лепило WDVS Kleber on the brick wall build-up.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D4",
+                    "bottom_right": "J4"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "F2",
+                    "bottom_right": "J2"
+                  }
+                ]
+              },
+              "photo_claim": {
+                "text": "Photo does not show a distinct adhesive bonding layer between brick masonry and pink insulation; the brick-to-insulation interface is tight with no legible adhesive bed or marking.",
+                "evidence": [
+                  {
+                    "view_id": "photo",
+                    "top_left": "F2",
+                    "bottom_right": "G4"
+                  }
+                ]
+              },
+              "correspondence": "uncertain",
+              "correspondence_basis": "No distinct bonding layer or product marking is resolvable at the brick-insulation interface in photo regions; correspondence to branded adhesive cannot be confirmed visually.",
+              "visibility": "insufficient",
+              "verdict": "inconclusive",
+              "justification": "Photo shows brick masonry F1-F4 directly abutting pink insulation G1-G4 with no exposed adhesive bed. Thin bonding layer, if present, is concealed at the contact interface and no text, colour or texture identifying BAUMIT WDVS Kleber is legible.",
+              "limitations": [
+                "Product qualifier spelling transliterated from low-resolution annotation; exact punctuation uncertain.",
+                "Adhesive layer concealed behind insulation in photo; thin layer not resolvable at this resolution.",
+                "Brand/product name cannot be verified from photo alone."
+              ]
+            },
+            {
+              "criterion": "Thermal insulation - EPS-F boards",
+              "design_claim": {
+                "text": "Drawing annotates thermal insulation as BAUMIT EPS-F boards, with vertical BAUMIT EPS-F shown at concrete slab edge.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D5",
+                    "bottom_right": "J5"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "E2",
+                    "bottom_right": "G5"
+                  }
+                ]
+              },
+              "photo_claim": {
+                "text": "Photo shows continuous pink beaded insulation boards applied over the brick wall and continuing vertically past the concrete slab edge.",
+                "evidence": [
+                  {
+                    "view_id": "photo",
+                    "top_left": "G1",
+                    "bottom_right": "G8"
+                  }
+                ]
+              },
+              "correspondence": "supported",
+              "correspondence_basis": "Continuous board-form insulation is clearly visible over the brick wall and continuing vertically past the concrete slab edge, matching the expected location/extent of EPS-F in the design.",
+              "visibility": "sufficient",
+              "verdict": "match",
+              "justification": "Photo G1-G8 shows pink beaded insulation boards in a continuous vertical layer over brick F1-F4 and over slab-edge zone F6-G8. Board joints and beaded EPS texture are visible. Brand and EPS-F designation are not legible, but presence, board form and location correspond.",
+              "limitations": [
+                "Board thickness dimension at top edge not reliably legible and not stated.",
+                "Brand BAUMIT and EPS-F type not legible in photo; colour appears pink.",
+                "No metric thickness inferred."
+              ]
+            },
+            {
+              "criterion": "Base coat and mesh reinforcement",
+              "design_claim": {
+                "text": "Drawing annotates outer render build-up to include BAUMIT putty/shpaklovka layer and BAUMIT glass-textile mesh.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D6",
+                    "bottom_right": "J6"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "F3",
+                    "bottom_right": "J4"
+                  }
+                ]
+              },
+              "photo_claim": {
+                "text": "Photo shows white glass-textile mesh over pink insulation along full height with grey base-coat/render partly covering it and exposed mesh at side and lower termination.",
+                "evidence": [
+                  {
+                    "view_id": "photo",
+                    "top_left": "H1",
+                    "bottom_right": "H9"
+                  },
+                  {
+                    "view_id": "photo",
+                    "top_left": "H6",
+                    "bottom_right": "I8"
+                  }
+                ]
+              },
+              "correspondence": "supported",
+              "correspondence_basis": "White woven mesh and grey render coat over insulation are directly visible in photo side and front faces, matching the expected mesh-reinforced base-coat build-up.",
+              "visibility": "sufficient",
+              "verdict": "match",
+              "justification": "Photo H1-H9 shows white glass-textile grid mesh over pink insulation, partially embedded with mesh still exposed. Grey base-coat/render is visible at H6-I8 over and beside mesh, and mesh wraps the lower termination G9-H9. Layout corresponds to reinforced outer render.",
+              "limitations": [
+                "Second word of putty product name not fully certain at this resolution; not quoted verbatim beyond BAUMIT Shpaklovka.",
+                "Brand of putty/mesh not legible in photo; putty vs base-coat cannot be separated visually where covered."
+              ]
+            },
+            {
+              "criterion": "Primer and structural finish",
+              "design_claim": {
+                "text": "Drawing annotates finish layers as BAUMIT Universal primer and BAUMIT structural plaster.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D7",
+                    "bottom_right": "J8"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "F3",
+                    "bottom_right": "J4"
+                  }
+                ]
+              },
+              "photo_claim": {
+                "text": "Photo shows light beige textured outer finish over grey base coat on the external face; a separate Universal primer layer is not visually distinguishable.",
+                "evidence": [
+                  {
+                    "view_id": "photo",
+                    "top_left": "I1",
+                    "bottom_right": "I9"
+                  }
+                ]
+              },
+              "correspondence": "uncertain",
+              "correspondence_basis": "Outer textured finish is visible, but a separate thin primer layer cannot be isolated visually and no product names are legible, so full primer-plus-finish correspondence is not confirmable.",
+              "visibility": "insufficient",
+              "verdict": "inconclusive",
+              "justification": "Photo I1-I9 shows light beige textured outer finish over grey base. Finish presence and exterior position correspond. Primer as a distinct layer is not visually separable from finish/base and no labels for Universal primer or structural plaster are visible.",
+              "limitations": [
+                "Color, grain size and application thickness not annotated in legible region.",
+                "Thin primer coat not visually distinguishable from finish in photo.",
+                "Brand/product names not verifiable from photo."
+              ]
+            },
+            {
+              "criterion": "Mechanical fixing - dowel",
+              "design_claim": {
+                "text": "Drawing annotates BAUMIT dowel fixing through insulation into brick masonry and into concrete slab edge.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D8",
+                    "bottom_right": "J9"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "E4",
+                    "bottom_right": "H5"
+                  }
+                ]
+              },
+              "photo_claim": {
+                "text": "Photo shows metallic disc-type mechanical fixing with shank penetrating the pink insulation at slab-edge level.",
+                "evidence": [
+                  {
+                    "view_id": "photo",
+                    "top_left": "F6",
+                    "bottom_right": "H8"
+                  }
+                ]
+              },
+              "correspondence": "supported",
+              "correspondence_basis": "Disc-type mechanical fixing penetrating the insulation is clearly visible at slab-edge level in photo, matching expected dowel-through-insulation detail.",
+              "visibility": "sufficient",
+              "verdict": "match",
+              "justification": "Photo F6-H8 shows metallic fixing with circular plate/washer and threaded shank driven through pink insulation G6-G7. Position at slab-edge insulation corresponds to dowel-through-insulation intent. Embedment substrate and brand are not visible.",
+              "limitations": [
+                "Dowel type, length, spacing and number per m2 not legible in supplied views.",
+                "Fixing embedment into masonry/slab concealed by insulation/concrete; brand BAUMIT not visible.",
+                "Only one fixing visible in this cut view; system spacing cannot be assessed."
+              ]
+            },
+            {
+              "criterion": "Profiles at slab-window junction",
+              "design_claim": {
+                "text": "Drawing annotates Zatvaryasht vodokapvasht profil and BAUMIT window profile Standard at the slab to window opening junction, with enlarged details at bottom of sheet.",
+                "evidence": [
+                  {
+                    "view_id": "crop-2",
+                    "top_left": "D9",
+                    "bottom_right": "J10"
+                  },
+                  {
+                    "view_id": "drawing",
+                    "top_left": "E6",
+                    "bottom_right": "H7"
+                  }
+                ]
+              },
+              "photo_claim": {
+                "text": "Photo shows perforated metal profiles with mesh and window/sill profiles at the concrete slab to lower window junction.",
+                "evidence": [
+                  {
+                    "view_id": "photo",
+                    "top_left": "E8",
+                    "bottom_right": "G9"
+                  },
+                  {
+                    "view_id": "photo",
+                    "top_left": "E5",
+                    "bottom_right": "F6"
+                  }
+                ]
+              },
+              "correspondence": "supported",
+              "correspondence_basis": "Perforated profiles and window/sill profiles are visible at the concrete slab to lower-window junction, matching the expected profile location at the slab-window opening.",
+              "visibility": "sufficient",
+              "verdict": "match",
+              "justification": "Photo E8-G9 shows perforated metal angle/drip-type profiles with round holes at the slab to lower-window junction, with mesh wrapping and insulation termination. Photo E5-F6 shows white window sill/profile above slab. Presence and junction location correspond to annotated profiles; exact profile names, dimensions and material not legible.",
+              "limitations": [
+                "Small leader text in circular details at bottom is not reliably legible; profile dimensions and material not stated.",
+                "Exact profile identities/names cannot be distinguished visually; brand not visible."
+              ]
+            }
+          ],
+          "questions": []
+        }
+      },
+      {
+        "event": "phase_started",
+        "phase": "review"
+      },
+      {
+        "event": "model_call",
+        "phase": "review",
+        "step": 4,
+        "duration_ms": 24734,
+        "diagnostic": {
+          "http_status": 200,
+          "finish_reason": "stop",
+          "usage": {
+            "completion_tokens": 5965,
+            "prompt_tokens": 7959,
+            "total_tokens": 13924,
+            "reasoning_tokens": 3935
+          }
+        }
+      },
+      {
+        "event": "phase_completed",
+        "phase": "review",
+        "duration_ms": 24798
+      },
+      {
+        "event": "evidence_resolution",
+        "phase": "review",
+        "references": [
+          {
+            "criterion": "Adhesive layer - WDVS Kleber",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "D3",
+              "bottom_right": "J4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6491596638655462,
+                0.1,
+                0.35084033613445376,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Adhesive layer - WDVS Kleber",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F2",
+              "bottom_right": "J2"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.1,
+                0.5,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Adhesive layer - WDVS Kleber",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "F2",
+              "bottom_right": "G4"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5,
+                0.1,
+                0.20031298904538342,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Thermal insulation - EPS-F boards",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "D4",
+              "bottom_right": "J5"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6491596638655462,
+                0.15,
+                0.35084033613445376,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Thermal insulation - EPS-F boards",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "E2",
+              "bottom_right": "G5"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.39915966386554624,
+                0.1,
+                0.3025210084033613,
+                0.4
+              ]
+            }
+          },
+          {
+            "criterion": "Thermal insulation - EPS-F boards",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "G1",
+              "bottom_right": "G8"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5993740219092332,
+                0.0,
+                0.10093896713615023,
+                0.8
+              ]
+            }
+          },
+          {
+            "criterion": "Base coat and mesh reinforcement",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "D5",
+              "bottom_right": "J6"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6491596638655462,
+                0.2,
+                0.35084033613445376,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Base coat and mesh reinforcement",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F3",
+              "bottom_right": "J4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.2,
+                0.5,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Base coat and mesh reinforcement",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "H1",
+              "bottom_right": "H9"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.6995305164319249,
+                0.0,
+                0.10093896713615023,
+                0.9
+              ]
+            }
+          },
+          {
+            "criterion": "Base coat and mesh reinforcement",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "H6",
+              "bottom_right": "I8"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.6995305164319249,
+                0.5,
+                0.20109546165884193,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Primer and structural finish",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "D7",
+              "bottom_right": "J8"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6491596638655462,
+                0.3,
+                0.35084033613445376,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Primer and structural finish",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "F3",
+              "bottom_right": "J4"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.5,
+                0.2,
+                0.5,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Primer and structural finish",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "I1",
+              "bottom_right": "I9"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.7996870109546166,
+                0.0,
+                0.10093896713615023,
+                0.9
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "D8",
+              "bottom_right": "J9"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6491596638655462,
+                0.35,
+                0.35084033613445376,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "E4",
+              "bottom_right": "H5"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.39915966386554624,
+                0.3,
+                0.4012605042016807,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Mechanical fixing - dowel",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "F6",
+              "bottom_right": "H8"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.5,
+                0.5,
+                0.3004694835680751,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Profiles at slab-window junction",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "crop-2",
+              "top_left": "D9",
+              "bottom_right": "J10"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.6491596638655462,
+                0.4,
+                0.35084033613445376,
+                0.1
+              ]
+            }
+          },
+          {
+            "criterion": "Profiles at slab-window junction",
+            "claim": "design_claim",
+            "grid": {
+              "view_id": "drawing",
+              "top_left": "E5",
+              "bottom_right": "H7"
+            },
+            "original": {
+              "asset_id": "drawing",
+              "bbox": [
+                0.39915966386554624,
+                0.4,
+                0.4012605042016807,
+                0.3
+              ]
+            }
+          },
+          {
+            "criterion": "Profiles at slab-window junction",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "E8",
+              "bottom_right": "G9"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.3998435054773083,
+                0.7,
+                0.3004694835680751,
+                0.2
+              ]
+            }
+          },
+          {
+            "criterion": "Profiles at slab-window junction",
+            "claim": "photo_claim",
+            "grid": {
+              "view_id": "photo",
+              "top_left": "E5",
+              "bottom_right": "F6"
+            },
+            "original": {
+              "asset_id": "photo",
+              "bbox": [
+                0.3998435054773083,
+                0.4,
+                0.20031298904538342,
+                0.2
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "event": "workflow_completed",
+        "workflow": "staged",
+        "duration_ms": 72976
+      }
+    ],
+    "provenance": {
+      "mode": "live",
+      "model": "muse-spark-1.3",
+      "prompt_version": "drawing-photo-staged-0.1.0",
+      "prompt_sha256": "283bab705cbf4590b9c6354b4730c0be9debb4a30ad21dff5eccd72b0a5bc838",
+      "tools_sha256": "1db69e888e7842028f12b2565d7a651c4fc14855fd399d28f3f93ec02351f9ee",
+      "max_completion_tokens": 12000,
+      "max_calls": 9,
+      "reasoning_effort": "medium",
+      "task_seconds": 240,
+      "evidence_coordinates": "grid-view-to-original-pixels-v1",
+      "workflow": "staged",
+      "schema_sha256": "da1d55b2b0ec95c97455224b235f2bb576d6d68f4b32de6c11c6140d9b0b26da",
+      "context_isolation": "drawing-only; photo-plus-checklist; fresh-both-source-review",
+      "max_calls_per_stage": 3
+    },
+    "report": {
+      "status": "completed",
+      "findings": [
+        {
+          "criterion": "Adhesive layer - WDVS Kleber",
+          "design_claim": {
+            "text": "Drawing annotates bonding layer as BAUMIT Лепило WDVS Kleber on the brick wall build-up.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.6491596638655462,
+                  0.1,
+                  0.35084033613445376,
+                  0.1
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5,
+                  0.1,
+                  0.5,
+                  0.1
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo does not show a distinct adhesive bonding layer between brick masonry and pink insulation; the brick-to-insulation interface is tight with no legible adhesive bed or marking.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.5,
+                  0.1,
+                  0.20031298904538342,
+                  0.3
+                ]
+              }
+            ]
+          },
+          "correspondence": "uncertain",
+          "correspondence_basis": "No distinct bonding layer or product marking is resolvable at the brick-insulation interface in photo; correspondence to branded adhesive cannot be confirmed visually.",
+          "visibility": "insufficient",
+          "verdict": "inconclusive",
+          "justification": "Photo shows brick masonry F1-F4 directly abutting pink insulation G1-G4 with no exposed adhesive bed. Thin bonding layer, if present, is concealed at contact interface and no text or texture identifying BAUMIT WDVS Kleber is legible.",
+          "limitations": [
+            "Product qualifier spelling transliterated from low-resolution annotation; exact punctuation uncertain.",
+            "Adhesive layer concealed behind insulation in photo; thin layer not resolvable.",
+            "Brand/product name cannot be verified from photo alone."
+          ]
+        },
+        {
+          "criterion": "Thermal insulation - EPS-F boards",
+          "design_claim": {
+            "text": "Drawing annotates thermal insulation as BAUMIT EPS-F boards, with vertical BAUMIT EPS-F shown at concrete slab edge.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.6491596638655462,
+                  0.15,
+                  0.35084033613445376,
+                  0.1
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.39915966386554624,
+                  0.1,
+                  0.3025210084033613,
+                  0.4
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows continuous pink beaded insulation boards applied over the brick wall and continuing vertically past the concrete slab edge.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.5993740219092332,
+                  0.0,
+                  0.10093896713615023,
+                  0.8
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Continuous board-form insulation is clearly visible over the brick wall and continuing vertically past the concrete slab edge, matching expected location/extent of EPS-F in design.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Photo G1-G8 shows pink beaded insulation boards in continuous vertical layer over brick F1-F4 and over slab-edge zone F6-G8. Board joints and beaded EPS texture are visible. Brand and EPS-F designation are not legible, but presence, board form and location correspond.",
+          "limitations": [
+            "Board thickness dimension at top edge not reliably legible and not stated.",
+            "Brand BAUMIT and EPS-F type not legible in photo; colour appears pink.",
+            "No metric thickness inferred."
+          ]
+        },
+        {
+          "criterion": "Base coat and mesh reinforcement",
+          "design_claim": {
+            "text": "Drawing annotates outer render build-up to include BAUMIT putty/shpaklovka layer and BAUMIT glass-textile mesh.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.6491596638655462,
+                  0.2,
+                  0.35084033613445376,
+                  0.1
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5,
+                  0.2,
+                  0.5,
+                  0.2
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows white glass-textile mesh over pink insulation along full height with grey base-coat/render partly covering it and exposed mesh at side and lower termination.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.6995305164319249,
+                  0.0,
+                  0.10093896713615023,
+                  0.9
+                ]
+              },
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.6995305164319249,
+                  0.5,
+                  0.20109546165884193,
+                  0.3
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "White woven mesh and grey render coat over insulation are directly visible in photo side and front faces, matching expected mesh-reinforced base-coat build-up.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Photo H1-H9 shows white glass-textile grid mesh over pink insulation, partially embedded with mesh still exposed. Grey base-coat/render is visible at H6-I8 over and beside mesh, and mesh wraps lower termination G9-H9. Layout corresponds to reinforced outer render.",
+          "limitations": [
+            "Second word of putty product name not fully certain at this resolution; not quoted verbatim beyond BAUMIT Shpaklovka.",
+            "Brand of putty/mesh not legible in photo; putty vs base-coat cannot be separated visually where covered."
+          ]
+        },
+        {
+          "criterion": "Primer and structural finish",
+          "design_claim": {
+            "text": "Drawing annotates finish layers as BAUMIT Universal primer and BAUMIT structural plaster.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.6491596638655462,
+                  0.3,
+                  0.35084033613445376,
+                  0.1
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.5,
+                  0.2,
+                  0.5,
+                  0.2
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows light beige textured outer finish over grey base coat on the external face; a separate Universal primer layer is not visually distinguishable.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.7996870109546166,
+                  0.0,
+                  0.10093896713615023,
+                  0.9
+                ]
+              }
+            ]
+          },
+          "correspondence": "uncertain",
+          "correspondence_basis": "Outer textured finish is visible, but a separate thin primer layer cannot be isolated visually and no product names are legible, so full primer-plus-finish correspondence is not confirmable.",
+          "visibility": "insufficient",
+          "verdict": "inconclusive",
+          "justification": "Photo I1-I9 shows light beige textured outer finish over grey base. Finish presence and exterior position correspond. Primer as distinct layer is not visually separable from finish/base and no labels for Universal primer or structural plaster are visible.",
+          "limitations": [
+            "Color, grain size and application thickness not annotated in legible region.",
+            "Thin primer coat not visually distinguishable from finish in photo.",
+            "Brand/product names not verifiable from photo."
+          ]
+        },
+        {
+          "criterion": "Mechanical fixing - dowel",
+          "design_claim": {
+            "text": "Drawing annotates BAUMIT dowel fixing through insulation into brick masonry and into concrete slab edge.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.6491596638655462,
+                  0.35,
+                  0.35084033613445376,
+                  0.1
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.39915966386554624,
+                  0.3,
+                  0.4012605042016807,
+                  0.2
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows metallic disc-type mechanical fixing with shank penetrating the pink insulation at slab-edge level.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.5,
+                  0.5,
+                  0.3004694835680751,
+                  0.3
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Disc-type mechanical fixing penetrating the insulation is clearly visible at slab-edge level in photo, matching expected dowel-through-insulation detail.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Photo F6-H8 shows metallic fixing with circular plate/washer and threaded shank driven through pink insulation G6-G7. Position at slab-edge insulation corresponds to dowel-through-insulation intent. Embedment substrate and brand are not visible.",
+          "limitations": [
+            "Dowel type, length, spacing and number per m2 not legible in supplied views.",
+            "Fixing embedment into masonry/slab concealed by insulation/concrete; brand BAUMIT not visible.",
+            "Only one fixing visible in this cut view; system spacing cannot be assessed."
+          ]
+        },
+        {
+          "criterion": "Profiles at slab-window junction",
+          "design_claim": {
+            "text": "Drawing annotates Zatvaryasht vodokapvasht profil and BAUMIT window profile Standard at the slab to window opening junction, with enlarged details at bottom of sheet.",
+            "evidence": [
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.6491596638655462,
+                  0.4,
+                  0.35084033613445376,
+                  0.1
+                ]
+              },
+              {
+                "asset_id": "drawing",
+                "bbox": [
+                  0.39915966386554624,
+                  0.4,
+                  0.4012605042016807,
+                  0.3
+                ]
+              }
+            ]
+          },
+          "photo_claim": {
+            "text": "Photo shows perforated metal profiles with mesh and window/sill profiles at the concrete slab to lower window junction.",
+            "evidence": [
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.3998435054773083,
+                  0.7,
+                  0.3004694835680751,
+                  0.2
+                ]
+              },
+              {
+                "asset_id": "photo",
+                "bbox": [
+                  0.3998435054773083,
+                  0.4,
+                  0.20031298904538342,
+                  0.2
+                ]
+              }
+            ]
+          },
+          "correspondence": "supported",
+          "correspondence_basis": "Perforated profiles and window/sill profiles are visible at the concrete slab to lower-window junction, matching expected profile location at the slab-window opening.",
+          "visibility": "sufficient",
+          "verdict": "match",
+          "justification": "Photo E8-G9 shows perforated metal angle/drip-type profiles with round holes at slab to lower-window junction, with mesh wrapping and insulation termination. Photo E5-F6 shows white window sill/profile above slab. Presence and junction location correspond; exact names, dimensions and material not legible.",
+          "limitations": [
+            "Small leader text in circular details at bottom is not reliably legible; profile dimensions and material not stated.",
+            "Exact profile identities/names cannot be distinguished visually; brand not visible."
+          ]
+        }
+      ],
+      "questions": []
+    },
+    "wall_seconds": 72.977
+  }
+}

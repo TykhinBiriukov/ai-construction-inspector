@@ -1,0 +1,13 @@
+{
+  "checked_on": "2026-11-03",
+  "source": "read-only Inspector PostgreSQL receipts query for capture session",
+  "reviews": [
+    {
+      "review_id": "cd678afb-7782-5e9c-88b6-d9adb538bd79",
+      "status": "cancelled",
+      "created_at": "2026-11-02T16:50:19.032025Z",
+      "updated_at": "2026-11-02T17:10:26.548253Z",
+      "error": null
+    }
+  ]
+}

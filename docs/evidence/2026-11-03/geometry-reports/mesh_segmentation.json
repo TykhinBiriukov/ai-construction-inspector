@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "status": "completed",
+  "session_id": "2b6b4560-c2d5-482d-880b-21f34502b9f2",
+  "processed_frames": 77,
+  "projection_reused": false,
+  "projection": "mask_projection",
+  "mesh": "mesh_preprocessing/mesh.ply",
+  "source_mesh_sha256": "555e5dfb7b8cbd377988a82691ecadabe4eb4737864a47b574522925f42c2fbb",
+  "parameters": {
+    "min_views": 2,
+    "min_class_purity": 0.65,
+    "instance_overlap": 0.3,
+    "min_overlap_faces": 3
+  },
+  "total_vertices": 466799,
+  "total_faces": 896915,
+  "labeled_faces": 449584,
+  "unknown_faces": 447331,
+  "candidate_faces": 568890,
+  "provisional_only_faces": 119306,
+  "labeled_surface_area_m2": 68.65800417254799,
+  "conflicting_class_faces": 12817,
+  "insufficient_view_faces": 123215,
+  "total_surface_area_m2": 128.0757945911825,
+  "classes": [
+    {
+      "class_id": 0,
+      "label": "ceiling",
+      "face_count": 72379,
+      "surface_area_m2": 12.227347048466287
+    },
+    {
+      "class_id": 1,
+      "label": "door",
+      "face_count": 20039,
+      "surface_area_m2": 2.9413388070455198
+    },
+    {
+      "class_id": 2,
+      "label": "floor",
+      "face_count": 67691,
+      "surface_area_m2": 11.251831807112335
+    },
+    {
+      "class_id": 3,
+      "label": "wall",
+      "face_count": 261241,
+      "surface_area_m2": 37.907855919816484
+    },
+    {
+      "class_id": 4,
+      "label": "window",
+      "face_count": 28234,
+      "surface_area_m2": 4.32963059010736
+    }
+  ],
+  "candidate_objects": 30,
+  "observation_count": 284,
+  "supported_observations": 238,
+  "unconfirmed_observations": 46,
+  "artifacts": {
+    "mesh": "mesh.ply",
+    "viewer": "viewer.html",
+    "labels": "labels.npz",
+    "objects": "objects.json",
+    "preview": "preview.jpg",
+    "candidate_viewer": "candidates/viewer.html"
+  },
+  "projection_fingerprints": {
+    "report.json": "6075046e6bbb4ceb499505c91290d0782e4b9874f8b11bd5a27e83ab8557d59b",
+    "observations.json": "e4929fe95842552b51c8d2710bf50390b3af11ca80497a1489e96539b8ff4d51",
+    "observations.npz": "7fa26667f7ac495b1eb3386d4dd61e6306567bea550470779ddbc8aa9397055a"
+  },
+  "policies": {
+    "geometry": "unchanged_coordinates_and_face_order",
+    "unknown_id": -1,
+    "instances": "candidate_associations_not_guaranteed_physical_objects",
+    "confidence": "agreement_score_not_calibrated_probability",
+    "missing_surfaces": "not_reconstructed",
+    "outside_room_filter": "not_guaranteed",
+    "model_requests": 0
+  }
+}
