@@ -7,6 +7,7 @@
   let token = read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
   let scopedSessions = [], scopedInspections = [];
   let geometryViewer=null;
+  const presentedProgress=new Set();
   let chatChoices=null;
   let workState=null,workspaceBusy=false,showTrash=false,uploadQueue=[],planEditing=null,observationEditing=null,importRequest=null;
   const chosenFiles=new Set();
@@ -50,7 +51,7 @@
     return body;
   }
   function lock() {
-    geometryViewer?.clear();
+    closeProgress4d();geometryViewer?.clear();
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').textContent='Not connected'; $('token').value='';
@@ -202,7 +203,7 @@
     box.append(node('div','source',`AI summary · Source: ${item.source}. Verify against original evidence.`)); return box;
   }
   const comparisonPhaseLabels={drawing_checklist:'Reading the drawing',checklist_reuse:'Using saved checklist',photo_inspection:'Checking the photo',review:'Reviewing the findings'};
-  const toolLabels={session_import:'Connecting saved inspection result',device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Reviewing inspection evidence'};
+  const toolLabels={saved_demo_result:'Opening saved comparison',progress4d_result:'Reading construction progress',session_import:'Connecting saved inspection result',device_status:'Checking capture device',session_get:'Reading capture task',session_create:'Creating capture task',drawing_photo_compare:'Comparing drawing and photo',drawing_photo_result:'Reading comparison results',delegate_inspection:'Reviewing inspection evidence'};
   let activitySync=0,activitySignature='',activityExpanded=new Map();
   function isLiveEvent(run,event){return event?.status==='running'&&event.origin==='live'&&run.status==='running'&&Date.now()-activitySync<12000&&Date.now()-Date.parse(run.updated_at)<90000&&!document.hidden;}
   function updateActivityStatus(){
@@ -320,6 +321,19 @@
             const artifact=renderArtifact(item);if(artifact)grid.append(artifact);
           }
           for(const result of comparisons)grid.append(renderComparison(result,chat.chat_id));
+          for(const tool of run.tool_results||[]){
+            if(tool.result?.viewer?.kind==='saved_demo'&&tool.result.viewer.chat_id===chat.chat_id){
+              const result=tool.result,card=node('section','geometry-result-card');card.append(node('h4','',result.title));const button=node('button','quiet','Open saved result');button.onclick=()=>showSavedDemo(result);card.append(button);grid.append(card);
+              if(run===runs.at(-1)&&run.status==='completed'&&!presentedProgress.has(run.run_id)){presentedProgress.add(run.run_id);const target=chat.chat_id;setTimeout(()=>{if(chat?.chat_id===target)showSavedDemo(result);},0);}
+            }
+
+            if(tool.name==='progress4d_result'&&tool.result?.viewer?.kind==='progress4d'&&tool.result.viewer.chat_id===chat.chat_id){
+              const card=node('section','geometry-result-card');card.append(node('h4','','Construction progress · 4D'),node('p','',`${tool.result.survey_count} surveys · weekly models and stage progress`));
+              const button=node('button','quiet','Open progress and weekly models');button.onclick=showProgressInline;card.append(button);
+              const expand=node('button','quiet','Full screen');expand.onclick=openProgress4d;card.append(expand);grid.append(card);
+              if(run===runs.at(-1)&&run.status==='completed'&&!presentedProgress.has(run.run_id)){presentedProgress.add(run.run_id);const targetChat=chat.chat_id;setTimeout(()=>{if(chat?.chat_id===targetChat)showProgressInline();},0);}
+            }
+          }
           if(run.continuation&&run.session_id&&scopedSessions.some(s=>s.session_id===run.session_id&&s.geometry_result))grid.append(geometryResultCard(run.session_id));
           if(grid.childNodes.length) assistant.append(grid); $('messages').append(assistant);
         }
@@ -551,8 +565,52 @@
     $('document-context').hidden=!context;
     if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
   },text=>{$('document-status').textContent=text;});
-  function resetDocument(){documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
-  async function openDocument(file,inspect=false){if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  function resetDocument(){savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
+  async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  let savedDemoCleanup=()=>{};
+  async function showSavedDemo(result){
+    const prefix=`/v1/chats/${encodeURIComponent(chat.chat_id)}/saved-demo-assets/`;if(result.viewer?.chat_id!==chat.chat_id||[result.drawing,result.photo,result.model].filter(Boolean).some(path=>!path.startsWith(prefix)||!/^[-a-z]+$/.test(path.slice(prefix.length))))return;
+    resetDocument();const generation=documentGeneration;document.querySelector('.document-workspace').classList.add('showing-progress');$('document-name').textContent=result.title;
+    const host=node('div','saved-demo-output'),images=node('div','saved-demo-images');host.append(node('p','muted',result.summary),images);$('document-view').replaceChildren(host);
+    const urls=[];let model=null;savedDemoCleanup=()=>{for(const url of urls)URL.revokeObjectURL(url);model?.clear?.();};
+    try{
+      for(const [key,label] of [['drawing','Drawing'],['photo','Photo']])if(result[key]){const figure=node('figure'),img=node('img');img.alt=label;figure.append(node('figcaption','',label),img);images.append(figure);const blob=await api(result[key],{blob:true});if(generation!==documentGeneration)return;const url=URL.createObjectURL(blob);urls.push(url);img.src=url;}
+      if(result.model){const section=node('section','saved-demo-model'),tools=node('div','saved-demo-tools'),canvas=node('div','saved-model-canvas'),caption=node('p','muted');tools.append(node('strong','','Project model'));section.append(tools,canvas,caption);images.prepend(section);model=new ProjectDocuments.GeometryModel(canvas,()=>{},text=>caption.textContent=text);const fit=node('button','quiet','Fit model');fit.onclick=()=>model.zoom(1);tools.append(fit);const blob=await api(result.model,{blob:true});if(generation!==documentGeneration)return;await model.openArtifact('ifc',blob);}
+      if(result.report?.findings){const table=node('table'),head=node('tr');for(const title of ['Detail','Result','Observation'])head.append(node('th','',title));table.append(head);for(const finding of result.report.findings){const row=node('tr');for(const text of [finding.criterion,({match:'Match',mismatch:'Mismatch',inconclusive:'Unclear'})[finding.verdict]||'Unclear',finding.justification||finding.reasoning||finding.explanation||finding.photo_claim?.text||''])row.append(node('td','',typeof text==='string'?text:JSON.stringify(text)));table.append(row);}host.append(table);}
+    }catch(error){if(generation===documentGeneration)$('document-status').textContent=error.message;}
+  }
+  async function showProgressInline(){
+    savedDemoCleanup();savedDemoCleanup=()=>{};
+    if(!chat?.chat_id)return;
+    const chatId=chat.chat_id,generation=++documentGeneration;
+    viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;
+    document.querySelector('.document-workspace').classList.add('showing-progress');
+    $('document-name').textContent='Construction progress · 4D';$('document-download').disabled=true;$('document-status').textContent='Loading progress…';
+    try{
+      const result=await api(`/v1/chats/${chatId}/progress4d`);
+      if(generation!==documentGeneration||chat?.chat_id!==chatId)return;
+      const url=new URL(result.viewer_path,location.origin);
+      if(url.origin!==location.origin||url.pathname!=='/ui/progress4d/viewer.html')throw new Error('Invalid viewer address');
+      const frame=node('iframe','progress4d-inline');frame.title='Construction progress and weekly models';frame.referrerPolicy='no-referrer';frame.src=url.href;
+      $('document-view').replaceChildren(frame);$('document-status').textContent='';
+    }catch(error){if(generation===documentGeneration)$('document-status').textContent=error.message;}
+  }
+  let progress4dGeneration=0;
+  function closeProgress4d(){progress4dGeneration++;$('progress4d-dialog').close();$('progress4d-frame').removeAttribute('src');}
+  $('progress4d-close').onclick=closeProgress4d;
+  $('progress4d-dialog').addEventListener('cancel',event=>{event.preventDefault();closeProgress4d();});
+  async function openProgress4d(){
+    if(!chat?.chat_id)return;
+    const generation=++progress4dGeneration;
+    $('progress4d-dialog').showModal();$('progress4d-status').textContent='Loading 4D result…';
+    try{
+      const result=await api(`/v1/chats/${chat.chat_id}/progress4d`);
+      if(generation!==progress4dGeneration)return;
+      const url=new URL(result.viewer_path,location.origin);
+      if(url.origin!==location.origin||url.pathname!=='/ui/progress4d/viewer.html')throw new Error('Invalid 4D viewer address');
+      $('progress4d-frame').src=url.href;$('progress4d-status').textContent='';
+    }catch(error){if(generation===progress4dGeneration)$('progress4d-status').textContent=error.message;}
+  };
   geometryViewer=new InspectionViewer($('geometry-dialog'),api);
   function geometryResultCard(sessionId){
     const card=node('section','geometry-result-card');card.append(node('h4','','Captured geometry and inspection results'),node('p','','Explore the model, review decisions and the captured evidence.'));
@@ -566,11 +624,21 @@
   $('zoom-in').onclick=()=>viewer.zoom(1.2);$('zoom-out').onclick=()=>viewer.zoom(1/1.2);$('zoom-fit').onclick=()=>viewer.zoom(1);
   $('page-prev').onclick=()=>viewer.next(-1).catch(e=>notify(e.message));$('page-next').onclick=()=>viewer.next(1).catch(e=>notify(e.message));
   const root=document.documentElement;
-  const layoutKey='inspector-document-layout';let layout={files:210,dialogue:360,scale:1};
+  const layoutKey='inspector-document-layout';let layout={files:210,dialogue:360,scale:1,composer:80,activity:160,hideFiles:false,hideChat:false};
   try{Object.assign(layout,JSON.parse(read(localStorage,layoutKey)||'{}'));}catch{}
-  function applyLayout(){layout.files=Math.max(150,Math.min(340,Number(layout.files)||210));layout.dialogue=Math.max(280,Math.min(innerWidth*.5,Number(layout.dialogue)||360));layout.scale=Math.max(.85,Math.min(1.3,Number(layout.scale)||1));root.style.setProperty('--files-width',layout.files+'px');root.style.setProperty('--dialogue-width',layout.dialogue+'px');root.style.setProperty('--ui-scale',layout.scale);$('ui-scale').value=String(layout.scale);write(localStorage,layoutKey,JSON.stringify(layout));}
+  function applyLayout(){layout.files=Math.max(150,Math.min(340,Number(layout.files)||210));layout.dialogue=Math.max(280,Math.min(innerWidth*.5,Number(layout.dialogue)||360));layout.scale=Math.max(.85,Math.min(1.3,Number(layout.scale)||1));root.style.setProperty('--files-width',layout.files+'px');root.style.setProperty('--dialogue-width',layout.dialogue+'px');root.style.setProperty('--ui-scale',layout.scale);layout.composer=Math.max(44,Math.min(innerHeight*.36,Number(layout.composer)||80));layout.activity=Math.max(52,Math.min(innerHeight*.32,Number(layout.activity)||160));root.style.setProperty('--composer-height',layout.composer+'px');root.style.setProperty('--activity-height',layout.activity+'px');root.classList.toggle('files-hidden',!!layout.hideFiles);root.classList.toggle('chat-hidden',!!layout.hideChat);for(const [id,key,label] of [['toggle-files','hideFiles','files'],['toggle-chat','hideChat','chat']]){$(id).textContent=label==='files'?(layout[key]?'›':'‹'):(layout[key]?'‹':'›');$(id).title=(layout[key]?'Show ':'Hide ')+label+' panel';$(id).setAttribute('aria-label',$(id).title);$(id).setAttribute('aria-pressed',String(!layout[key]));}for(const [id,key] of [['resize-composer','composer'],['resize-activity','activity']])$(id).setAttribute('aria-valuenow',String(Math.round(layout[key])));$('ui-scale').value=String(layout.scale);write(localStorage,layoutKey,JSON.stringify(layout));}
   for(const [id,key,direction] of [['resize-files','files',1],['resize-dialogue','dialogue',-1]]){const handle=$(id);let drag=null;handle.onpointerdown=e=>{if(e.button!==0)return;drag={x:e.clientX,width:layout[key]};handle.setPointerCapture(e.pointerId);};handle.onpointermove=e=>{if(!drag)return;layout[key]=drag.width+(e.clientX-drag.x)*direction;applyLayout();};handle.onpointerup=handle.onpointercancel=()=>{drag=null;};handle.onkeydown=e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();layout[key]+=(e.key==='ArrowRight'?20:-20)*direction;applyLayout();};}
-  $('ui-scale').onchange=()=>{layout.scale=Number($('ui-scale').value);applyLayout();};$('reset-layout').onclick=()=>{layout={files:210,dialogue:360,scale:1};applyLayout();viewer.zoom(1);};applyLayout();
+  for(const [id,key,direction] of [['resize-composer','composer',-1],['resize-activity','activity',1]]){
+    const handle=$(id);let drag=null;
+    handle.onpointerdown=e=>{if(e.button!==0)return;drag={y:e.clientY,height:layout[key]};handle.setPointerCapture(e.pointerId);root.classList.add('resizing-panels');e.preventDefault();};
+    handle.onpointermove=e=>{if(!drag)return;layout[key]=drag.height+(e.clientY-drag.y)*direction;applyLayout();};
+    handle.onpointerup=handle.onpointercancel=()=>{drag=null;root.classList.remove('resizing-panels');};
+    handle.onkeydown=e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();layout[key]+=(e.key==='ArrowDown'?16:-16)*direction;applyLayout();};
+  }
+  $('toggle-files').onclick=()=>{layout.hideFiles=!layout.hideFiles;applyLayout();};
+  $('toggle-chat').onclick=()=>{layout.hideChat=!layout.hideChat;applyLayout();};
+  addEventListener('resize',applyLayout);
+  $('ui-scale').onchange=()=>{layout.scale=Number($('ui-scale').value);applyLayout();};$('reset-layout').onclick=()=>{layout={files:210,dialogue:360,scale:1,composer:80,activity:160,hideFiles:false,hideChat:false};applyLayout();viewer.zoom(1);};applyLayout();
   $('activity-open').onclick=()=>$('activity-dialog').showModal();
   $('plan-template').addEventListener('click',()=>downloadBlob(new Blob(['title,location,reference\n'],{type:'text/csv'}),'plan-template.csv'));
   $('import-plan').addEventListener('click',async()=>{
@@ -594,7 +662,7 @@
     if(sending||workspaceBusy)return;
     if($('message').value.trim()&&!confirm('Discard this unsent message and switch conversation?')){renderChatPicker();return;}
     remember(); // Keep the exact frozen payload in the old chat, including document selection.
-    geometryViewer?.clear();epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
+    closeProgress4d();geometryViewer?.clear();epoch++; pending=null;chat=id?{chat_id:id}:null;create=null;
     if(id){try{pending=JSON.parse(read(sessionStorage,chatPendingKey(id))||'null');}catch{}}
     workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];showTrash=false;selected=null;scopedSessions=[];scopedInspections=[];importRequest=null;
     $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();
@@ -613,5 +681,11 @@
   });
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);
   setInterval(()=>{if(token)updateActivityStatus();},1000);
+  const intro=$('demo-welcome');
+  const dismissIntro=()=>intro.close();
+  $('demo-welcome-close').onclick=dismissIntro;$('demo-welcome-start').onclick=dismissIntro;
+  intro.addEventListener('close',()=>write(sessionStorage,'inspector-demo-intro-v1','seen'));
+  $('demo-about').onclick=()=>intro.showModal();
+  if(!read(sessionStorage,'inspector-demo-intro-v1'))intro.showModal();
   if(token) refresh();
 })();

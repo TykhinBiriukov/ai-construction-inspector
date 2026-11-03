@@ -11,7 +11,7 @@ from ai_inspector.observability import telemetry
 from pydantic import Field, ValidationError, field_validator
 
 from .workspace import FileIDs
-from . import drawing_photo
+from . import drawing_photo, progress4d
 from .document_selection import DocumentSelection, selection_context
 from .artifacts import ARTIFACT_INSTRUCTIONS, presentation
 from .errors import APIError
@@ -67,6 +67,7 @@ TOOL_DESCRIPTIONS = {
     "session_create": "Assign capture to this chat's registered iPhone only when the user requests capture. Reuse the current open session. After sealing, an explicitly requested rescan creates a linked session with the same inspection context.",
     "session_import": "Use an existing capture by the session UUID explicitly supplied by the user, without new phone capture. Attach only a completed Geometry result matching this session and selected IFC; otherwise report not found. Never reconstruct or segment. Select one IFC or use the saved reference. Review the saved result by default. Never invent a session ID.",
     "session_get": "Read the current capture session of this chat, acknowledgement, source and processing states. Does not create a session.",
+    "progress4d_result": "Read the connected construction progress monitoring result for this conversation and show its weekly 4D viewer. Use for requests about construction progress, stages, weekly changes or schedule. This reads saved evidence; it does not analyze newly supplied links or photos.",
     "device_status": "Read whether this chat's configured iPhone currently has a live connection. Offline does not cancel a session.",
 }
 TOOLS = [{"type": "function", "function": {"name": name, "description": description,
@@ -485,6 +486,8 @@ class OrchestratorAgent:
             child = run["delegations"][-1]
             child["history"], child["history_run_ids"] = self._inspector_history(principal, run, profile)
             plan["delegation_run_id"] = child_id
+        if name == 'progress4d_result':
+            plan['progress4d_project'] = progress4d.project_for_chat(self.service, principal, run['chat_id'])
         if name == "drawing_photo_compare":
             plan['comparison'] = drawing_photo.plan_compare(self.service, principal, run, arguments, operation_id)
         elif name == "drawing_photo_result":
@@ -744,6 +747,8 @@ class OrchestratorAgent:
 
     def _execute(self, principal, run, plan):
         chat, session = self._context(principal, run)
+        if plan['name'] == 'progress4d_result':
+            return progress4d.agent_result(self.service, principal, run['chat_id'], plan['progress4d_project']), None
         if plan["name"] in drawing_photo.SCHEMAS:
             retry = run.get('comparison_retry')
             if not retry or retry.get('operation_id') != plan['operation_id'] or retry.get('exhausted'):
@@ -842,13 +847,16 @@ class OrchestratorAgent:
                 prompt += "\nThis run has a validated typed inspection_request. For its analysis use the registered discrepancy_inspector. Only Inspector calls the verifier; do not invent cases or measurements."
             if run.get('geometry_continuation', {}).get('summary'):
                 prompt += '\nThis is a server continuation after accepted reviews. Explain the supplied aggregate, distinguish no candidates from compliance, and retain unknowns. Do not start another inspection or capture.'
-            context = {"project_id": chat["project_id"], "device_id": chat["device_id"],
+            monitoring = bool(self.settings.progress4d_base_url and json.loads(self.settings.progress4d_chat_projects_json).get(run['chat_id']))
+            prompt += "\nYou choose the workflow from the user's request, not from a UI mode. If construction progress monitoring is connected and requested, call progress4d_result; its accepted result creates a 4D output card. Describe only returned evidence. It is saved data, not processing of new attachments or URLs. Do not claim arbitrary folder links were downloaded. For a subsequent detailed installation question in the same chat, use selected drawing/photo inputs via existing comparison tools, or ask for the missing close-up photo and reference/detail. Never reuse a progress percentage as installation compliance. For monitoring, use latest_progress counts including retained_past_present; a no_data forecast is not absence of historical evidence. Keep the reply short in the user's language (2-4 sentences); translate phase names, avoid internal tool names/status codes and duplicate tables because the viewer already contains the full analysis."
+            context = {"progress_monitoring_connected": monitoring, "project_id": chat["project_id"], "device_id": chat["device_id"],
                        "room_id": chat["room_id"], "session": session_summary(session),
                        "registered_inspectors": self.inspectors.catalog()}
             tools = [tool for tool in TOOLS if tool['function']['name'] != 'drawing_photo_compare'
                      or len(run.get('file_ids', [])) >= 2]
             if run.get('geometry_continuation', {}).get('summary'):
                 return ([{'role': 'developer', 'content': prompt}] + run['messages'], [])
+            tools = [tool for tool in tools if tool['function']['name'] != 'progress4d_result' or monitoring]
             return ([{"role": "developer", "content": prompt + "\nServer context: " + canonical_json(context)}]
                     + run["history"] + run["messages"], tools + self.inspectors.tools())
         def execute_tool(plan):

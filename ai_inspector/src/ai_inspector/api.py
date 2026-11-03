@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
-from . import drawing_photo
+from . import drawing_photo, progress4d
 from .workspace import WorkItem, Observation, ImportPlan
 from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
@@ -150,6 +150,8 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
                 "connect-src 'self'; img-src 'self' blob:; object-src 'none'; "
                 "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
             )
+            if request.url.path.startswith("/ui/progress4d/"):
+                response.headers["Content-Security-Policy"] = response.headers["Content-Security-Policy"].replace("frame-ancestors 'none'", "frame-ancestors 'self'").replace("connect-src 'self'", "connect-src 'self' blob:")
             response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
@@ -309,6 +311,17 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         content = GeometryView(service).artifact(principal, str(chat_id), str(session_id), artifact_id)
         return Response(content, media_type='application/octet-stream', headers={'Cache-Control': 'private, no-store',
                         'X-Content-Type-Options': 'nosniff'})
+
+    @app.get('/v1/chats/{chat_id}/progress4d', tags=['workspace'])
+    def progress4d_view(chat_id: UUID, principal: Annotated[Principal, Depends(operator)]):
+        project = progress4d.project_for_chat(service, principal, str(chat_id))
+        return {'project_id': project, 'viewer_path': f'/ui/progress4d/viewer.html?chat={chat_id}&project={project}'}
+
+    @app.get('/v1/chats/{chat_id}/progress4d/data/{path:path}', tags=['workspace'])
+    async def progress4d_data(chat_id: UUID, path: str, request: Request,
+                              principal: Annotated[Principal, Depends(operator)]):
+        project = await run_in_threadpool(progress4d.project_for_chat, service, principal, str(chat_id))
+        return await progress4d.read_response(service.settings, project, path, request.headers.get('range'))
 
     @app.get("/v1/chats/{chat_id}/workspace", tags=["workspace"])
     def workspace_state(chat_id: UUID, principal: Annotated[Principal, Depends(operator)]):
