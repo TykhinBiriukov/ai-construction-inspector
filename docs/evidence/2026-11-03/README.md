@@ -2,6 +2,8 @@
 
 Start with the real-room Geometry case. It connects a device capture to a completed reconstruction, an IFC reference and image-linked comparison results. Drawing/photo and Progress4D provide complementary evidence about requirement handling and dated observations.
 
+For the recovered algorithm history and quantitative comparison, see [Geometry workflow evolution](workflow-evolution.md): paired projection diagnostics calculated on GCP, cold/warm SAM timings and byte-level output preservation.
+
 ## 1. Real-room Geometry: capture → reconstruction → IFC comparison
 
 [Download the versioned capture/result package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03). The [package manifest](geometry-case-manifest.json) records file hashes, provenance and verification boundaries. The compact [comparison result](geometry-result.json) is readable directly in the repository.

@@ -1,0 +1,2190 @@
+{
+  "kind": "descriptive_reanalysis_of_saved_diagnostics",
+  "execution": {
+    "platform": "Linux",
+    "machine": "x86_64",
+    "python": "3.11.2"
+  },
+  "input_sha256": {
+    "analyze.py": "b2bcc27ec61c6ffc94c057204f61d6eca470be6664772373766a6fac3d54ccdf",
+    "cameras.json": "8066cc4aa7b6bccab46b9ebf9578a83168b1ac060dc6b5ea0704ce7e49fb9208",
+    "history.json": "d3cc7c713836aa7afc91d94691eaac144053c5c8aa47f4c302ab753e91a84eb4",
+    "protocol.txt": "46ba961679c6598bae5cc1634b101b9c89b7890a965c3a57e5803f29d0963bd6",
+    "sam-final.json": "6ff5ea40be8d349faf33286be8f8437800f47531f88cb8be1b3d371bf31cb859",
+    "sam-first.json": "38681cb37179268508feeaaab98672bfed9088b558492cd40e28e600550cf750"
+  },
+  "projection": {
+    "counts": {
+      "accepted_raw": 50,
+      "accepted_refined": 18,
+      "rejected": 9
+    },
+    "retained_fraction": 0.8831168831168831,
+    "raw_all_frames": {
+      "n_frames": 77,
+      "mean_frame_median_mm": 13.897649266503075,
+      "median_frame_median_mm": 9.462356567382812,
+      "mean_frame_p90_mm": 48.54645876987995,
+      "mean_frame_agreement": 0.9399483750734918
+    },
+    "same_retained_frames_raw": {
+      "n_frames": 68,
+      "mean_frame_median_mm": 10.992812321466557,
+      "median_frame_median_mm": 9.002387523651123,
+      "mean_frame_p90_mm": 35.61465986593462,
+      "mean_frame_agreement": 0.9663273375322479
+    },
+    "same_retained_frames_selected": {
+      "n_frames": 68,
+      "mean_frame_median_mm": 7.932925925535313,
+      "median_frame_median_mm": 7.56680965423584,
+      "mean_frame_p90_mm": 29.979091760812,
+      "mean_frame_agreement": 0.976146909144663
+    },
+    "refined_subset_raw": {
+      "n_frames": 18,
+      "mean_frame_median_mm": 18.198053042093914,
+      "median_frame_median_mm": 17.059236764907837,
+      "mean_frame_p90_mm": 50.13932220430838,
+      "mean_frame_agreement": 0.9348139280109408
+    },
+    "refined_subset_selected": {
+      "n_frames": 18,
+      "mean_frame_median_mm": 6.638482213020325,
+      "median_frame_median_mm": 6.333976984024048,
+      "mean_frame_p90_mm": 28.849398251622915,
+      "mean_frame_agreement": 0.9719100874356199
+    },
+    "rejected_subset_raw": {
+      "n_frames": 9,
+      "mean_frame_median_mm": 35.845306184556755,
+      "median_frame_median_mm": 26.263117790222168,
+      "mean_frame_p90_mm": 146.25338382191129,
+      "mean_frame_agreement": 0.7406406587184469
+    },
+    "rejected_subset_proposals": {
+      "n_frames": 9,
+      "mean_frame_median_mm": 7.641858524746365,
+      "median_frame_median_mm": 7.343947887420654,
+      "mean_frame_p90_mm": 74.25708737638261,
+      "mean_frame_agreement": 0.9086270878756201
+    },
+    "rows": [
+      {
+        "frame_id": "989f0444-a599-4f3e-8427-c35508144f90",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed",
+          "local_depth_regression"
+        ],
+        "before": {
+          "samples": 23825,
+          "coverage": 1.0,
+          "median_m": 0.05607771873474121,
+          "p90_m": 0.16334688663482666,
+          "agreement": 0.6110807974816369
+        },
+        "proposal": {
+          "samples": 23804,
+          "coverage": 0.9991185729275971,
+          "median_m": 0.007343947887420654,
+          "p90_m": 0.040097128599882126,
+          "agreement": 0.9265669635355402
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "a1c3bb67-b7e5-493b-9ad7-b1a53d1ac2e9",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 23389,
+          "coverage": 0.9999572466866182,
+          "median_m": 0.030457258224487305,
+          "p90_m": 0.07885336875915527,
+          "agreement": 0.7969558339390311
+        },
+        "proposal": {
+          "samples": 23386,
+          "coverage": 0.9998289867464728,
+          "median_m": 0.005118072032928467,
+          "p90_m": 0.0189361572265625,
+          "agreement": 0.9829385102197896
+        },
+        "selected": {
+          "samples": 23386,
+          "coverage": 0.9998289867464728,
+          "median_m": 0.005118072032928467,
+          "p90_m": 0.0189361572265625,
+          "agreement": 0.9829385102197896
+        }
+      },
+      {
+        "frame_id": "b31459bf-a3a1-45ef-b41f-f80a08c56a39",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed"
+        ],
+        "before": {
+          "samples": 23446,
+          "coverage": 0.9971929227628445,
+          "median_m": 0.017793595790863037,
+          "p90_m": 0.14078587293624878,
+          "agreement": 0.7943359208393755
+        },
+        "proposal": {
+          "samples": 23426,
+          "coverage": 0.9963422932970398,
+          "median_m": 0.005332231521606445,
+          "p90_m": 0.1335374116897583,
+          "agreement": 0.8819260650559207
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "36e302db-ce73-40bc-b517-85820f84534b",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 24004,
+          "coverage": 0.9963059809903292,
+          "median_m": 0.007458090782165527,
+          "p90_m": 0.019905995577573776,
+          "agreement": 0.9811698050324946
+        },
+        "proposal": {
+          "samples": 23999,
+          "coverage": 0.9960984518324825,
+          "median_m": 0.004063844680786133,
+          "p90_m": 0.012635136023163795,
+          "agreement": 0.9833743072628026
+        },
+        "selected": {
+          "samples": 24004,
+          "coverage": 0.9963059809903292,
+          "median_m": 0.007458090782165527,
+          "p90_m": 0.019905995577573776,
+          "agreement": 0.9811698050324946
+        }
+      },
+      {
+        "frame_id": "cf50f812-1032-4653-8ec6-098b95c2a165",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23002,
+          "coverage": 0.995628273384409,
+          "median_m": 0.005936086177825928,
+          "p90_m": 0.03545176982879639,
+          "agreement": 0.9546561168594035
+        },
+        "proposal": {
+          "samples": 23022,
+          "coverage": 0.9964939618231399,
+          "median_m": 0.00428164005279541,
+          "p90_m": 0.02273186482489109,
+          "agreement": 0.9651637564069151
+        },
+        "selected": {
+          "samples": 23002,
+          "coverage": 0.995628273384409,
+          "median_m": 0.005936086177825928,
+          "p90_m": 0.03545176982879639,
+          "agreement": 0.9546561168594035
+        }
+      },
+      {
+        "frame_id": "f1e24d80-9378-44bb-8496-3a844b4f375d",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23667,
+          "coverage": 0.9902510460251046,
+          "median_m": 0.009462356567382812,
+          "p90_m": 0.03894200176000595,
+          "agreement": 0.9641272658131576
+        },
+        "proposal": {
+          "samples": 23591,
+          "coverage": 0.987071129707113,
+          "median_m": 0.005241513252258301,
+          "p90_m": 0.018926620483398438,
+          "agreement": 0.9751600186511805
+        },
+        "selected": {
+          "samples": 23667,
+          "coverage": 0.9902510460251046,
+          "median_m": 0.009462356567382812,
+          "p90_m": 0.03894200176000595,
+          "agreement": 0.9641272658131576
+        }
+      },
+      {
+        "frame_id": "d164d395-e67d-4c53-80cc-ef5d58b38e02",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23808,
+          "coverage": 0.9956923591652378,
+          "median_m": 0.007273316383361816,
+          "p90_m": 0.02187713421881199,
+          "agreement": 0.9658938172043011
+        },
+        "proposal": {
+          "samples": 23845,
+          "coverage": 0.997239764125298,
+          "median_m": 0.0033229589462280273,
+          "p90_m": 0.012432265095412731,
+          "agreement": 0.9796603061438457
+        },
+        "selected": {
+          "samples": 23808,
+          "coverage": 0.9956923591652378,
+          "median_m": 0.007273316383361816,
+          "p90_m": 0.02187713421881199,
+          "agreement": 0.9658938172043011
+        }
+      },
+      {
+        "frame_id": "211f9100-a731-43b7-94a1-3e6cd5e8ac6e",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 24058,
+          "coverage": 1.0,
+          "median_m": 0.008584797382354736,
+          "p90_m": 0.01447139959782362,
+          "agreement": 0.9972566298112894
+        },
+        "proposal": {
+          "samples": 24058,
+          "coverage": 1.0,
+          "median_m": 0.002943694591522217,
+          "p90_m": 0.009378182701766491,
+          "agreement": 0.9994596392052539
+        },
+        "selected": {
+          "samples": 24058,
+          "coverage": 1.0,
+          "median_m": 0.002943694591522217,
+          "p90_m": 0.009378182701766491,
+          "agreement": 0.9994596392052539
+        }
+      },
+      {
+        "frame_id": "231b3bef-15aa-46d0-9f33-aed43d2a82e1",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23789,
+          "coverage": 0.9894767490225439,
+          "median_m": 0.006093621253967285,
+          "p90_m": 0.03568892553448677,
+          "agreement": 0.9956702677708185
+        },
+        "proposal": {
+          "samples": 23731,
+          "coverage": 0.9870643041344314,
+          "median_m": 0.004252433776855469,
+          "p90_m": 0.018389344215393066,
+          "agreement": 0.9998735830769879
+        },
+        "selected": {
+          "samples": 23789,
+          "coverage": 0.9894767490225439,
+          "median_m": 0.006093621253967285,
+          "p90_m": 0.03568892553448677,
+          "agreement": 0.9956702677708185
+        }
+      },
+      {
+        "frame_id": "4f27c765-2960-485f-8d54-d2b3f9643d8a",
+        "status": "accepted_raw",
+        "reasons": [
+          "correction_exceeds_bound"
+        ],
+        "before": {
+          "samples": 23769,
+          "coverage": 1.0,
+          "median_m": 0.0129852294921875,
+          "p90_m": 0.02949347533285618,
+          "agreement": 0.9987799234296774
+        },
+        "proposal": {
+          "samples": 23769,
+          "coverage": 1.0,
+          "median_m": 0.003521561622619629,
+          "p90_m": 0.007174873258918524,
+          "agreement": 1.0
+        },
+        "selected": {
+          "samples": 23769,
+          "coverage": 1.0,
+          "median_m": 0.0129852294921875,
+          "p90_m": 0.02949347533285618,
+          "agreement": 0.9987799234296774
+        }
+      },
+      {
+        "frame_id": "31a6d139-e9f8-4365-9d06-bdd3a8fb4db3",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23922,
+          "coverage": 1.0,
+          "median_m": 0.003833591938018799,
+          "p90_m": 0.007792329881340265,
+          "agreement": 0.9999581974751275
+        },
+        "proposal": {
+          "samples": 23922,
+          "coverage": 1.0,
+          "median_m": 0.0026611685752868652,
+          "p90_m": 0.0058634160086512566,
+          "agreement": 1.0
+        },
+        "selected": {
+          "samples": 23922,
+          "coverage": 1.0,
+          "median_m": 0.003833591938018799,
+          "p90_m": 0.007792329881340265,
+          "agreement": 0.9999581974751275
+        }
+      },
+      {
+        "frame_id": "bc6d0bc7-8b0c-4f0f-b899-173d23524c7b",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23882,
+          "coverage": 0.9936342833368005,
+          "median_m": 0.005988121032714844,
+          "p90_m": 0.01443169079720974,
+          "agreement": 0.9998743823800351
+        },
+        "proposal": {
+          "samples": 23758,
+          "coverage": 0.9884751404202206,
+          "median_m": 0.0029448866844177246,
+          "p90_m": 0.008802938275039196,
+          "agreement": 0.9999158178297837
+        },
+        "selected": {
+          "samples": 23882,
+          "coverage": 0.9936342833368005,
+          "median_m": 0.005988121032714844,
+          "p90_m": 0.01443169079720974,
+          "agreement": 0.9998743823800351
+        }
+      },
+      {
+        "frame_id": "fa46a924-ad90-4755-ad69-c14bf16a5755",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23436,
+          "coverage": 0.9950747282608695,
+          "median_m": 0.005391478538513184,
+          "p90_m": 0.022310495376586914,
+          "agreement": 0.984084314729476
+        },
+        "proposal": {
+          "samples": 23383,
+          "coverage": 0.9928243885869565,
+          "median_m": 0.004367709159851074,
+          "p90_m": 0.01333529967814684,
+          "agreement": 0.9850746268656716
+        },
+        "selected": {
+          "samples": 23436,
+          "coverage": 0.9950747282608695,
+          "median_m": 0.005391478538513184,
+          "p90_m": 0.022310495376586914,
+          "agreement": 0.984084314729476
+        }
+      },
+      {
+        "frame_id": "1531cadb-254a-4a94-8c73-d03b09d5f002",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 24043,
+          "coverage": 1.0,
+          "median_m": 0.007979869842529297,
+          "p90_m": 0.016353081911802292,
+          "agreement": 1.0
+        },
+        "proposal": {
+          "samples": 24043,
+          "coverage": 1.0,
+          "median_m": 0.004307150840759277,
+          "p90_m": 0.009367847815155983,
+          "agreement": 1.0
+        },
+        "selected": {
+          "samples": 24043,
+          "coverage": 1.0,
+          "median_m": 0.007979869842529297,
+          "p90_m": 0.016353081911802292,
+          "agreement": 1.0
+        }
+      },
+      {
+        "frame_id": "20aa8b75-cf25-451a-b910-c0d7f278750a",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 23741,
+          "coverage": 1.0,
+          "median_m": 0.02471780776977539,
+          "p90_m": 0.03564488887786865,
+          "agreement": 0.9985257571290174
+        },
+        "proposal": {
+          "samples": 23741,
+          "coverage": 1.0,
+          "median_m": 0.004439711570739746,
+          "p90_m": 0.010666608810424805,
+          "agreement": 1.0
+        },
+        "selected": {
+          "samples": 23741,
+          "coverage": 1.0,
+          "median_m": 0.004439711570739746,
+          "p90_m": 0.010666608810424805,
+          "agreement": 1.0
+        }
+      },
+      {
+        "frame_id": "12b3f962-fd59-4afe-ac3c-e5f8e33e000d",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23722,
+          "coverage": 1.0,
+          "median_m": 0.006207883358001709,
+          "p90_m": 0.04075946658849716,
+          "agreement": 0.9917376275187589
+        },
+        "proposal": {
+          "samples": 23722,
+          "coverage": 1.0,
+          "median_m": 0.004297018051147461,
+          "p90_m": 0.016356324777007103,
+          "agreement": 0.9997049152685271
+        },
+        "selected": {
+          "samples": 23722,
+          "coverage": 1.0,
+          "median_m": 0.006207883358001709,
+          "p90_m": 0.04075946658849716,
+          "agreement": 0.9917376275187589
+        }
+      },
+      {
+        "frame_id": "57e828f8-2c1a-4ec1-9e8f-6ce61e793375",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 21963,
+          "coverage": 1.0,
+          "median_m": 0.0092695951461792,
+          "p90_m": 0.030966807156801224,
+          "agreement": 0.9984064107817694
+        },
+        "proposal": {
+          "samples": 21963,
+          "coverage": 1.0,
+          "median_m": 0.004390120506286621,
+          "p90_m": 0.019549895077943802,
+          "agreement": 0.9997723443973956
+        },
+        "selected": {
+          "samples": 21963,
+          "coverage": 1.0,
+          "median_m": 0.0092695951461792,
+          "p90_m": 0.030966807156801224,
+          "agreement": 0.9984064107817694
+        }
+      },
+      {
+        "frame_id": "c398c628-9c53-4601-b8b6-07e83c3e21fc",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 21887,
+          "coverage": 0.9992238860482103,
+          "median_m": 0.007033586502075195,
+          "p90_m": 0.022743653506040573,
+          "agreement": 0.9957052131402202
+        },
+        "proposal": {
+          "samples": 21896,
+          "coverage": 0.9996347699050402,
+          "median_m": 0.004161536693572998,
+          "p90_m": 0.012663841247558594,
+          "agreement": 0.9968030690537084
+        },
+        "selected": {
+          "samples": 21887,
+          "coverage": 0.9992238860482103,
+          "median_m": 0.007033586502075195,
+          "p90_m": 0.022743653506040573,
+          "agreement": 0.9957052131402202
+        }
+      },
+      {
+        "frame_id": "f278791e-88b1-4c26-8fe9-c423e210895a",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 19627,
+          "coverage": 0.9927166051287238,
+          "median_m": 0.01583266258239746,
+          "p90_m": 0.02834160253405571,
+          "agreement": 0.9883833494675702
+        },
+        "proposal": {
+          "samples": 19623,
+          "coverage": 0.9925142886045217,
+          "median_m": 0.007090926170349121,
+          "p90_m": 0.024630164727568626,
+          "agreement": 0.9902665239769658
+        },
+        "selected": {
+          "samples": 19623,
+          "coverage": 0.9925142886045217,
+          "median_m": 0.007090926170349121,
+          "p90_m": 0.024630164727568626,
+          "agreement": 0.9902665239769658
+        }
+      },
+      {
+        "frame_id": "7de58edd-e528-425e-a496-67fbf0610d6c",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 18663,
+          "coverage": 0.9950946414289523,
+          "median_m": 0.021213412284851074,
+          "p90_m": 0.03482992574572563,
+          "agreement": 0.9879976423940416
+        },
+        "proposal": {
+          "samples": 18670,
+          "coverage": 0.9954678752332712,
+          "median_m": 0.006394445896148682,
+          "p90_m": 0.02453671768307686,
+          "agreement": 0.9859132297803963
+        },
+        "selected": {
+          "samples": 18670,
+          "coverage": 0.9954678752332712,
+          "median_m": 0.006394445896148682,
+          "p90_m": 0.02453671768307686,
+          "agreement": 0.9859132297803963
+        }
+      },
+      {
+        "frame_id": "2cf23f1e-ad49-48d7-897f-a8b938e57e2c",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 19743,
+          "coverage": 0.993708475941212,
+          "median_m": 0.022316455841064453,
+          "p90_m": 0.05264270305633545,
+          "agreement": 0.9846021374664438
+        },
+        "proposal": {
+          "samples": 19769,
+          "coverage": 0.9950171129454399,
+          "median_m": 0.0067675113677978516,
+          "p90_m": 0.022371839731931686,
+          "agreement": 0.9945874854570287
+        },
+        "selected": {
+          "samples": 19769,
+          "coverage": 0.9950171129454399,
+          "median_m": 0.0067675113677978516,
+          "p90_m": 0.022371839731931686,
+          "agreement": 0.9945874854570287
+        }
+      },
+      {
+        "frame_id": "e463f150-3333-4989-a117-2cb123891101",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed"
+        ],
+        "before": {
+          "samples": 13889,
+          "coverage": 0.9979880721419846,
+          "median_m": 0.02557229995727539,
+          "p90_m": 0.047988034784793854,
+          "agreement": 0.9196486428108576
+        },
+        "proposal": {
+          "samples": 13836,
+          "coverage": 0.994179780125027,
+          "median_m": 0.00544285774230957,
+          "p90_m": 0.032479047775268555,
+          "agreement": 0.9369037294015612
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "36442c95-a7c9-492b-9775-9f17fb925f37",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed",
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 11652,
+          "coverage": 0.9824620573355818,
+          "median_m": 0.011414706707000732,
+          "p90_m": 0.03195927292108536,
+          "agreement": 0.9588911774802609
+        },
+        "proposal": {
+          "samples": 11650,
+          "coverage": 0.9822934232715008,
+          "median_m": 0.009362280368804932,
+          "p90_m": 0.03251150995492935,
+          "agreement": 0.9595708154506438
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "83f1572b-e96a-4a8f-90f6-8b8cbf56554e",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 15868,
+          "coverage": 0.9657942787583689,
+          "median_m": 0.010387241840362549,
+          "p90_m": 0.0410228967666626,
+          "agreement": 0.9631333501386438
+        },
+        "proposal": {
+          "samples": 15881,
+          "coverage": 0.9665855143031041,
+          "median_m": 0.00984048843383789,
+          "p90_m": 0.03854060173034668,
+          "agreement": 0.9630375920911781
+        },
+        "selected": {
+          "samples": 15868,
+          "coverage": 0.9657942787583689,
+          "median_m": 0.010387241840362549,
+          "p90_m": 0.0410228967666626,
+          "agreement": 0.9631333501386438
+        }
+      },
+      {
+        "frame_id": "b0e1a9ee-5802-4fe4-b8be-e853e4cb1151",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 16587,
+          "coverage": 0.9769126568113552,
+          "median_m": 0.015224218368530273,
+          "p90_m": 0.05191392824053764,
+          "agreement": 0.9252426599143908
+        },
+        "proposal": {
+          "samples": 16573,
+          "coverage": 0.9760881088403321,
+          "median_m": 0.011011302471160889,
+          "p90_m": 0.047216713428497314,
+          "agreement": 0.9313944367344476
+        },
+        "selected": {
+          "samples": 16587,
+          "coverage": 0.9769126568113552,
+          "median_m": 0.015224218368530273,
+          "p90_m": 0.05191392824053764,
+          "agreement": 0.9252426599143908
+        }
+      },
+      {
+        "frame_id": "9ee3548b-e3e9-49a3-bc31-cd9a10ed9c21",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 16044,
+          "coverage": 0.9979473782422094,
+          "median_m": 0.016711056232452393,
+          "p90_m": 0.06046156957745552,
+          "agreement": 0.9081899775617053
+        },
+        "proposal": {
+          "samples": 16038,
+          "coverage": 0.9975741742862474,
+          "median_m": 0.009607404470443726,
+          "p90_m": 0.051611267030239105,
+          "agreement": 0.9181942885646589
+        },
+        "selected": {
+          "samples": 16038,
+          "coverage": 0.9975741742862474,
+          "median_m": 0.009607404470443726,
+          "p90_m": 0.051611267030239105,
+          "agreement": 0.9181942885646589
+        }
+      },
+      {
+        "frame_id": "ae3e92a3-2bd8-4f0e-83d8-cdfe4afec24e",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 16600,
+          "coverage": 0.9919330743949806,
+          "median_m": 0.018396854400634766,
+          "p90_m": 0.05888655036687851,
+          "agreement": 0.9236746987951807
+        },
+        "proposal": {
+          "samples": 16569,
+          "coverage": 0.9900806692560502,
+          "median_m": 0.011432766914367676,
+          "p90_m": 0.05068402364850044,
+          "agreement": 0.9301708008932343
+        },
+        "selected": {
+          "samples": 16569,
+          "coverage": 0.9900806692560502,
+          "median_m": 0.011432766914367676,
+          "p90_m": 0.05068402364850044,
+          "agreement": 0.9301708008932343
+        }
+      },
+      {
+        "frame_id": "13510b5f-4c5c-4ab7-9269-82f5d23ee1e8",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 18099,
+          "coverage": 0.9983451927850405,
+          "median_m": 0.021413803100585938,
+          "p90_m": 0.0591425895690918,
+          "agreement": 0.9101607823636665
+        },
+        "proposal": {
+          "samples": 18083,
+          "coverage": 0.9974626289370622,
+          "median_m": 0.009696245193481445,
+          "p90_m": 0.04939625412225723,
+          "agreement": 0.9221921141403528
+        },
+        "selected": {
+          "samples": 18083,
+          "coverage": 0.9974626289370622,
+          "median_m": 0.009696245193481445,
+          "p90_m": 0.04939625412225723,
+          "agreement": 0.9221921141403528
+        }
+      },
+      {
+        "frame_id": "6587aa42-1178-462c-8ed4-1bf1e1f8c239",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 22634,
+          "coverage": 0.9998674736051597,
+          "median_m": 0.01487189531326294,
+          "p90_m": 0.031713224947452545,
+          "agreement": 0.9847132632323053
+        },
+        "proposal": {
+          "samples": 22635,
+          "coverage": 0.9999116490701064,
+          "median_m": 0.006273508071899414,
+          "p90_m": 0.023581266403198242,
+          "agreement": 0.9845814004859731
+        },
+        "selected": {
+          "samples": 22635,
+          "coverage": 0.9999116490701064,
+          "median_m": 0.006273508071899414,
+          "p90_m": 0.023581266403198242,
+          "agreement": 0.9845814004859731
+        }
+      },
+      {
+        "frame_id": "a06d0ce1-e718-4748-9de2-f51844f510c5",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23193,
+          "coverage": 0.997762959776296,
+          "median_m": 0.010590195655822754,
+          "p90_m": 0.04020263999700546,
+          "agreement": 0.9702496442892252
+        },
+        "proposal": {
+          "samples": 23168,
+          "coverage": 0.996687459668746,
+          "median_m": 0.008837401866912842,
+          "p90_m": 0.03695804998278618,
+          "agreement": 0.9701312154696132
+        },
+        "selected": {
+          "samples": 23193,
+          "coverage": 0.997762959776296,
+          "median_m": 0.010590195655822754,
+          "p90_m": 0.04020263999700546,
+          "agreement": 0.9702496442892252
+        }
+      },
+      {
+        "frame_id": "f00bbdbf-fc1f-49a9-828b-12365e0d17b0",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22472,
+          "coverage": 0.9993773903762341,
+          "median_m": 0.009894371032714844,
+          "p90_m": 0.031468965113162994,
+          "agreement": 0.9634211463154148
+        },
+        "proposal": {
+          "samples": 22469,
+          "coverage": 0.9992439740282842,
+          "median_m": 0.008437871932983398,
+          "p90_m": 0.029946137219667435,
+          "agreement": 0.9631937335884997
+        },
+        "selected": {
+          "samples": 22472,
+          "coverage": 0.9993773903762341,
+          "median_m": 0.009894371032714844,
+          "p90_m": 0.031468965113162994,
+          "agreement": 0.9634211463154148
+        }
+      },
+      {
+        "frame_id": "22123885-85f4-45e7-996b-6f365807adab",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23394,
+          "coverage": 0.9991884850296844,
+          "median_m": 0.011137127876281738,
+          "p90_m": 0.033336590975522995,
+          "agreement": 0.9678122595537317
+        },
+        "proposal": {
+          "samples": 23380,
+          "coverage": 0.9985905266305044,
+          "median_m": 0.006320655345916748,
+          "p90_m": 0.029170382767915726,
+          "agreement": 0.9705731394354149
+        },
+        "selected": {
+          "samples": 23394,
+          "coverage": 0.9991884850296844,
+          "median_m": 0.011137127876281738,
+          "p90_m": 0.033336590975522995,
+          "agreement": 0.9678122595537317
+        }
+      },
+      {
+        "frame_id": "5d53c501-adc6-4227-b160-b3b64552d723",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23366,
+          "coverage": 0.999828840393667,
+          "median_m": 0.008886218070983887,
+          "p90_m": 0.03563964366912842,
+          "agreement": 0.9650346657536591
+        },
+        "proposal": {
+          "samples": 23370,
+          "coverage": 1.0,
+          "median_m": 0.007958531379699707,
+          "p90_m": 0.027115201577544212,
+          "agreement": 0.9682071031236628
+        },
+        "selected": {
+          "samples": 23366,
+          "coverage": 0.999828840393667,
+          "median_m": 0.008886218070983887,
+          "p90_m": 0.03563964366912842,
+          "agreement": 0.9650346657536591
+        }
+      },
+      {
+        "frame_id": "a7123bec-11ca-4187-941f-b17437a4d36f",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 23704,
+          "coverage": 0.9999578148070027,
+          "median_m": 0.010949552059173584,
+          "p90_m": 0.03277360275387764,
+          "agreement": 0.9837580155248059
+        },
+        "proposal": {
+          "samples": 23702,
+          "coverage": 0.9998734444210082,
+          "median_m": 0.005540609359741211,
+          "p90_m": 0.020771265029907227,
+          "agreement": 0.982533119567969
+        },
+        "selected": {
+          "samples": 23702,
+          "coverage": 0.9998734444210082,
+          "median_m": 0.005540609359741211,
+          "p90_m": 0.020771265029907227,
+          "agreement": 0.982533119567969
+        }
+      },
+      {
+        "frame_id": "08b53e7b-0b4c-4e8c-b16f-e32043b6e7d4",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23873,
+          "coverage": 0.9911566885327576,
+          "median_m": 0.00502169132232666,
+          "p90_m": 0.03253025934100151,
+          "agreement": 1.0
+        },
+        "proposal": {
+          "samples": 23926,
+          "coverage": 0.9933571369260151,
+          "median_m": 0.003687560558319092,
+          "p90_m": 0.012120425701141357,
+          "agreement": 1.0
+        },
+        "selected": {
+          "samples": 23873,
+          "coverage": 0.9911566885327576,
+          "median_m": 0.00502169132232666,
+          "p90_m": 0.03253025934100151,
+          "agreement": 1.0
+        }
+      },
+      {
+        "frame_id": "935e17c0-5022-4245-8e7e-4292b6c82d4f",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23696,
+          "coverage": 1.0,
+          "median_m": 0.008833765983581543,
+          "p90_m": 0.035027503967285156,
+          "agreement": 0.9889010803511141
+        },
+        "proposal": {
+          "samples": 23696,
+          "coverage": 1.0,
+          "median_m": 0.004506826400756836,
+          "p90_m": 0.020943284034729004,
+          "agreement": 0.9902093180283592
+        },
+        "selected": {
+          "samples": 23696,
+          "coverage": 1.0,
+          "median_m": 0.008833765983581543,
+          "p90_m": 0.035027503967285156,
+          "agreement": 0.9889010803511141
+        }
+      },
+      {
+        "frame_id": "0da921df-f519-45fc-b69e-b638ae8557d4",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 21834,
+          "coverage": 0.9836021263176863,
+          "median_m": 0.010500967502593994,
+          "p90_m": 0.03259139135479927,
+          "agreement": 0.9615278922780984
+        },
+        "proposal": {
+          "samples": 21976,
+          "coverage": 0.9899990990179296,
+          "median_m": 0.006571829319000244,
+          "p90_m": 0.02736973762512207,
+          "agreement": 0.964188205314889
+        },
+        "selected": {
+          "samples": 21834,
+          "coverage": 0.9836021263176863,
+          "median_m": 0.010500967502593994,
+          "p90_m": 0.03259139135479927,
+          "agreement": 0.9615278922780984
+        }
+      },
+      {
+        "frame_id": "946c822d-373c-4f7f-ad59-42d757935016",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 21389,
+          "coverage": 0.9922067077979311,
+          "median_m": 0.009235620498657227,
+          "p90_m": 0.03746996074914932,
+          "agreement": 0.9341250175323764
+        },
+        "proposal": {
+          "samples": 21354,
+          "coverage": 0.9905831052558334,
+          "median_m": 0.006221890449523926,
+          "p90_m": 0.024554390460252762,
+          "agreement": 0.9401048983796947
+        },
+        "selected": {
+          "samples": 21389,
+          "coverage": 0.9922067077979311,
+          "median_m": 0.009235620498657227,
+          "p90_m": 0.03746996074914932,
+          "agreement": 0.9341250175323764
+        }
+      },
+      {
+        "frame_id": "c308b412-b118-420c-97cb-b84ebd55aaf8",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 21390,
+          "coverage": 0.9929440163401727,
+          "median_m": 0.009274274110794067,
+          "p90_m": 0.0378534309566021,
+          "agreement": 0.9604488078541374
+        },
+        "proposal": {
+          "samples": 21408,
+          "coverage": 0.9937795933525206,
+          "median_m": 0.007838964462280273,
+          "p90_m": 0.02853846549987793,
+          "agreement": 0.9596412556053812
+        },
+        "selected": {
+          "samples": 21390,
+          "coverage": 0.9929440163401727,
+          "median_m": 0.009274274110794067,
+          "p90_m": 0.0378534309566021,
+          "agreement": 0.9604488078541374
+        }
+      },
+      {
+        "frame_id": "a7d53d1c-da76-4b57-90db-1c6a70e185bb",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 21811,
+          "coverage": 0.99452829328348,
+          "median_m": 0.009832382202148438,
+          "p90_m": 0.029613733291625977,
+          "agreement": 0.9787721791756453
+        },
+        "proposal": {
+          "samples": 21797,
+          "coverage": 0.993889927499886,
+          "median_m": 0.008349061012268066,
+          "p90_m": 0.023835469037294388,
+          "agreement": 0.9786209111345598
+        },
+        "selected": {
+          "samples": 21811,
+          "coverage": 0.99452829328348,
+          "median_m": 0.009832382202148438,
+          "p90_m": 0.029613733291625977,
+          "agreement": 0.9787721791756453
+        }
+      },
+      {
+        "frame_id": "5d76ab85-5d1b-4f21-9e15-4751a9f3c7b4",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 20410,
+          "coverage": 0.9723214711066648,
+          "median_m": 0.008373677730560303,
+          "p90_m": 0.04224057123064995,
+          "agreement": 0.9456148946594807
+        },
+        "proposal": {
+          "samples": 20637,
+          "coverage": 0.9831356295555238,
+          "median_m": 0.007451891899108887,
+          "p90_m": 0.03525529056787491,
+          "agreement": 0.9369578911663518
+        },
+        "selected": {
+          "samples": 20410,
+          "coverage": 0.9723214711066648,
+          "median_m": 0.008373677730560303,
+          "p90_m": 0.04224057123064995,
+          "agreement": 0.9456148946594807
+        }
+      },
+      {
+        "frame_id": "2f11e4f1-049a-4cba-a1d4-cc64672da00c",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 21424,
+          "coverage": 0.9889217134416544,
+          "median_m": 0.012096881866455078,
+          "p90_m": 0.03646029159426689,
+          "agreement": 0.9611650485436893
+        },
+        "proposal": {
+          "samples": 21425,
+          "coverage": 0.9889678729689808,
+          "median_m": 0.007024645805358887,
+          "p90_m": 0.03591408580541611,
+          "agreement": 0.9546791131855309
+        },
+        "selected": {
+          "samples": 21425,
+          "coverage": 0.9889678729689808,
+          "median_m": 0.007024645805358887,
+          "p90_m": 0.03591408580541611,
+          "agreement": 0.9546791131855309
+        }
+      },
+      {
+        "frame_id": "9ae74145-efd4-420f-82e9-131b484b723b",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22836,
+          "coverage": 0.999343573585401,
+          "median_m": 0.00911855697631836,
+          "p90_m": 0.026849865913391113,
+          "agreement": 0.990103345594675
+        },
+        "proposal": {
+          "samples": 22813,
+          "coverage": 0.998337053083016,
+          "median_m": 0.006689786911010742,
+          "p90_m": 0.022394467145204544,
+          "agreement": 0.9879893043440143
+        },
+        "selected": {
+          "samples": 22836,
+          "coverage": 0.999343573585401,
+          "median_m": 0.00911855697631836,
+          "p90_m": 0.026849865913391113,
+          "agreement": 0.990103345594675
+        }
+      },
+      {
+        "frame_id": "e893dbb4-7889-4463-978e-a5026ce73c0c",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23552,
+          "coverage": 0.9999150887322747,
+          "median_m": 0.005403995513916016,
+          "p90_m": 0.023732375353574753,
+          "agreement": 0.9936311141304348
+        },
+        "proposal": {
+          "samples": 23540,
+          "coverage": 0.9994056211259235,
+          "median_m": 0.0057392120361328125,
+          "p90_m": 0.0235839132219553,
+          "agreement": 0.9910365335598981
+        },
+        "selected": {
+          "samples": 23552,
+          "coverage": 0.9999150887322747,
+          "median_m": 0.005403995513916016,
+          "p90_m": 0.023732375353574753,
+          "agreement": 0.9936311141304348
+        }
+      },
+      {
+        "frame_id": "d8bfafed-9f02-4f07-9585-31510f816cdb",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23536,
+          "coverage": 0.9994055201698514,
+          "median_m": 0.007987439632415771,
+          "p90_m": 0.014805912971496582,
+          "agreement": 1.0
+        },
+        "proposal": {
+          "samples": 23528,
+          "coverage": 0.9990658174097664,
+          "median_m": 0.003790557384490967,
+          "p90_m": 0.010004532523453236,
+          "agreement": 1.0
+        },
+        "selected": {
+          "samples": 23536,
+          "coverage": 0.9994055201698514,
+          "median_m": 0.007987439632415771,
+          "p90_m": 0.014805912971496582,
+          "agreement": 1.0
+        }
+      },
+      {
+        "frame_id": "b65dce08-fa43-46f1-a038-d3a4619229b2",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23094,
+          "coverage": 0.9974086550919927,
+          "median_m": 0.00760197639465332,
+          "p90_m": 0.025414466857910156,
+          "agreement": 0.9892179786957651
+        },
+        "proposal": {
+          "samples": 23094,
+          "coverage": 0.9974086550919927,
+          "median_m": 0.004511117935180664,
+          "p90_m": 0.016821885481476784,
+          "agreement": 0.989391183857279
+        },
+        "selected": {
+          "samples": 23094,
+          "coverage": 0.9974086550919927,
+          "median_m": 0.00760197639465332,
+          "p90_m": 0.025414466857910156,
+          "agreement": 0.9892179786957651
+        }
+      },
+      {
+        "frame_id": "921f001f-055e-4922-94b0-a5c7fcc9343b",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22818,
+          "coverage": 0.9988181221273802,
+          "median_m": 0.008192896842956543,
+          "p90_m": 0.020960092544555664,
+          "agreement": 0.9760715224822508
+        },
+        "proposal": {
+          "samples": 22828,
+          "coverage": 0.9992558546727949,
+          "median_m": 0.0057634711265563965,
+          "p90_m": 0.018521642312407494,
+          "agreement": 0.9777028210968985
+        },
+        "selected": {
+          "samples": 22818,
+          "coverage": 0.9988181221273802,
+          "median_m": 0.008192896842956543,
+          "p90_m": 0.020960092544555664,
+          "agreement": 0.9760715224822508
+        }
+      },
+      {
+        "frame_id": "dd449b2b-1c4a-429a-830c-09be1c8169aa",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23387,
+          "coverage": 1.0,
+          "median_m": 0.005082368850708008,
+          "p90_m": 0.02400946617126465,
+          "agreement": 0.9917475520588361
+        },
+        "proposal": {
+          "samples": 23387,
+          "coverage": 1.0,
+          "median_m": 0.0048961639404296875,
+          "p90_m": 0.023264814168214798,
+          "agreement": 0.9903792705349126
+        },
+        "selected": {
+          "samples": 23387,
+          "coverage": 1.0,
+          "median_m": 0.005082368850708008,
+          "p90_m": 0.02400946617126465,
+          "agreement": 0.9917475520588361
+        }
+      },
+      {
+        "frame_id": "035d26bb-1053-41f3-a63d-6e6b5c6e62e0",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22130,
+          "coverage": 0.9925102031663452,
+          "median_m": 0.005699634552001953,
+          "p90_m": 0.021796369925141335,
+          "agreement": 0.9882512426570267
+        },
+        "proposal": {
+          "samples": 22134,
+          "coverage": 0.9926895994976903,
+          "median_m": 0.004692792892456055,
+          "p90_m": 0.018939947709441185,
+          "agreement": 0.9884340833107437
+        },
+        "selected": {
+          "samples": 22130,
+          "coverage": 0.9925102031663452,
+          "median_m": 0.005699634552001953,
+          "p90_m": 0.021796369925141335,
+          "agreement": 0.9882512426570267
+        }
+      },
+      {
+        "frame_id": "1abd0ddb-9f16-4eee-a750-69a7c544c8ba",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22239,
+          "coverage": 0.9997752202841216,
+          "median_m": 0.007609844207763672,
+          "p90_m": 0.023400377482175827,
+          "agreement": 0.9735149961778857
+        },
+        "proposal": {
+          "samples": 22240,
+          "coverage": 0.9998201762272972,
+          "median_m": 0.005913078784942627,
+          "p90_m": 0.024461984634399414,
+          "agreement": 0.9741456834532374
+        },
+        "selected": {
+          "samples": 22239,
+          "coverage": 0.9997752202841216,
+          "median_m": 0.007609844207763672,
+          "p90_m": 0.023400377482175827,
+          "agreement": 0.9735149961778857
+        }
+      },
+      {
+        "frame_id": "39bcebec-e311-4f75-96d5-234981405cae",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 22792,
+          "coverage": 0.9941984732824427,
+          "median_m": 0.012980818748474121,
+          "p90_m": 0.0315052755177021,
+          "agreement": 0.9644173394173394
+        },
+        "proposal": {
+          "samples": 22826,
+          "coverage": 0.9956815703380589,
+          "median_m": 0.00494384765625,
+          "p90_m": 0.02949213981628418,
+          "agreement": 0.9669236835187943
+        },
+        "selected": {
+          "samples": 22826,
+          "coverage": 0.9956815703380589,
+          "median_m": 0.00494384765625,
+          "p90_m": 0.02949213981628418,
+          "agreement": 0.9669236835187943
+        }
+      },
+      {
+        "frame_id": "737b796b-7b56-4c8c-86a6-532b19330f16",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 22794,
+          "coverage": 0.9996929959212315,
+          "median_m": 0.014192938804626465,
+          "p90_m": 0.03547055646777153,
+          "agreement": 0.9766605246994823
+        },
+        "proposal": {
+          "samples": 22785,
+          "coverage": 0.9992982763913864,
+          "median_m": 0.0039708614349365234,
+          "p90_m": 0.020833110436797142,
+          "agreement": 0.9815229317533465
+        },
+        "selected": {
+          "samples": 22785,
+          "coverage": 0.9992982763913864,
+          "median_m": 0.0039708614349365234,
+          "p90_m": 0.020833110436797142,
+          "agreement": 0.9815229317533465
+        }
+      },
+      {
+        "frame_id": "1571331d-914e-4952-b4d5-181085aae0d0",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22581,
+          "coverage": 0.9955471298827264,
+          "median_m": 0.005805492401123047,
+          "p90_m": 0.02586674690246582,
+          "agreement": 0.995128647978389
+        },
+        "proposal": {
+          "samples": 22623,
+          "coverage": 0.9973988184463451,
+          "median_m": 0.004216432571411133,
+          "p90_m": 0.012550163082778454,
+          "agreement": 0.996728992618132
+        },
+        "selected": {
+          "samples": 22581,
+          "coverage": 0.9955471298827264,
+          "median_m": 0.005805492401123047,
+          "p90_m": 0.02586674690246582,
+          "agreement": 0.995128647978389
+        }
+      },
+      {
+        "frame_id": "895475ad-59cf-4c55-ac26-ad32fc2aff48",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23639,
+          "coverage": 1.0,
+          "median_m": 0.006925344467163086,
+          "p90_m": 0.02229928970336914,
+          "agreement": 0.9948390371843141
+        },
+        "proposal": {
+          "samples": 23639,
+          "coverage": 1.0,
+          "median_m": 0.00452876091003418,
+          "p90_m": 0.015866970643401146,
+          "agreement": 0.9931046152544524
+        },
+        "selected": {
+          "samples": 23639,
+          "coverage": 1.0,
+          "median_m": 0.006925344467163086,
+          "p90_m": 0.02229928970336914,
+          "agreement": 0.9948390371843141
+        }
+      },
+      {
+        "frame_id": "51319bcb-ac56-4f89-9e17-0f3749dc50e6",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23534,
+          "coverage": 0.999702646446625,
+          "median_m": 0.005940735340118408,
+          "p90_m": 0.023287976160645485,
+          "agreement": 0.984193082348942
+        },
+        "proposal": {
+          "samples": 23535,
+          "coverage": 0.9997451255256786,
+          "median_m": 0.005223631858825684,
+          "p90_m": 0.019411493092775345,
+          "agreement": 0.9844911833439558
+        },
+        "selected": {
+          "samples": 23534,
+          "coverage": 0.999702646446625,
+          "median_m": 0.005940735340118408,
+          "p90_m": 0.023287976160645485,
+          "agreement": 0.984193082348942
+        }
+      },
+      {
+        "frame_id": "d22feec1-8b75-4223-ba02-5c37341020eb",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 24018,
+          "coverage": 0.9996670273869974,
+          "median_m": 0.0070822834968566895,
+          "p90_m": 0.019456636160612106,
+          "agreement": 0.9917145474227662
+        },
+        "proposal": {
+          "samples": 24019,
+          "coverage": 0.9997086489636228,
+          "median_m": 0.005537629127502441,
+          "p90_m": 0.019435619935393333,
+          "agreement": 0.9900079104042633
+        },
+        "selected": {
+          "samples": 24018,
+          "coverage": 0.9996670273869974,
+          "median_m": 0.0070822834968566895,
+          "p90_m": 0.019456636160612106,
+          "agreement": 0.9917145474227662
+        }
+      },
+      {
+        "frame_id": "26c7255c-e56d-45c0-9002-40e4e73bc9fb",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23343,
+          "coverage": 0.9999143285500107,
+          "median_m": 0.007331132888793945,
+          "p90_m": 0.029044294729828835,
+          "agreement": 0.9888617572719873
+        },
+        "proposal": {
+          "samples": 23343,
+          "coverage": 0.9999143285500107,
+          "median_m": 0.004840850830078125,
+          "p90_m": 0.018721390515565872,
+          "agreement": 0.9929743392023305
+        },
+        "selected": {
+          "samples": 23343,
+          "coverage": 0.9999143285500107,
+          "median_m": 0.007331132888793945,
+          "p90_m": 0.029044294729828835,
+          "agreement": 0.9888617572719873
+        }
+      },
+      {
+        "frame_id": "c86bce97-2867-40fb-9a35-8870aaf4ba98",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23430,
+          "coverage": 0.9994028322811807,
+          "median_m": 0.0068503618240356445,
+          "p90_m": 0.020657170563936234,
+          "agreement": 0.9959880495091763
+        },
+        "proposal": {
+          "samples": 23417,
+          "coverage": 0.9988483193994199,
+          "median_m": 0.005025386810302734,
+          "p90_m": 0.015826892107725143,
+          "agreement": 0.9951317418969124
+        },
+        "selected": {
+          "samples": 23430,
+          "coverage": 0.9994028322811807,
+          "median_m": 0.0068503618240356445,
+          "p90_m": 0.020657170563936234,
+          "agreement": 0.9959880495091763
+        }
+      },
+      {
+        "frame_id": "8adbbe8c-3ccd-4f6d-8313-d78ca6f4f20a",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23250,
+          "coverage": 1.0,
+          "median_m": 0.007894635200500488,
+          "p90_m": 0.01817305013537407,
+          "agreement": 0.9897634408602151
+        },
+        "proposal": {
+          "samples": 23250,
+          "coverage": 1.0,
+          "median_m": 0.005922079086303711,
+          "p90_m": 0.016202783212065697,
+          "agreement": 0.9889032258064516
+        },
+        "selected": {
+          "samples": 23250,
+          "coverage": 1.0,
+          "median_m": 0.007894635200500488,
+          "p90_m": 0.01817305013537407,
+          "agreement": 0.9897634408602151
+        }
+      },
+      {
+        "frame_id": "f12207d7-d818-4b8e-b39a-e6aa5f4fe3ad",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 23614,
+          "coverage": 1.0,
+          "median_m": 0.00869053602218628,
+          "p90_m": 0.03012237511575222,
+          "agreement": 0.9935207927500636
+        },
+        "proposal": {
+          "samples": 23614,
+          "coverage": 1.0,
+          "median_m": 0.0037559866905212402,
+          "p90_m": 0.009750699624419212,
+          "agreement": 0.9991953925637334
+        },
+        "selected": {
+          "samples": 23614,
+          "coverage": 1.0,
+          "median_m": 0.00869053602218628,
+          "p90_m": 0.03012237511575222,
+          "agreement": 0.9935207927500636
+        }
+      },
+      {
+        "frame_id": "9546d388-8ebe-4bf1-9802-6cee1116e2b0",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed"
+        ],
+        "before": {
+          "samples": 23441,
+          "coverage": 0.9999573415237608,
+          "median_m": 0.016227245330810547,
+          "p90_m": 0.16933822631835938,
+          "agreement": 0.8818309799070005
+        },
+        "proposal": {
+          "samples": 23441,
+          "coverage": 0.9999573415237608,
+          "median_m": 0.005785226821899414,
+          "p90_m": 0.14511346817016602,
+          "agreement": 0.8858410477368713
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "a481a5af-d931-4d95-94d8-375e4e840ca3",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed",
+          "local_depth_regression"
+        ],
+        "before": {
+          "samples": 23567,
+          "coverage": 0.9995334633980829,
+          "median_m": 0.10591399669647217,
+          "p90_m": 0.21335239708423615,
+          "agreement": 0.48266644036152245
+        },
+        "proposal": {
+          "samples": 23549,
+          "coverage": 0.9987700398676732,
+          "median_m": 0.008087396621704102,
+          "p90_m": 0.060475874692201614,
+          "agreement": 0.9091256528939657
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "b19c8eb3-01b1-4e61-bd16-2d4a60d10351",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 23119,
+          "coverage": 0.999783774433489,
+          "median_m": 0.029378890991210938,
+          "p90_m": 0.1768369972705841,
+          "agreement": 0.5420217137419439
+        },
+        "proposal": {
+          "samples": 23117,
+          "coverage": 0.9996972842068846,
+          "median_m": 0.005106687545776367,
+          "p90_m": 0.022600363940000534,
+          "agreement": 0.982091101786564
+        },
+        "selected": {
+          "samples": 23117,
+          "coverage": 0.9996972842068846,
+          "median_m": 0.005106687545776367,
+          "p90_m": 0.022600363940000534,
+          "agreement": 0.982091101786564
+        }
+      },
+      {
+        "frame_id": "223b745c-46cf-455b-a065-3937b40f8cbc",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed",
+          "local_depth_regression"
+        ],
+        "before": {
+          "samples": 23599,
+          "coverage": 0.9997881714963566,
+          "median_m": 0.030872702598571777,
+          "p90_m": 0.18320569396018982,
+          "agreement": 0.595321835671003
+        },
+        "proposal": {
+          "samples": 23604,
+          "coverage": 1.0,
+          "median_m": 0.005692601203918457,
+          "p90_m": 0.040989555418491364,
+          "agreement": 0.915946449754279
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "8c2f552c-21ce-4f28-965b-2d0d425a4488",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed"
+        ],
+        "before": {
+          "samples": 22603,
+          "coverage": 0.9882821039744655,
+          "median_m": 0.03247237205505371,
+          "p90_m": 0.21100178360939026,
+          "agreement": 0.6145644383488917
+        },
+        "proposal": {
+          "samples": 22521,
+          "coverage": 0.984696777578593,
+          "median_m": 0.009153366088867188,
+          "p90_m": 0.05211961269378662,
+          "agreement": 0.9183872829803295
+        },
+        "selected": null
+      },
+      {
+        "frame_id": "3318e5a4-0dc7-4ede-be85-cacc7a592c9f",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22180,
+          "coverage": 0.9996394447449072,
+          "median_m": 0.011225104331970215,
+          "p90_m": 0.04376695305109024,
+          "agreement": 0.966546438232642
+        },
+        "proposal": {
+          "samples": 22169,
+          "coverage": 0.9991436812691545,
+          "median_m": 0.00853729248046875,
+          "p90_m": 0.02810077741742134,
+          "agreement": 0.9778068473995218
+        },
+        "selected": {
+          "samples": 22180,
+          "coverage": 0.9996394447449072,
+          "median_m": 0.011225104331970215,
+          "p90_m": 0.04376695305109024,
+          "agreement": 0.966546438232642
+        }
+      },
+      {
+        "frame_id": "ce352eb6-f454-4957-8878-72b6076c3be1",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22310,
+          "coverage": 0.9997759354694152,
+          "median_m": 0.00842517614364624,
+          "p90_m": 0.026245390996336937,
+          "agreement": 0.9872254594352309
+        },
+        "proposal": {
+          "samples": 22309,
+          "coverage": 0.9997311225632982,
+          "median_m": 0.007513523101806641,
+          "p90_m": 0.026550721377134323,
+          "agreement": 0.9875386615267381
+        },
+        "selected": {
+          "samples": 22310,
+          "coverage": 0.9997759354694152,
+          "median_m": 0.00842517614364624,
+          "p90_m": 0.026245390996336937,
+          "agreement": 0.9872254594352309
+        }
+      },
+      {
+        "frame_id": "533378db-c615-4197-a431-3fd895477557",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 20288,
+          "coverage": 0.9961211764128247,
+          "median_m": 0.009838223457336426,
+          "p90_m": 0.040671467781066895,
+          "agreement": 0.9673205835962145
+        },
+        "proposal": {
+          "samples": 20269,
+          "coverage": 0.9951882947905927,
+          "median_m": 0.0065670013427734375,
+          "p90_m": 0.03657831996679306,
+          "agreement": 0.9746410775075238
+        },
+        "selected": {
+          "samples": 20288,
+          "coverage": 0.9961211764128247,
+          "median_m": 0.009838223457336426,
+          "p90_m": 0.040671467781066895,
+          "agreement": 0.9673205835962145
+        }
+      },
+      {
+        "frame_id": "bee76417-7011-4a1b-a305-e93b0636d4b5",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 21666,
+          "coverage": 0.9976975501934058,
+          "median_m": 0.007927298545837402,
+          "p90_m": 0.03003227710723877,
+          "agreement": 0.9738761192652081
+        },
+        "proposal": {
+          "samples": 21667,
+          "coverage": 0.9977435991895377,
+          "median_m": 0.00461125373840332,
+          "p90_m": 0.022409701719880104,
+          "agreement": 0.978631097983108
+        },
+        "selected": {
+          "samples": 21666,
+          "coverage": 0.9976975501934058,
+          "median_m": 0.007927298545837402,
+          "p90_m": 0.03003227710723877,
+          "agreement": 0.9738761192652081
+        }
+      },
+      {
+        "frame_id": "5eb4d83e-ed65-4126-a04b-ae53897b0233",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 21125,
+          "coverage": 0.9993377170159421,
+          "median_m": 0.01740741729736328,
+          "p90_m": 0.0448724739253521,
+          "agreement": 0.9781301775147929
+        },
+        "proposal": {
+          "samples": 21121,
+          "coverage": 0.9991484933062112,
+          "median_m": 0.005841970443725586,
+          "p90_m": 0.024541854858398438,
+          "agreement": 0.9802566166374698
+        },
+        "selected": {
+          "samples": 21121,
+          "coverage": 0.9991484933062112,
+          "median_m": 0.005841970443725586,
+          "p90_m": 0.024541854858398438,
+          "agreement": 0.9802566166374698
+        }
+      },
+      {
+        "frame_id": "31827066-f301-40d4-83fd-a7b5fd20ec45",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 19274,
+          "coverage": 0.9944278196264575,
+          "median_m": 0.016828536987304688,
+          "p90_m": 0.04876508563756943,
+          "agreement": 0.9514371692435405
+        },
+        "proposal": {
+          "samples": 19264,
+          "coverage": 0.9939118769992776,
+          "median_m": 0.01498568058013916,
+          "p90_m": 0.05257239192724228,
+          "agreement": 0.9506333056478405
+        },
+        "selected": {
+          "samples": 19274,
+          "coverage": 0.9944278196264575,
+          "median_m": 0.016828536987304688,
+          "p90_m": 0.04876508563756943,
+          "agreement": 0.9514371692435405
+        }
+      },
+      {
+        "frame_id": "cf1369b6-f64f-4790-92d5-b3a58c5f6d15",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 15815,
+          "coverage": 0.9772600877464005,
+          "median_m": 0.014519691467285156,
+          "p90_m": 0.06642265617847443,
+          "agreement": 0.9092001264622194
+        },
+        "proposal": {
+          "samples": 15832,
+          "coverage": 0.9783105728233331,
+          "median_m": 0.013834714889526367,
+          "p90_m": 0.06580202281475067,
+          "agreement": 0.9115083375442142
+        },
+        "selected": {
+          "samples": 15815,
+          "coverage": 0.9772600877464005,
+          "median_m": 0.014519691467285156,
+          "p90_m": 0.06642265617847443,
+          "agreement": 0.9092001264622194
+        }
+      },
+      {
+        "frame_id": "19e23887-1ab5-4bd5-8385-a307a5faa5f8",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 19365,
+          "coverage": 0.9938924245534798,
+          "median_m": 0.014197587966918945,
+          "p90_m": 0.036745645105838776,
+          "agreement": 0.9808933643170669
+        },
+        "proposal": {
+          "samples": 19363,
+          "coverage": 0.9937897762266475,
+          "median_m": 0.007531642913818359,
+          "p90_m": 0.032671403139829636,
+          "agreement": 0.9795486236636884
+        },
+        "selected": {
+          "samples": 19363,
+          "coverage": 0.9937897762266475,
+          "median_m": 0.007531642913818359,
+          "p90_m": 0.032671403139829636,
+          "agreement": 0.9795486236636884
+        }
+      },
+      {
+        "frame_id": "a816b0e7-d08e-4604-88e2-b43ebacca603",
+        "status": "accepted_refined",
+        "reasons": [],
+        "before": {
+          "samples": 20291,
+          "coverage": 0.9919339069221744,
+          "median_m": 0.021844863891601562,
+          "p90_m": 0.05285513401031494,
+          "agreement": 0.9591444482775615
+        },
+        "proposal": {
+          "samples": 20276,
+          "coverage": 0.9912006257332812,
+          "median_m": 0.009768128395080566,
+          "p90_m": 0.04667246341705322,
+          "agreement": 0.9585223910041428
+        },
+        "selected": {
+          "samples": 20276,
+          "coverage": 0.9912006257332812,
+          "median_m": 0.009768128395080566,
+          "p90_m": 0.04667246341705322,
+          "agreement": 0.9585223910041428
+        }
+      },
+      {
+        "frame_id": "29368ab7-d95d-4083-a90a-33ca9699edb2",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement",
+          "local_depth_regression"
+        ],
+        "before": {
+          "samples": 21855,
+          "coverage": 0.9990400438837082,
+          "median_m": 0.007432699203491211,
+          "p90_m": 0.03704829141497612,
+          "agreement": 0.9941889727751086
+        },
+        "proposal": {
+          "samples": 21843,
+          "coverage": 0.9984914975315414,
+          "median_m": 0.005555629730224609,
+          "p90_m": 0.0324886329472065,
+          "agreement": 0.971524058050634
+        },
+        "selected": {
+          "samples": 21855,
+          "coverage": 0.9990400438837082,
+          "median_m": 0.007432699203491211,
+          "p90_m": 0.03704829141497612,
+          "agreement": 0.9941889727751086
+        }
+      },
+      {
+        "frame_id": "33577300-221f-467e-b95e-acf50010608a",
+        "status": "accepted_raw",
+        "reasons": [
+          "insufficient_held_out_improvement"
+        ],
+        "before": {
+          "samples": 22512,
+          "coverage": 0.993424826794934,
+          "median_m": 0.008427739143371582,
+          "p90_m": 0.03883213922381401,
+          "agreement": 0.9429193319118693
+        },
+        "proposal": {
+          "samples": 22497,
+          "coverage": 0.9927628966065045,
+          "median_m": 0.003974437713623047,
+          "p90_m": 0.03624682500958443,
+          "agreement": 0.9464817531226386
+        },
+        "selected": {
+          "samples": 22512,
+          "coverage": 0.993424826794934,
+          "median_m": 0.008427739143371582,
+          "p90_m": 0.03883213922381401,
+          "agreement": 0.9429193319118693
+        }
+      },
+      {
+        "frame_id": "b441e1b4-4056-4c8a-8c07-18b425cb1d2c",
+        "status": "rejected",
+        "reasons": [
+          "depth_validation_failed"
+        ],
+        "before": {
+          "samples": 21062,
+          "coverage": 0.9819114219114219,
+          "median_m": 0.026263117790222168,
+          "p90_m": 0.1553022861480713,
+          "agreement": 0.8074256955654734
+        },
+        "proposal": {
+          "samples": 21044,
+          "coverage": 0.9810722610722611,
+          "median_m": 0.012576818466186523,
+          "p90_m": 0.1309901773929596,
+          "agreement": 0.8433757840714693
+        },
+        "selected": null
+      }
+    ]
+  },
+  "sam": {
+    "equal_fields": [
+      "model",
+      "parameters",
+      "source_manifest_sha256",
+      "detection_count",
+      "class_counts",
+      "selected_count",
+      "processed_count"
+    ],
+    "first_cache": {
+      "hits": 0,
+      "misses": 462,
+      "prefetched": 0,
+      "invalidated": 0
+    },
+    "final_cache": {
+      "hits": 462,
+      "misses": 0,
+      "prefetched": 462,
+      "invalidated": 0
+    },
+    "timings": {
+      "e25b6cb6-5b41-41ae-ace0-0bb225acdf78": {
+        "total_seconds": 4238.525528,
+        "segmentation_stage_seconds": 3668.473201
+      },
+      "4129394c-0d20-4c1c-98f1-30d472ab9191": {
+        "total_seconds": 197.651536,
+        "segmentation_stage_seconds": null
+      },
+      "54a47af7-ec32-4275-aee2-d07bd92550b1": {
+        "total_seconds": 818.094529,
+        "segmentation_stage_seconds": 161.21002
+      }
+    }
+  },
+  "limits": [
+    "One development capture; 77 correlated frames, not 77 independent trials",
+    "Held-out pixels share the reconstruction source; residual is not independent physical accuracy",
+    "Retained cohort is selected by gates; report coverage and rejected rows alongside improvement",
+    "Not a rerun of the full historical pipeline; saved raw/selected diagnostic branches",
+    "Historical cold/warm timings do not isolate all environmental factors"
+  ]
+}
