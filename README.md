@@ -18,7 +18,7 @@
 |---|---|
 | Event | [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) · Track 2 |
 | Hackathon dates | 26 October–4 November 2026 |
-| Team development period | 27 October–3 November 2026 (implementation history in this repository) |
+| Team development period | 27 October–4 November 2026 (implementation history in this repository) |
 | Meta models | **Muse Spark 1.3 · SAM 3.1 · Muse Voice Transcribe 1.0** |
 | Creators | Tykhin Biriukov, Egor Pichugin and Oleg Kulikov |
 
