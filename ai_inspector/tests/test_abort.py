@@ -25,7 +25,7 @@ class AbortTests(unittest.TestCase):
 
     def test_abort_auth_idempotency_and_device_event(self):
         self.assertEqual(self.client.post(self.path+'/abort').status_code,401)
-        self.assertEqual(self.client.post(self.path+'/abort',headers={'Authorization':'Bearer device'}).status_code,403)
+        self.assertEqual(self.client.post(self.path+'/abort',headers={'Authorization':'Bearer invalid'}).status_code,401)
         first = self.client.post(self.path+'/abort',headers=self.headers)
         self.assertEqual(first.status_code,200,first.text)
         self.assertEqual(first.json()['capture_state'],'cancelled')
@@ -36,6 +36,20 @@ class AbortTests(unittest.TestCase):
         self.assertEqual(first.json()['revision'],self.session['revision']+1)
         self.assertEqual(self.client.post(self.path+'/capture-start',headers={'Authorization':'Bearer device'},json={
             'schema_version':'0.1','operation_id':str(uuid4()),'device':{'name':'test','os_version':'test','app_version':'test'}}).status_code,409)
+
+    def test_device_can_abort_only_its_assigned_session(self):
+        other = self.client.post('/v1/capture-sessions', headers=self.headers, json={
+            'schema_version': '0.1', 'request_id': str(uuid4()), 'device_id': 'iphone-1'}).json()
+        other['device_id'] = 'iphone-other'
+        with self.service.database.transaction() as db:
+            db.execute('UPDATE sessions SET device_id=?,data=? WHERE session_id=?',
+                       ('iphone-other', canonical_json(other), other['session_id']))
+        device = {'Authorization': 'Bearer device'}
+        self.assertEqual(self.client.post('/v1/sessions/' + other['session_id'] + '/abort', headers=device).status_code, 403)
+        first = self.client.post(self.path + '/abort', headers=device)
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.json()['capture_state'], 'cancelled')
+        self.assertEqual(self.client.post(self.path + '/abort', headers=device).json(), first.json())
 
     def test_abort_revokes_worker_and_preserves_evidence(self):
         session = self.session | {'capture_state':'sealed','processing_state':'queued_geometry',

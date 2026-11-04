@@ -10,14 +10,18 @@ Python 3.12+ is required. From this directory in PowerShell, create the environm
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m uvicorn ai_inspector.main:app --app-dir src --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps -e .
 ```
 
 `--app-dir src` loads the current source tree directly, including when the package
 has not been installed into the selected environment.
 
-Create an ignored `.env` from [.env.example](.env.example) if needed. Set distinct random operator/device tokens; preserve existing credentials and data on restart. Settings load from the working directory's `.env`, with process environment taking precedence. The example lists configuration names, not working credentials. A fresh clone is not preconfigured.
+Before starting Uvicorn, create an ignored `.env` from [.env.example](.env.example) if needed. Set distinct random operator/device tokens and `INSPECTOR_BROWSER_ORIGIN=http://127.0.0.1:8000` for the local command above; preserve existing credentials and data on restart. Settings load from the working directory's `.env`, with process environment taking precedence. The example lists configuration names, not working credentials. A fresh clone is not preconfigured. Use the exact public HTTPS origin for hosting; HTTP browser sessions are restricted to loopback.
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn ai_inspector.main:app --app-dir src --host 127.0.0.1 --port 8000
+```
 
 Open `/` for the operational console or `/ui/demo.html` for the document/chat workspace. HTTP request schemas are generated at `/docs` and `/openapi.json`; [`api.py`](src/ai_inspector/api.py) and its Pydantic models are authoritative for fields and limits. Check `/v1/capabilities` for the running instance's limits/configuration; configuration is not a successful service call.
 
@@ -44,6 +48,31 @@ Native development defaults to SQLite and local immutable BIM blobs under `INSPE
 The optional [Mac hosting helper](scripts/host_mac.py) supports `start/status/restart/stop`; [start-remote-test.ps1](scripts/start-remote-test.ps1) is a temporary tunnel workflow. Use these only when a temporary test host is intended. Read any current private connection files from that host; the repository does not establish that a process or tunnel is running.
 
 ## Verification
+
+From the repository root, run the published offline subset with the installed Inspector environment. After the PowerShell setup above:
+
+```powershell
+.\ai_inspector\.venv\Scripts\python.exe -B -m unittest discover -s ai_inspector/tests -v
+```
+
+For a fresh macOS/Linux clone, use Python 3.12 and the same pinned dependencies:
+
+```sh
+python3.12 -m venv ai_inspector/.venv
+ai_inspector/.venv/bin/python -m pip install -r ai_inspector/requirements.lock
+ai_inspector/.venv/bin/python -m pip install --no-deps ./ai_inspector
+ai_inspector/.venv/bin/python -B -m unittest discover -s ai_inspector/tests -v
+```
+
+On either platform, the JavaScript subset is:
+
+```sh
+node --test ai_inspector/tests/web/demo-comparison.test.cjs ai_inspector/cloudflare/frontend/index.test.mjs
+```
+
+It covers browser-cookie ownership/origin checks, user image submission and saved-message replay, capture cancellation, storage integrity, reopen and existing adapters. Model/storage responses in these checks are fixtures. The PostgreSQL integration case is skipped unless `INSPECTOR_TEST_POSTGRES_URL` points to a disposable test database. Node.js 24 is used in CI for the JavaScript checks.
+
+[Offline regression CI](../.github/workflows/offline-checks.yml) runs this subset, the Localization tests and selected Geometry projection/plane/visibility invariants in separate Python 3.12 environments. It runs on pull requests and non-main pushes; main invokes the same jobs before the web deployment. This does not gate the separate GCP backend updater and does not run paid model calls, a phone capture, native full reconstruction or all Geometry tests.
 
 The optional companion workspace keeps the full Codex regression suite, fixtures and reports outside this checkout at `local-checks/inspector/`; its `run-tests.ps1` imports this backend. If present, run it from the companion root. A plain clone may not contain these files. Tracked teammate tests in this repository are only a subset; do not describe their discovery command or historical counts as a full current suite. Verification data and new assistant tests stay outside Git, per [AGENTS](../AGENTS.md).
 

@@ -1,36 +1,102 @@
+"""Public browser cookies, conversation ownership and own-image submission."""
+import io
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
+from PIL import Image
+
 from ai_inspector.api import create_app
 from ai_inspector.config import Settings
-from ai_inspector.public_demo import mint, verify
+from ai_inspector import browser_session, public_access
+
 
 class PublicDemoTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory()
-        self.settings=Settings(Path(self.tmp.name),'private-operator','private-device',public_demo_enabled=True,saved_demo_dir='/unused')
-        self.patch=patch('ai_inspector.saved_demo.configure');self.patch.start()
-        self.c=TestClient(create_app(self.settings,background_worker=False))
-    def tearDown(self):self.patch.stop();self.tmp.cleanup()
-    def token(self):
-        r=self.c.post('/v1/demo/session');self.assertEqual(r.status_code,200)
-        return r.json()['token']
-    def test_tampering_and_private_access(self):
-        token=self.token();self.assertIsNotNone(verify(self.settings,token))
-        self.assertIsNone(verify(self.settings,token+'x'))
-        self.assertEqual(self.c.get('/v1/operator/overview',headers={'Authorization':'Bearer '+token}).status_code,401)
-        self.assertEqual(self.c.get('/public-demo/v1/operator/overview',headers={'Authorization':'Bearer private-operator'}).status_code,401)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.settings = Settings(Path(self.tmp.name), 'private-operator', 'private-device')
+        self.app = create_app(self.settings, background_worker=False)
+        self.origin = self.settings.browser_origin
+        self.headers = {'Origin': self.origin}
+        self.c = self.client()
+        self.cookie = browser_session.cookie_settings(self.settings, public=True)[0]
+
+    def client(self, app=None):
+        client = TestClient(app or self.app, base_url=self.origin)
+        self.addCleanup(client.close)
+        return client
+
+    def bootstrap(self, client=None):
+        client = client or self.c
+        response = client.post('/v1/demo/session', headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {'authenticated': True, 'mode': 'public'})
+        return client.cookies.get(self.cookie)
+
+    def chat(self, client=None):
+        response = (client or self.c).post('/v1/chats', headers=self.headers, json={
+            'schema_version': '0.1', 'request_id': str(uuid4()), 'room_id': 'demo'})
+        self.assertEqual(response.status_code, 201, response.text)
+        return response.json()['chat_id']
+
+    def test_cookie_integrity_and_private_access(self):
+        token = self.bootstrap()
+        self.assertIsNotNone(public_access.visitor(self.settings, token))
+        self.assertIsNone(public_access.visitor(self.settings, token + 'x'))
+        self.assertEqual(self.bootstrap(), token)
+        response = self.c.post('/v1/demo/session', headers=self.headers)
+        for attribute in ('HttpOnly', 'Secure', 'SameSite=strict', 'Path=/'):
+            self.assertIn(attribute, response.headers['set-cookie'])
+        self.assertNotIn('Domain=', response.headers['set-cookie'])
+        self.assertEqual(self.c.get('/v1/operator/backlog').status_code, 403)
+        self.assertEqual(self.c.get('/v1/operator/overview', headers={
+            'Authorization': 'Bearer ' + token}).status_code, 401)
+        self.c.cookies.clear()
+        self.c.cookies.set(self.cookie, token + 'x')
+        self.assertEqual(self.c.get('/v1/chats').status_code, 401)
+
     def test_visitor_isolation(self):
-        from uuid import uuid4
-        a,b=self.token(),self.token();headers=lambda t:{'Authorization':'Bearer '+t}
-        body={'schema_version':'0.1','request_id':str(uuid4()),'room_id':'demo'}
-        r=self.c.post('/public-demo/v1/chats',json=body,headers=headers(a));self.assertEqual(r.status_code,201,r.text)
-        chat=r.json()['chat_id']
-        self.assertEqual(self.c.get('/public-demo/v1/chats/'+chat,headers=headers(b)).status_code,404)
-        self.assertEqual(self.c.get('/public-demo/v1/chats',headers=headers(b)).json()['chats'],[])
-        self.assertEqual(self.c.get('/public-demo/v1/operator/backlog',headers=headers(a)).status_code,403)
-    def test_bootstrap_is_opt_in(self):
-        s=Settings(Path(self.tmp.name)/'off','op-off','dev-off')
-        self.assertEqual(TestClient(create_app(s,background_worker=False)).post('/v1/demo/session').status_code,404)
+        self.bootstrap(); chat = self.chat()
+        other = self.client(); self.bootstrap(other)
+        self.assertEqual(other.get('/v1/chats/' + chat).status_code, 403)
+        self.assertEqual(other.get('/v1/chats').json()['chats'], [])
+        self.assertEqual(self.c.get('/v1/chats/' + chat).status_code, 200)
+
+    def test_bootstrap_and_mutations_require_exact_origin(self):
+        self.assertEqual(self.c.post('/v1/demo/session').status_code, 403)
+        self.assertEqual(self.c.post('/v1/demo/session', headers={'Origin': 'https://other.example'}).status_code, 403)
+        self.bootstrap()
+        body = {'schema_version': '0.1', 'request_id': str(uuid4()), 'room_id': 'demo'}
+        for headers in ({}, {'Origin': 'https://other.example'}):
+            self.assertEqual(self.c.post('/v1/chats', headers=headers, json=body).status_code, 403)
+        self.assertEqual(self.c.post('/v1/chats', headers=self.headers, json=body).status_code, 201)
+
+    def test_own_image_reaches_model_and_completed_request_reopens(self):
+        token = self.bootstrap(); chat = self.chat(); file_id = str(uuid4())
+        raw = io.BytesIO(); Image.new('RGB', (32, 24), 'red').save(raw, format='PNG')
+        response = self.c.post(f'/v1/chats/{chat}/files', headers=self.headers,
+            data={'file_id': file_id}, files={'file': ('my-site.png', raw.getvalue(), 'image/png')})
+        self.assertEqual(response.status_code, 200, response.text)
+        calls = []
+        class Model:
+            def complete(self, messages, tools):
+                calls.append(messages)
+                return {'role': 'assistant', 'content': 'Offline fixture: image received.'}
+        self.app.state.service.agent.model = Model()
+        body = {'schema_version': '0.1', 'request_id': str(uuid4()),
+                'text': 'Describe my site photo.', 'file_ids': [file_id]}
+        response = self.c.post(f'/v1/chats/{chat}/messages', headers=self.headers, json=body)
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()['status'], 'completed', response.text)
+        parts = next(m['content'] for m in reversed(calls[0]) if m['role'] == 'user')
+        self.assertEqual(sum(p['type'] == 'image_url' for p in parts), 1)
+        self.assertEqual(self.c.post(f'/v1/chats/{chat}/messages', headers=self.headers, json=body).status_code, 200)
+        self.assertEqual(len(calls), 1)
+        reopened = self.client(create_app(self.settings, background_worker=False))
+        reopened.cookies.set(self.cookie, token)
+        response = reopened.get('/v1/chats/' + chat)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['runs'][-1]['reply'], 'Offline fixture: image received.')

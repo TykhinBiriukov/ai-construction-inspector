@@ -14,7 +14,7 @@ class ProjectionCameraTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.session=Path(self.tmp.name)
+        self.session=Path(self.tmp.name).resolve()
         self.metadata={'frame_id':'f','intrinsics':{'K':np.eye(3).tolist()},
             'pose':{'T_world_from_camera':np.eye(4).tolist()}}
 

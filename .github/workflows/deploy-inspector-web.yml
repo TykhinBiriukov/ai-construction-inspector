@@ -1,12 +1,13 @@
-name: Deploy Inspector backend and web
+name: Check Inspector and deploy web
 
 on:
   push:
     branches: [main]
     paths:
-      - ai_inspector/src/ai_inspector/**
-      - ai_inspector/cloudflare/**
-      - ai_inspector/viewer/**
+      - ai_inspector/**
+      - localization_service/**
+      - geometry-engine/**
+      - .github/workflows/offline-checks.yml
       - .github/workflows/deploy-inspector-web.yml
   workflow_dispatch:
 
@@ -18,7 +19,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  checks:
+    uses: ./.github/workflows/offline-checks.yml
+
   deploy:
+    needs: checks
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
