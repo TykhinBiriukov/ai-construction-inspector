@@ -136,5 +136,27 @@
       "unknown_count": 83
     }
   ],
-  "scope": "Six processed survey dates; not an independent field or held-out evaluation. Week 7 prepared scene excluded."
+  "scope": "Six processed survey dates; not an independent field or held-out evaluation. Week 7 prepared scene excluded.",
+  "metric_definitions": {
+    "visible_recall": {
+      "quantity": "historical_per_survey_detection_recall",
+      "numerator": "correctly reported present elements",
+      "denominator": "evaluator-labelled existing elements visible in at least two photos",
+      "is_construction_progress": false,
+      "is_overall_workflow_accuracy": false
+    },
+    "unknown_count": {
+      "quantity": "current-survey uncertain or occluded product states",
+      "is_error_count": false
+    },
+    "viewer_stage_progress": {
+      "source": "resources/progress4d/replay/timeline.json report.snapshots[].tasks[]",
+      "formula": "100 * (currently_observed_present + retained_past_present) / total_products",
+      "denominator": "all planned IFC products assigned to the stage",
+      "unit": "percent of planned stage element count",
+      "rounding": "whole percent in viewer",
+      "is_model_accuracy": false,
+      "historical_confirmation_dates_preserved": true
+    }
+  }
 }

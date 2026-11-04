@@ -28,6 +28,45 @@ No mandatory human review stage is imposed. Unknown and occluded work stay expli
   unresolved predecessors are explicitly assumed ready. It is labelled as a conditional scenario,
   not a measured production rate. No work-calendar/resource-leveling claim is made.
 
+## Reading progress and evaluation metrics
+
+The viewer's stage percentage is a construction-progress estimate by **element count**:
+
+```text
+confirmed stage work = currently_observed_present + retained_past_present
+stage progress (%) = 100 × confirmed stage work / total_products
+```
+
+`total_products` is the full list of planned IFC products assigned to that stage,
+not just products visible in this survey. The viewer rounds to a whole percent.
+Earlier confirmations retain their evidence dates; a new observed removal updates
+the state. Covered work does not lose its earlier confirmation just because a
+later survey cannot see it. This is a count-based estimate for the defined stage,
+not an area-, cost- or labour-weighted percentage for the whole project.
+
+Examples from the [saved timeline](../resources/progress4d/replay/timeline.json):
+
+| Survey and stage | Current + retained confirmations | Planned elements | Stage progress |
+|---|---:|---:|---:|
+| Week 4, framing | 0 + 44 | 44 | 100% |
+| Week 5, services | 1 + 19 | 22 | 91% (20/22) |
+| Week 6, flooring | 116 + 0 | 120 | 97% (116/120) |
+
+`unknown` counts planned elements without a current or retained confirmation.
+It is an evidence state, not a count of incorrect model answers. `currently_observed_absent`
+is a separate state. `direct_coverage` describes current survey observations and
+is used for quantity/forecast eligibility; it is not construction completion.
+See the [temporal aggregation](temporal.py) and [stage-card calculation](web/viewer.js).
+
+The [historical evaluator](../docs/evidence/2026-11-03/README.md#3-progress4d-construction-progress-and-evaluator-coverage)
+has a separate field, `visible_recall`: correctly reported present elements divided
+by evaluator-labelled existing elements visible in at least two photos. It is a
+per-survey diagnostic, not the stage-card percentage, not cumulative confirmed work,
+and not an overall workflow accuracy score. For example, its week 4 value of 22%
+coexists with 100% confirmed framing above because the quantities and denominators
+differ. Evaluating the whole workflow requires dated state transitions, retained
+confirmations, removals and evidence availability in addition to that diagnostic.
+
 ## Run locally
 
 Use Python3.12 with the pinned `requirements.lock` in a virtual environment. Native

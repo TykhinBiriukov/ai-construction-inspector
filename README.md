@@ -289,6 +289,8 @@ Progress4D combines overlapping photo surveys, an IFC work schedule and Meta vis
 
 The progress viewer brings these dated results into the Inspector workspace through a scoped bridge. Versioned evidence cards, source dates and separate material/installation fields make the reasoning behind each status inspectable.
 
+**Reading the percentages:** each stage card shows **confirmed work / all planned IFC elements in that stage**, including retained earlier observations. It describes construction progress, not model accuracy or workflow quality. For example, week 4 framing is **44/44 = 100%**, even though the current survey no longer directly sees the covered frame. “Unknown” means no current or retained confirmation for that planned element; it does not mean a model error or proven absence. The separate archived `visible_recall` field uses a different denominator and is not displayed as stage progress. [Formulas and worked examples](progress4d_service/README.md#reading-progress-and-evaluation-metrics).
+
 [Service, supported inputs and setup](progress4d_service/README.md) · [Pipeline](progress4d_service/pipeline.py) · [Surface adapter](progress4d_service/surface.py) · [Visual assessment](progress4d_service/perception.py) · [Temporal logic](progress4d_service/temporal.py) · [Inspector integration](ai_inspector/docs/progress4d.md)
 
 ### iPhone capture and Localization: bring physical observations into the workflow

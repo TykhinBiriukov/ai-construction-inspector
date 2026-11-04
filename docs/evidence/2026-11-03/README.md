@@ -133,9 +133,9 @@ Original drawing/photo source images are not included in this release. Their has
 
 ## 3. Progress4D: construction progress and evaluator coverage
 
-**Two different quantities must be kept separate.** Construction progress describes installed work relative to the planned task quantities. The table below instead describes **visible-element detection recall in a historical development evaluation**. It is not the percentage of work completed by builders, and it is not a general accuracy score for the whole product.
+**The demo's percentages describe construction progress.** For each stage, the viewer calculates `100 × (currently_observed_present + retained_past_present) / total_products`, using all planned IFC elements in that stage. Earlier confirmations remain attached to their observation dates. Week 4 framing is **44/44 = 100%**; week 6 flooring is **116/120 ≈ 97%**. An `unknown` planned element lacks confirmation; that state alone is neither an incorrect model answer nor a proven absence. [Calculation, examples and evidence-state definitions](../../../progress4d_service/README.md#reading-progress-and-evaluation-metrics).
 
-For this evaluator, `visible_recall = correctly reported present elements / reference elements that exist and are visible in at least two photos`. Thus week 4 is **11 / 50 = 22.0%** and week 5 is **11 / 57 = 19.3%**. These percentages come from the archived evaluator outputs, not the construction-progress indicator. Undecided elements are not automatically reported as absent.
+**The archive below measures something else.** `visible_recall = correctly reported present elements / evaluator-labelled existing elements visible in at least two photos`. It is a historical per-survey detection diagnostic, not construction completion, not cumulative progress, and not a whole-workflow accuracy score. Its week 4 value **11/50 = 22.0%** and week 5 value **11/57 = 19.3%** must not replace the stage percentages above. Covered elements can retain earlier construction confirmation while being unavailable to a current-survey detector.
 
 The [six-week saved evaluation](progress4d-evaluation.json) records the later local version of the normal scenario. Its input surveys are rendered development scenes; they are separate from the real-room RGB-D capture above.
 
@@ -148,7 +148,7 @@ The [six-week saved evaluation](progress4d-evaluation.json) records the later lo
 | 5 | 11 | 57 | 19.3% |
 | 6 | 127 | 155 | 81.9% |
 
-This retained evaluation reports no false-present, false-absent or hidden-as-present entries for these dates. Low coverage in weeks 4–5 remains material; absence of false positives is not complete monitoring. These are development measurements against the scene evaluator, not field accuracy. The full surveys and evaluator environment are not packaged here, so these JSON measurements are inspectable historical results rather than an independently reproduced benchmark.
+This retained evaluation reports no false-present, false-absent or hidden-as-present entries for these dates. The lower current-survey recall in weeks 4–5 remains part of the diagnostic record; it does not erase retained construction confirmations. Neither that recall nor the absence of false positives establishes whole-workflow quality. These are development measurements against the scene evaluator, not field accuracy. The full surveys and evaluator environment are not packaged here, so these JSON measurements are inspectable historical results rather than an independently reproduced benchmark.
 
 The seventh displayed week is a prepared scene, not an additional successful reconstruction. Schedule projections are conditional scenarios, not measured remaining durations. See [Progress4D setup and numerical gates](../../../progress4d_service/README.md).
 
