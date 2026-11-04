@@ -2,7 +2,7 @@
 
 ## Reviewer quick start
 
-1. Open [the hosted workspace](https://inspector.campuscompile.eu/demo). The configured public demo creates a visitor session; no operator token, device or local service setup is needed for the prepared walkthrough.
+1. Open [the hosted workspace](https://inspector.campuscompile.eu/demo). The configured public demo creates a visitor session; no operator token, device or local service setup is needed for the prepared walkthrough. It has no iPhone connection and cannot assign a real capture.
 2. In the left sidebar, choose **Model & site photos**, **Drawing & installation** or **Construction progress**. A details dialog explains the example and lets you inspect its source files; the model example opens `room.ifc` first.
 3. For a **Prepared inputs** example, choose **Use these inputs** to attach its files and prepare the task. With a configured model, **Analyze these inputs** submits a new analysis request. Uploaded inputs alone do not establish a successful analysis.
 4. For a recorded example, choose **Show example result**. Inspect the model and source images, switch between the drawing photographs or explore the saved weekly timeline. Window observations are curated; Progress4D uses rendered surveys and a prepared seventh scene.
@@ -22,6 +22,14 @@ the backend cache volume; production DB/storage/device credentials are not inher
 No operator token is embedded in JavaScript or returned to visitors. Normal operator
 API routes retain their original authentication. Guest API requests use the
 `/public-demo` prefix; the same-origin viewer shares the guest session.
+
+To start a real phone capture from `/demo`, choose **Connect live project** and
+enter the operator credential for the iPhone's project. A prior same-tab Control
+Room login is reused automatically. The chat then uses the normal project API;
+the existing `session_create` tool can assign capture to the registered phone.
+The scope banner says **Live project**, and each new phone assignment shows its full session ID and
+acknowledgement state. Existing guest conversations and their task IDs remain in
+the separate demo workspace; repeat the capture request in the live chat.
 
 ## Automated HTTP checks
 

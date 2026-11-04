@@ -4,7 +4,7 @@ Use the configured backend base URL and the **operator** bearer identity. Keep c
 
 ## Console and login
 
-`/` is the operational Control room; `/ui/demo.html` is the document/chat workspace. Both use the same backend API. The operational UI supports capture creation, session/status browsing, source/result inspection, export, reference BIM upload and abort. The demo supports files, IFC/PDF/image viewing, document selections, agent conversation and activity. See [viewer build](../viewer/README.md) and [agent behavior](agent-chat.md).
+`/` is the operational Control room; `/ui/demo.html` is the document/chat workspace. `/demo` starts as an isolated public visitor project. Choose **Connect live project** there and enter the operator credential to switch that same page to the normal project API and phone handoff. A prior same-tab Control Room login is reused automatically. A guest capture request cannot create a real assignment. The operational UI supports capture creation, session/status browsing, source/result inspection, export, reference BIM upload and abort. The chat workspace supports files, IFC/PDF/image viewing, document selections, agent conversation and activity. See [viewer build](../viewer/README.md) and [agent behavior](agent-chat.md).
 
 Operator login is stored in `sessionStorage` for the site/tab. Reload retains it; Lock workspace/logout and HTTP 401 clear it. Storage-blocking browsers require manual login. Closing the browser is not a promised persistence boundary. Shared operator credentials do not authenticate individual observation authors.
 

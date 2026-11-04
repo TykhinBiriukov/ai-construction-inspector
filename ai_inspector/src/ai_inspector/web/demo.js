@@ -1,11 +1,12 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  const authKey = 'inspector-demo-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
+  const authKey = 'inspector-demo-session', operatorAuthKey = 'inspector-operator-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
   const read = (store, key) => { try { return store.getItem(key); } catch { return null; } };
   const write = (store, key, value) => { try { if (value == null) store.removeItem(key); else store.setItem(key,value); } catch {} };
-  let token = read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
-  let apiPrefix=read(sessionStorage,'inspector-demo-api-prefix')||'';
+  const operatorToken = read(sessionStorage, operatorAuthKey) || '';
+  let token = operatorToken || read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
+  let apiPrefix=operatorToken ? '' : read(sessionStorage,'inspector-demo-api-prefix')||'';
   let scopedSessions = [], scopedInspections = [];
   let geometryViewer=null;
   const presentedProgress=new Set();
@@ -58,12 +59,23 @@
   function lock() {
     voice.cancel();$("voice-input").hidden=true;
     closeProgress4d();geometryViewer?.clear();
+    if(!apiPrefix && read(sessionStorage,operatorAuthKey)===token)write(sessionStorage,operatorAuthKey,null);
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;workspaceBusy=false;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
-    $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('token').value='';
+    $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('workspace-scope').hidden=true; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
-  function unlock() { voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=!!apiPrefix; $('token').value=''; write(sessionStorage,authKey,token); }
+  function unlock() {
+    voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=!!apiPrefix; $('token').value='';
+    if(apiPrefix){write(sessionStorage,authKey,token);write(sessionStorage,'inspector-demo-api-prefix',apiPrefix);}
+    else{write(sessionStorage,authKey,null);write(sessionStorage,'inspector-demo-api-prefix',null);write(sessionStorage,operatorAuthKey,token);}
+  }
+  function renderWorkspaceScope(){
+    const guest=!!apiPrefix;
+    $('workspace-scope').hidden=false;
+    $('workspace-scope-text').textContent=guest?'Public demo · separate project. Phone capture is unavailable here.':'Live project · phone assignments use this project and device.';
+    $('workspace-scope-link').hidden=!guest;
+  }
   function controls() {
     $('chat-picker').disabled=sending||workspaceBusy;
     $('document-view').inert=sending||!!pending; $('clear-document-context').disabled=sending||!!pending;
@@ -107,17 +119,18 @@
     renderFiles();renderProgress();
     $('tasks').replaceChildren(); $('task-count').textContent=scopedSessions.length;
     for(const session of scopedSessions) {
-      const button=node('button','',`◌  ${session.room_id}`); button.append(node('small','',`${session.capture_state} · ${session.processing_state}`));
+      const button=node('button','',`◌  ${session.room_id}`); button.append(node('small','',`${apiPrefix?'Demo only · ':''}${session.capture_state} · ${session.processing_state} · ${session.session_id.slice(0,8)}`));
       button.addEventListener('click',()=>showTask(session)); $('tasks').append(button);
     }
-    if(!scopedSessions.length) $('tasks').append(node('p','muted','No capture tasks yet. Ask AI Inspector to create one.'));
-    $('device-state').textContent=device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',device.online);
+    if(!scopedSessions.length) $('tasks').append(node('p','muted',apiPrefix?'Phone capture is available in the live project.':'No capture tasks yet. Ask AI Inspector to create one.'));
+    $('device-state').textContent=apiPrefix?'Unavailable in demo':device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',!apiPrefix&&device.online);
     $('device-name').textContent=device.device_id;
     if(selected) { const session=scopedSessions.find(s=>s.session_id===selected); if(session) showTask(session); }
   }
   function showTask(session) {
     selected=session.session_id; const box=$('selection'); box.hidden=false; box.className='selection';
     box.replaceChildren(node('h3','',`Task · ${session.room_id}`),node('p','',session.capture_task?.text || 'Capture assignment'),node('p','',`Capture: ${session.capture_state}\nProcessing: ${session.processing_state}`),node('p','',`Created ${timestamp(session.created_at)}`));
+    if(apiPrefix)box.append(node('p','','Demo-only task · not sent to an iPhone.'));
     if(session.error) box.append(node('p','',session.error.message || 'Processing error reported'));
     if(session.geometry_result) box.append(geometryResultCard(session.session_id));
     box.append(node('p','',`Session ${session.session_id}`));
@@ -233,7 +246,7 @@
     if(tool.name==='session_import')return r.new_geometry_computation===false?'Saved result connected. Evidence review continues automatically.':'Saved capture connected.';
     if(tool.name==='device_status')return `${r.device_id||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
     const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
-    if(tool.name==='session_create'||tool.name==='session_get')return session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
+    if(tool.name==='session_create'||tool.name==='session_get')return apiPrefix?'Demo-only task · no phone assignment':session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
     return 'Completed';
   }
   function actionEvents(run){
@@ -310,7 +323,7 @@
     }
   }
   function renderConversation() {
-    const runs=chat?.runs||[], signature=JSON.stringify([runs,chat?.geometry_reviews,scopedSessions.map(s=>[s.session_id,s.geometry_result?.job_id,s.processing_state])]);
+    const runs=chat?.runs||[], signature=JSON.stringify([runs,chat?.geometry_reviews,scopedSessions.map(s=>[s.session_id,s.capture_state,s.device_acknowledged_at,s.geometry_result?.job_id,s.processing_state])]);
     $('suggestions').hidden=false;
     if(historySignature!==signature) {
       const follow = $('messages').scrollHeight - $('messages').scrollTop - $('messages').clientHeight < 100;
@@ -329,6 +342,14 @@
           }
           for(const result of comparisons)grid.append(renderComparison(result,chat.chat_id));
           for(const tool of run.tool_results||[]){
+            if(tool.name==='session_create'&&tool.result?.session?.session_id){
+              const saved=tool.result.session,session=scopedSessions.find(item=>item.session_id===saved.session_id)||saved;
+              const card=node('section','assignment-card');
+              card.append(node('strong','',apiPrefix?'Demo-only task':'Phone assignment'),node('code','',session.session_id));
+              card.append(node('small','',apiPrefix?'This task cannot reach your iPhone. Open the live project to assign a new one.':
+                session.device_acknowledged_at?'Acknowledged by the phone.':`Waiting for the phone to acknowledge this exact task · ${session.capture_state}.`));
+              grid.append(card);
+            }
             if(tool.result?.viewer?.kind==='saved_demo'&&tool.result.viewer.chat_id===chat.chat_id){
               const result=tool.result,card=node('section','geometry-result-card');card.append(node('h4','',result.title));const button=node('button','quiet','Open saved result');button.onclick=()=>showSavedDemo(result);card.append(button);grid.append(card);
               if(run===runs.at(-1)&&run.status==='completed'&&!presentedProgress.has(run.run_id)){presentedProgress.add(run.run_id);const target=chat.chat_id;setTimeout(()=>{if(chat?.chat_id===target)showSavedDemo(result);},0);}
@@ -366,7 +387,8 @@
     if(!token||refreshing) return; const current=epoch; refreshing=true;
     try {
       const [data,capabilities]=await Promise.all([api('/v1/operator/overview'),api('/v1/capabilities')]);
-      const status=await api(`/v1/devices/${encodeURIComponent(data.device_id)}/status`);
+      const status=apiPrefix?{device_id:'No phone in public demo',online:null}:
+        await api(`/v1/devices/${encodeURIComponent(data.device_id)}/status`);
       if(current!==epoch) return;
       overview=data; caps=capabilities; device=status;
       if(chatChoices===null)chatChoices=(await api('/v1/chats')).chats;
@@ -391,7 +413,7 @@
       renderChatPicker();
       workState=workspaceData; scopedSessions = linkedSessions; scopedInspections = linkedInspections;
       geometryViewer?.sync(chat?.chat_id,JSON.stringify([chat?.geometry_reviews,linkedSessions.map(s=>[s.session_id,s.processing_state,s.geometry_result?.job_id])]));
-      if(current!==epoch) return; $('connection').hidden=true; activitySync=Date.now(); renderRails(); renderConversation(); unlock();
+      if(current!==epoch) return; $('connection').hidden=true; activitySync=Date.now(); renderRails(); renderConversation(); unlock(); renderWorkspaceScope();
     } catch(error) { if(current===epoch) { activitySync=0;updateActivityStatus();$('connection').textContent='Connection lost';$('connection').hidden=false; notify(`Could not refresh: ${error.message}. Displayed data may be stale.`); } }
     finally { refreshing=false; }
   }
@@ -743,7 +765,24 @@
   }
   $('chat-picker').addEventListener('change',()=>switchConversation($('chat-picker').value));
   $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await startWorkspace(); event.submitter.disabled=false;});
-  $('lock').addEventListener('click',lock);
+  $('workspace-scope-link').addEventListener('click',()=>{$('live-connect-error').hidden=true;$('live-connect-dialog').showModal();$('live-token').focus();});
+  $('live-connect-cancel').addEventListener('click',()=>{$('live-token').value='';$('live-connect-dialog').close();});
+  $('live-connect-form').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const candidate=$('live-token').value.trim(),submit=$('live-connect-submit');
+    if(!candidate)return;
+    submit.disabled=true;$('live-connect-error').hidden=true;
+    try{
+      const response=await fetch('/v1/operator/overview',{headers:{Authorization:`Bearer ${candidate}`},signal:AbortSignal.timeout(10000)});
+      if(!response.ok)throw Error(response.status===401?'Operator access was not accepted.':'The live project could not be reached.');
+      const project=await response.json();
+      if(!project.project_id||!project.device_id)throw Error('The live project response is incomplete.');
+      write(sessionStorage,operatorAuthKey,candidate);write(sessionStorage,authKey,null);
+      write(sessionStorage,'inspector-demo-api-prefix',null);
+      location.reload();
+    }catch(error){$('live-connect-error').textContent=error.message;$('live-connect-error').hidden=false;submit.disabled=false;}
+  });
+  $('lock').addEventListener('click',()=>{lock();beginDemo();});
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
   $('new-chat').addEventListener('click',()=>switchConversation(''));
@@ -1030,6 +1069,8 @@
 
   }
   async function beginDemo(){
+    const shared=read(sessionStorage,operatorAuthKey);
+    if(shared){token=shared;apiPrefix='';}
     if(token.startsWith('demo.')&&Number(token.split('.')[2])*1000<=Date.now()){token='';write(sessionStorage,authKey,null);}
     if(!token){
       try{
