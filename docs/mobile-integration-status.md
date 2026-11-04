@@ -1,4 +1,4 @@
-> 28 October update: new captures now prepare independently sized Geometry ZIP parts (`supabase_geometry_parts_v1`), gated by server capabilities. See revision 8 of the common contract. Individual-file and old ZIP pending requests remain compatible. The parts contain original frame IDs, exact depth bytes, segment-specific mesh and the Geometry metadata schema. Root-bucket writes and direct Geometry calls are not used. Code is prepared; cloud/device rollout must be reported separately.
+> 28 October update: new captures now prepare independently sized Geometry ZIP parts (`supabase_geometry_parts_v1`), gated by server capabilities. See the [implemented capture formats](../ai_inspector/docs/ios-integration.md#capture-and-source-formats). Individual-file and old ZIP pending requests remain compatible. The parts contain original frame IDs, exact depth bytes, segment-specific mesh and the Geometry metadata schema. Root-bucket writes and direct Geometry calls are not used. Code is prepared; cloud/device rollout must be reported separately.
 
 # iOS integration — updated 2026-10-28
 
@@ -52,11 +52,7 @@ uploads and evidence-batch retries. Original files still enter the final ZIP.
 Old servers without the capability keep the existing capture flow. Default endpoint
 for fresh installs is inspector.campuscompile.eu; saved settings are not overwritten.
 
-The shared contract remains the only protocol document:
-[revision 6, section 13](../ai_inspector/docs/iphone-geometry-bim-inspector-api-v0.1.md).
-It now includes spatial-segments registration so the server knows an ARKit coordinate
-frame before accepting poses. The Inspector owner must implement that endpoint,
-evidence-batches, spatial-state and camera.pose handling before advertising readiness.
+This historical preparation record is superseded by the implemented [Inspector schemas](../ai_inspector/src/ai_inspector/schemas.py) and [Localization cloud guide](../localization_service/deploy/README.md).
 The app displays text/status only; a live BIM scene, coverage overlay and voice are
 not yet implemented. Early HTTP batch acknowledgement means queued, not successful
 localization. A dropped service does not delete local images or imply success.

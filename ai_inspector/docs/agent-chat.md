@@ -165,7 +165,7 @@ Native lifespan starts a remote-task poller; Cloudflare process advances remote 
 
 ## Server configuration
 
-Use Settings/[.env.example](../.env.example) and [model_client.py](../src/ai_inspector/model_client.py) for current defaults/validation. Core names are INSPECTOR_META_BASE_URL, INSPECTOR_META_MODEL, INSPECTOR_META_API_KEY, INSPECTOR_META_TIMEOUT_S and INSPECTOR_AGENT_MAX_STEPS. The key is server-only. Restart native processes after changing configuration; Worker configuration follows [deployment](cloudflare-deployment.md).
+Use Settings/[.env.example](../.env.example) and [model_client.py](../src/ai_inspector/model_client.py) for current defaults/validation. Core names are INSPECTOR_META_BASE_URL, INSPECTOR_META_MODEL, INSPECTOR_META_API_KEY, INSPECTOR_META_TIMEOUT_S and INSPECTOR_AGENT_MAX_STEPS. The key is server-only. Restart native processes after changing configuration; Hosted backend and gateway configuration follows [deployment](cloudflare-deployment.md).
 
 The adapter calls chat completions, validates one function call per response and binds tool results to its tool_call_id. Backend operation IDs are separate and persisted before effects. Missing model credentials produce resumable model_not_configured, never a substitute mock. agent_model_configured in capabilities means settings exist, not that a live request succeeded. Provider errors, signed storage URLs and full private session records do not enter model context.
 

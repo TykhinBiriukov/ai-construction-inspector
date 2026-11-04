@@ -1,77 +1,51 @@
-# Cloudflare + Supabase deployment
+# Cloudflare gateway + native backend + Supabase
 
-This guide describes the checked-in deployment path. Read live configuration/status from the target account and instance; old workstation handoffs and test counts are not deployment evidence. Native setup is in [backend README](../README.md).
+This guide describes the checked-in deployment configuration. The frontend runs on Cloudflare; the Python backend runs on the existing GCP VM. PostgreSQL metadata and private capture/reference blobs remain in Supabase. Read live health and configuration from the target deployment when verifying an installation.
 
 ## Runtime
 
-The JavaScript frontend serves same-origin assets and forwards HTTP/WSS to the Python `InspectorRuntime` Durable Object. Application metadata lives in the private Supabase `inspector` PostgreSQL schema, not Durable Object SQLite; capture/reference blobs live in private Storage. Native SQLite mode remains a separate option.
+The [JavaScript gateway](../cloudflare/frontend/index.js) serves assets and forwards HTTP/WebSocket traffic to `INSPECTOR_BACKEND_ORIGIN`, set in the [frontend configuration](../cloudflare/frontend/wrangler.jsonc). It replaces any incoming gateway credential with its own server-side secret. Operator, browser and device authorization remain enforced by the backend.
 
-The SQL adapter qualifies table names through Hyperdrive, binds values, rolls back read snapshots and serializes writes with transaction advisory locks. The frontend's successful completion handler wakes capture processing; its minute cron provides recovery and advances remote A2A workflows too. A tick is bounded, so a busy queue can take multiple minutes. Explicitly registered Geometry reviews also use this queue for evidence import and continuation; this is not a general workflow scheduler. See [Geometry integration](capture-to-geometry.md).
+Native capture and A2A pollers own durable processing. With the backend origin configured, the gateway's old Durable Object cron and completion-triggered queue are disabled. Native setup, network boundaries, persistent volumes and rollout commands are documented in [the GCP backend guide](../deploy/gcp/README.md). Local development uses [the backend README](../README.md).
 
-Read the actual Worker names, bindings, account/domain, cron and toolchain pins from [runtime config](../cloudflare/wrangler.jsonc), [frontend config](../cloudflare/frontend/wrangler.jsonc) and [CI workflow](../../.github/workflows/deploy-inspector-web.yml). Gateway fetch and cron use the same named object in [index.js](../cloudflare/frontend/index.js); preserve that identity and persistence when updating. Do not rotate the object name, recreate the database or alter domain/cron bindings as routine deployment.
-
-Cloud payload limits are defined in `CLOUD_LIMITS` in [entry.py](../cloudflare/src/entry.py) and exposed by `/v1/capabilities`. These are admission limits, not performance guarantees. Check provider/account quotas separately before sizing a deployment; no pricing or free-tier quota is guaranteed by this repository.
+The Python Worker remains a rollback implementation, not the active backend deployment path. Removing the backend origin changes routing; stop the native queue before an intentional rollback to avoid two active processors. Preserve database, Storage and service identities. Runtime admission limits are exposed by `/v1/capabilities`; do not use the old Worker's `CLOUD_LIMITS` as the native configuration.
 
 ## Database and secrets
 
-Use the intended project's restricted runtime database role and private Storage. Runtime credentials must not own schemas or apply migrations. Hyperdrive uses the restricted connection with origin TLS and query caching disabled; never substitute an administrator URI. Follow each SQL script's constraints/grants instead of granting broad schema access.
+Use the restricted runtime PostgreSQL role and private Supabase Storage. Runtime credentials must not own schemas or apply migrations. The native app uses `PostgresDatabase(initialize=False)`; its configuration comes from a private environment file, not Worker bindings. See [.env.example](../.env.example) for setting names and the [GCP guide](../deploy/gcp/README.md) for the private runtime file location.
 
-Before deploying a feature that depends on it, apply its compatible additive migration as the database owner:
+Apply compatible additive migrations separately as the database owner:
 
-- [001_agent_chat.sql](../scripts/sql/001_agent_chat.sql): chat/run persistence; [requirements and safe application](../scripts/sql/README.md).
+- [001_agent_chat.sql](../scripts/sql/001_agent_chat.sql): chat/run persistence.
 - [002_backlog.sql](../scripts/sql/002_backlog.sql): manual handoff board.
-- [003_workspace.sql](../scripts/sql/003_workspace.sql): chat files, plan items and observations.
+- [003_workspace.sql](../scripts/sql/003_workspace.sql): files, plans and observations.
 
-Neither ordinary requests nor CI apply PostgreSQL migrations. Check the selected database and existing schema; do not rerun a migration solely because a historical handoff says it was pending. Do not rewrite published migrations to repair a live schema.
+Follow the [SQL application instructions](../scripts/sql/README.md). Ordinary requests and CI do not apply migrations. Preserve existing data and grants; do not rewrite published migrations or substitute an administrator database URI.
 
-The runtime reads operator/device tokens, restricted database URI, Supabase URL/bucket/key and public origin from Worker Secrets/bindings. Use [.env.example](../.env.example) and [entry.py](../cloudflare/src/entry.py) for exact names. Existing tokens and Storage settings must survive redeployment. Keep administrator credentials, signed URLs and raw provider errors out of Git, browser code, logs and model context.
-
-The model API key belongs only on `ai-inspector-runtime`; nonsecret model defaults and limits are in Wrangler config. Missing model settings leave requests retryable, not backed by a mock. Optional Geometry, Localization, drawing/photo and remote A2A connections need their own configured endpoints and scoped service credentials. See [agent configuration](agent-chat.md#server-configuration); presence of a setting is not a successful connection.
-
-Optional Langfuse tracing also belongs on the Python runtime, never the public frontend. Add LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY as Worker Secrets, and LANGFUSE_BASE_URL, LANGFUSE_TRACING_ENVIRONMENT, LANGFUSE_RELEASE and optional INSPECTOR_LANGFUSE_PROMPTS_ENABLED / INSPECTOR_LANGFUSE_PROMPT_LABEL as bindings. Existing bindings/secrets must be preserved. The Python Worker uses a bounded OTLP/HTTP JSON exporter and does not install the native SDK or start exporter threads. Local .env credentials do not configure a deployed Worker. See [Langfuse integration](agent-chat.md#langfuse-cloud-traces-prompts-and-evaluation).
-
-To supply secrets during native tooling deployment, use an ignored private JSON file restricted to your account and `./deploy.sh --secrets-file /absolute/private/path/secrets.json`. Omitted existing secrets are preserved. A developer workstation's administrator `.env` is not a runtime secrets bundle. Do not publish real example values.
+Operator/device tokens, model keys, database and Storage credentials, specialist-service credentials and optional Langfuse settings belong to the native backend environment. The public gateway needs its dedicated gateway secret; it must not receive model or database credentials. Keep secrets, signed URLs and private runtime files out of Git and browser code. See [agent configuration](agent-chat.md#server-configuration) and [observability configuration](agent-chat.md#langfuse-cloud-traces-prompts-and-evaluation).
 
 ## CI deployment
 
-[Deploy Inspector backend and web](../../.github/workflows/deploy-inspector-web.yml) runs on matching component changes pushed to `feat/ai-inspector-development`, or an explicit dispatch for that ref. Documentation-only changes outside its path filters do not trigger it. The workflow serializes deployments, deploys backend first when needed, builds the viewer and checks JavaScript before publishing changed frontend assets. A backend failure prevents subsequent frontend deployment.
+[Check Inspector and deploy web](../../.github/workflows/deploy-inspector-web.yml) runs for matching component paths pushed to `main`, or manual dispatch. Maintained offline checks gate the frontend job. The job builds and publishes frontend assets only when its component-change detection requires them. It does not deploy the Python Worker or the native backend.
 
-Repository Actions secrets must provide `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Use an account token scoped to editing the existing runtime/frontend Workers, not the Global API Key or broad DNS permissions. Have the account/repository owner configure these privately; the guide does not assert that secrets are installed or a past run is still current.
+Actions requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, scoped to the existing frontend Worker. Frontend publication uses `versions upload` and `versions deploy` at 100%, preserving domain configuration. Toolchain versions and exact commands are maintained in the workflow.
 
-Frontend CI uses `versions upload` followed by `versions deploy` at 100%, preserving existing domain/cron configuration. Domain setup/change is a separate administrator operation. Do not broaden permissions after a 403 without inspecting the failing operation. SQL migrations are separate from code publication.
+The GCP backend deploys independently through `inspector-backend-update.timer`, polling `main`. Its [updater](../deploy/gcp/update.sh) builds before restart and records the revision only after an authenticated health check. Its narrow skip list does not exclude every documentation path: edits under `ai_inspector/docs/` can trigger a backend rollout. GitHub Actions checks are not a gate for that independent timer.
 
-## Manual build and publication
+## Build and publication
 
-Use the toolchain pinned in the workflow/lockfiles. From `ai_inspector/cloudflare`:
+For frontend changes, build the viewer from `ai_inspector/viewer` with `npm ci --ignore-scripts` and `npm run build`. Use the checked-in workflow for publication to the existing Worker. For native backend setup or recovery, follow the [GCP deployment guide](../deploy/gcp/README.md); do not run the legacy Python Worker deploy script as a native-backend update.
 
-```sh
-uv sync --locked
-uv run python prepare.py
-uv run pywrangler deploy --dry-run
-npx --yes wrangler@4.154.0 deploy --dry-run --config frontend/wrangler.jsonc
-```
+Changes to domains, credentials, database schemas and service provisioning are separate operations from publishing code. A workstation environment file does not configure a deployed service.
 
-`prepare.py` refreshes the shared source copy; generated files, Python modules, credentials and Wrangler state stay ignored. Preserve both uv.lock and pylock.toml. Build the viewer from `ai_inspector/viewer` with `npm ci --ignore-scripts` and `npm run build` when viewer source/dependencies change.
+## Recovery
 
-After reviewing the target and build, publish the runtime with `./deploy.sh` (or PowerShell: `uv run python prepare.py`, then `uv run pywrangler deploy`). Authenticate with the target account or its scoped credentials. Add `--secrets-file` only when intentionally updating runtime secrets. For the existing frontend, use the same version path as CI:
+Keep the previous native image for rollback. Authoritative records and files remain in Supabase; never resume an old SQLite snapshot as a live writer after cloud writes have started. A native replacement must use the same intended PostgreSQL database and private blob store.
 
-```sh
-npx --yes wrangler@4.154.0 versions upload --config frontend/wrangler.jsonc --tag UNIQUE_TAG
-npx --yes wrangler@4.154.0 versions deploy --config frontend/wrangler.jsonc --version-tag UNIQUE_TAG@100 --yes
-```
-
-Replace UNIQUE_TAG consistently with a unique deployment tag. Keep the target account/Worker configuration unchanged. These frontend commands use the currently pinned CI Wrangler version; update examples with the workflow when that pin changes.
-
-## Migration and recovery
-
-For a SQLite-to-PostgreSQL cutover, stop the old writer and use SQLite's backup API. [migrate_to_supabase.py](../scripts/migrate_to_supabase.py) requires an empty destination, imports transactionally and verifies every row/sequence; a mismatch rolls back. Keep the backup beside its original models directory and retain it privately. This is different from the additive chat/workspace SQL scripts.
-
-After cloud writes start, never resume the stale SQLite copy as the live backend. A native fallback must use the same PostgreSQL database and Supabase blob store. Do not delete capture data, reset schemas or broaden runtime permissions as a recovery shortcut.
+For a deliberate SQLite-to-PostgreSQL migration, [migrate_to_supabase.py](../scripts/migrate_to_supabase.py) requires an empty destination, imports transactionally and verifies rows/sequences. This is separate from applying additive feature migrations and is not needed for an ordinary rollout.
 
 ## Verify after publication
 
-Check health/UI, actual `/v1/capabilities`, operator/device authorization and the restricted runtime's database access. Confirm login survives same-tab reload and Lock workspace clears it. Send an ordinary chat question and verify a real model response plus durable history without creating a capture; configured model flags alone do not establish access.
+Check authenticated `/deployment-health` for the native revision and database access, then verify UI availability, `/v1/capabilities`, browser/operator/device scopes and saved chat recovery. Configured model flags alone do not establish a successful provider call.
 
-For an intentional phone test, supply only its device identity and HTTPS origin. Observe connection → assignment → acknowledgement → actual capture-start separately. Retry an interrupted request with its saved ID/body. Confirm upload completion, source acceptance and a verified Geometry result only if the external service is connected; `sealed/queued_geometry` is not completion. Preserve mock/synthetic labels.
-
-Remote inspectors need a real service/volume/credential check and task recovery test; minion follow-up differs from A2A polling. Phone display of optional capture_task, business messages, BIM measurements and automatic agent continuation after Geometry are separate integrations. Record the deployed revision, environment, observed results and limits rather than copying an old test count into this guide.
+Capture verification must distinguish assignment, device acknowledgement, actual capture, accepted source and completed Geometry processing. Confirm a scoped result and its source identities; `sealed/queued_geometry` is not completion. Specialist services need their own health and recovery checks. Record the revision and observed outcome rather than copying historical test counts.

@@ -2,7 +2,7 @@
 
 Use the configured HTTPS origin, device ID and scoped **device** bearer token. Only the operator uses the separate operator identity. No Supabase administrator key, backend database credential or model API key belongs on the phone. Private connection files exported by a test host are optional conveniences, not checked-in configuration or proof that the host is running.
 
-HTTP schemas/limits come from `<BASE_URL>/openapi.json`, `/docs` and `/v1/capabilities`. [schemas.py](../src/ai_inspector/schemas.py) defines the implemented wire models. This guide records lifecycle, retry and source rules; the broader [team API proposal](../../docs/iphone-geometry-bim-inspector-api-v0.1.md) remains a draft.
+HTTP schemas/limits come from `<BASE_URL>/openapi.json`, `/docs` and `/v1/capabilities`. [schemas.py](../src/ai_inspector/schemas.py) defines the implemented wire models. This guide records lifecycle, retry and source rules for the implemented API.
 
 ## Connect and restore assignment
 

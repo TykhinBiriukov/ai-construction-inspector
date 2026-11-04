@@ -8,8 +8,7 @@ cloud path is not yet verified.
 
 This component owns localization guidance and spatial calculations. Inspector owns
 inspection guidance and the durable cross-service control handoff. Existing Geometry
-and final capture ZIP are unchanged. Canonical proposed protocol:
-[shared contract §13](../ai_inspector/docs/iphone-geometry-bim-inspector-api-v0.1.md).
+and final capture ZIP are unchanged. The original harness contract is defined in [core.py](core.py) and [server.py](server.py); the cloud interface is documented in [deploy/README.md](deploy/README.md).
 
 Implemented now: internal HTTP harness, SQLite state, known-door initial guidance,
 independent ARKit segments, idempotent evidence batches, explicit instruction owner,

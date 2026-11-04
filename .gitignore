@@ -12,3 +12,6 @@ outputs/
 # Local repository walkthrough outputs and downloaded data
 .demo-cache/
 demo-output*/
+
+# Personal editor preferences
+.vscode/

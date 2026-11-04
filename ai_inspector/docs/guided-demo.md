@@ -130,8 +130,9 @@ The native Docker image builds a separate, immutable source library at
 `/opt/inspector-demo-inputs` and sets `INSPECTOR_SAVED_DEMO_INPUTS_DIR` to that
 directory. The library is loaded for both operator and isolated visitor examples;
 it supplements the existing read-only recorded-result mount. An explicit
-`scenario-inputs.json` in `INSPECTOR_SAVED_DEMO_DIR` takes precedence for the
-scenarios it defines. A configured bundled library with missing files fails
+`scenario-inputs.json` in `INSPECTOR_SAVED_DEMO_DIR` overrides bundled input
+examples. Geometry and Construction progress keep their recorded paths when
+recorded results are configured, regardless of either input manifest. A configured bundled library with missing files fails
 startup rather than silently showing a partial list. Other installations can
 set the same variable to a separately prepared input library.
 
