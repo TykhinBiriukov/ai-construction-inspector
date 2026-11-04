@@ -1,5 +1,6 @@
 """Public browser cookies, conversation ownership and own-image submission."""
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +11,7 @@ from PIL import Image
 
 from ai_inspector.api import create_app
 from ai_inspector.config import Settings
-from ai_inspector import browser_session, public_access
+from ai_inspector import browser_session, orchestrator_policy, public_access
 
 
 class PublicDemoTests(unittest.TestCase):
@@ -84,6 +85,13 @@ class PublicDemoTests(unittest.TestCase):
         class Model:
             def complete(self, messages, tools):
                 calls.append(messages)
+                prompt = messages[0]['content']
+                if orchestrator_policy.SCOPE_MARKER in prompt:
+                    return {'role': 'assistant', 'content': json.dumps({
+                        'status': 'in_scope', 'intent': 'inspection',
+                        'product_request': body['text'], 'language': 'en'})}
+                if orchestrator_policy.REVIEW_MARKER in prompt:
+                    return {'role': 'assistant', 'content': '{"verdict":"approved"}'}
                 return {'role': 'assistant', 'content': 'Offline fixture: image received.'}
         self.app.state.service.agent.model = Model()
         body = {'schema_version': '0.1', 'request_id': str(uuid4()),
@@ -91,10 +99,14 @@ class PublicDemoTests(unittest.TestCase):
         response = self.c.post(f'/v1/chats/{chat}/messages', headers=self.headers, json=body)
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(response.json()['status'], 'completed', response.text)
-        parts = next(m['content'] for m in reversed(calls[0]) if m['role'] == 'user')
+        image_messages = [m['content'] for request in calls for m in request
+                          if m['role'] == 'user' and isinstance(m['content'], list)]
+        self.assertEqual(len(image_messages), 1)
+        parts = image_messages[0]
         self.assertEqual(sum(p['type'] == 'image_url' for p in parts), 1)
+        completed_calls = len(calls)
         self.assertEqual(self.c.post(f'/v1/chats/{chat}/messages', headers=self.headers, json=body).status_code, 200)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), completed_calls)
         reopened = self.client(create_app(self.settings, background_worker=False))
         reopened.cookies.set(self.cookie, token)
         response = reopened.get('/v1/chats/' + chat)

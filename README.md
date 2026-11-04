@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/inspector-logo.jpg" alt="Inspector — IA · Inspector Agent" width="640">
+  <img src="docs/assets/inspector-logo-readme.svg" alt="Inspector — BIM" width="640">
 </p>
 
 # AI Construction Inspector
@@ -12,44 +12,32 @@
 
 **Sophisticated engineering behind a simple working interface.** The conversational workspace combines visual reasoning, metric reconstruction and a hierarchy of inspection agents. Users can submit project files, dictate a request and inspect findings beside their source evidence. The iPhone client adds assigned RGB-D capture for depth-based inspection; teams using the hosted workspace do not deploy its internal services.
 
-**[Open the web demo](https://inspector.campuscompile.eu/demo)** · [Three-scenario walkthrough](ai_inspector/docs/guided-demo.md#reviewer-quick-start) · [Explore the evidence](docs/evidence/2026-11-03/README.md) · [Run the components](docs/reproducible-setup.md)
-
 | Project | Details |
 |---|---|
 | Event | [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) · Track 2 |
-| Hackathon dates | 26 October–4 November 2026 |
-| Team development period | 27 October–4 November 2026 (implementation history in this repository) |
+| Live Demo video |  |
+| Creators | [Tykhin Biriukov](https://www.linkedin.com/in/tykhin-biriukov/), [Egor Pichugin](https://www.linkedin.com/in/egorpichugin/) and [Oleg Kulikov](https://www.linkedin.com/in/kulikovoleg/) |
 | Meta models | **Muse Spark 1.3 · SAM 3.1 · Muse Voice Transcribe 1.0** |
-| Creators | Tykhin Biriukov, Egor Pichugin and Oleg Kulikov |
+| Team development period | 27 October–4 November 2026 (implementation history in this repository) |
 
-[Demo walkthrough](#demo-walkthrough) · [Problem](#problem) · [Value](#value) · [Measured results](#measured-results) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons)
+### Demo materials
 
-## Run the repository demo
+| Demo | Link |
+|---|---|
+| Web demo | [Open AI Inspector](https://inspector.campuscompile.eu/demo) |
+| Demo walkthrough | [Explore the three scenarios](ai_inspector/docs/guided-demo.md#reviewer-quick-start) |
+| Repository demo | [Run the prepared example without an API key](demo/README.md) |
 
-For a self-contained evaluation, start with the [prepared Geometry walkthrough](demo/README.md). Python 3.11+ is sufficient; the command downloads and verifies the complete prepared dataset automatically, then writes a readable report and interactive scan/IFC view. No API key is needed for the default mode.
+### Additional materials
 
-```sh
-python3 demo/run.py --mode prepared
-python3 demo/run.py --verify-output demo-output
-```
+| Material | Link |
+|---|---|
+| Evidence | [Real-room capture and experiment records](docs/evidence/2026-11-03/README.md) |
+| Component setup | [Run the services locally](docs/reproducible-setup.md) |
 
-[Add a live Meta summary](demo/README.md#add-a-live-meta-summary), or [recompute from RGB-D with live SAM](demo/README.md#full-recomputation-on-linux-python-312-recommended). Prepared mode identifies every retained stage explicitly. Full recomputation uses the production Geometry algorithms and a fresh output directory. See the guide for exact prerequisites, expected outputs and your own capture data.
+## Why this prototype matters
 
-## Demo walkthrough
-
-[Open AI Inspector](https://inspector.campuscompile.eu/demo) and choose an example in the left sidebar. Each example opens a details dialog where you can inspect and download its source files before choosing the next action. Files, Tasks and Capture Devices start collapsed and remain available for your own work.
-
-| Choose | Explore | Product value |
-|---|---|---|
-| **Model & site photos** | The reference IFC opens first; switch to the site photo and capture metadata, or explore a configured saved model-to-scan comparison | Investigate differences in their spatial and visual context |
-| **Drawing & installation** | A window drawing and two installation photographs, with prepared input files or a labelled saved comparison | Review the installation against its design requirements |
-| **Construction progress** | A reference IFC and seven dated synthetic survey photographs, or the configured saved weekly timeline | Follow the relationship between planned work and observed progress |
-
-**Prepared inputs** and **recorded results** have separate actions. **Use these inputs** adds the listed attachable files and prepares a task in chat; **Analyze these inputs** sends that task through the normal analysis path when a chat model is configured. New findings depend on the connected analysis services. **Show example result** opens a retained result and does not perform a fresh reconstruction or inspection. Browsing an example does not create a chat or add files automatically. The [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start) describes the steps and configuration.
-
-For new work, the entry point matches the task: **drawing + photo** for visual inspection, **RGB-D capture + IFC** for metric comparison, and **dated photo surveys + scheduled IFC** for progress analysis. An existing calibrated RGB-D session can be reprocessed without another phone capture. The [public real-room package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03) includes 99 observations, their 396 capture files, a pinned IFC, meshes and processing manifests. The [Progress4D input folder](resources/progress4d/inputs) contains the reference IFC, seven capture manifests and 312 synthetic survey photographs, separate from its sibling replay outputs.
-
-Demo labels distinguish real captures, synthetic inputs, recorded results and mock fixtures. A reference model, preview photo and capture manifest do not replace validated complete RGB-D intake. Complete capture archives remain separate from ordinary chat attachments.
+Construction teams need to compare site observations with drawings and BIM before deciding what to check or correct next. In a recorded case from one physical room, AI Inspector processed 99 RGB-D observations, compared visible geometry with a laser-derived IFC reference, and kept measurements and review decisions linked to their sources. The completed review requested more evidence for eight candidate cases, rejected three and confirmed no construction discrepancy; it did not turn uncertain geometry into an unsupported defect claim. This is a concrete inspection workflow and evidence package, not a claim of certified acceptance or measured field savings. [Results and limitations](docs/evidence/2026-11-04/README.md).
 
 <a id="problem-and-value"></a>
 
@@ -78,8 +66,6 @@ A room looks ready. The next crew is scheduled. Before work continues, someone m
 AI Inspector helps engineers connect the design requirement, the site observation and the finding in one review. It compares supplied drawings and photographs, reviews scan-to-BIM evidence, and keeps findings linked to their sources. The goal is to reduce the effort needed to prepare a sound decision and make important gaps harder to overlook.
 
 **Help reduce evidence-related waiting.** Put the selected sources and comparison results together so the reviewer can investigate a discrepancy without repeatedly assembling the same context. This targets the preparation and clarification work around a decision; approval schedules and formal sign-off remain with the responsible people and processes.
-
-**Preliminary estimate: faster acceptance inspections.** Based on our preliminary estimate, acceptance inspections could be completed at least **3–4 times faster** by eliminating specialist travel time and reducing the time spent coordinating inspections.
 
 **Make repeated checks more consistent.** Turn a selected drawing into explicit requirements, reuse compatible checklists for later photographs, and review geometric differences against the selected reference model. Each result shows the evidence and its limits, helping reviewers distinguish a supported discrepancy from an unanswered question.
 
@@ -135,6 +121,33 @@ The PlanGrid/FMI study surveyed 599 construction industry participants, includin
 **Accessible capture, powerful processing, one elegant workspace.** Drawing/photo inspection starts with documents and a photograph. Depth inspection adds a LiDAR-equipped iPhone and its calibrated observations. The product combines familiar collection tools with advanced geometry and AI review behind a single interface.
 
 **Grounded in valuable, firsthand construction experience.** Egor Pichugin worked as a quality-control engineer performing site inspections. Oleg Kulikov worked in engineering management and acceptance of renovation and major refurbishment. Tykhin Biriukov worked on solar-panel installation. Their experience shapes the product around the questions practitioners actually ask: what needs attention, where is the evidence, and what should be checked next?
+
+## Run the repository demo
+
+For a self-contained evaluation, start with the [prepared Geometry walkthrough](demo/README.md). Python 3.11+ is sufficient; the command downloads and verifies the complete prepared dataset automatically, then writes a readable report and interactive scan/IFC view. No API key is needed for the default mode.
+
+```sh
+python3 demo/run.py --mode prepared
+python3 demo/run.py --verify-output demo-output
+```
+
+[Add a live Meta summary](demo/README.md#add-a-live-meta-summary), or [recompute from RGB-D with live SAM](demo/README.md#full-recomputation-on-linux-python-312-recommended). Prepared mode identifies every retained stage explicitly. Full recomputation uses the production Geometry algorithms and a fresh output directory. See the guide for exact prerequisites, expected outputs and your own capture data.
+
+## Demo walkthrough
+
+[Open AI Inspector](https://inspector.campuscompile.eu/demo) and choose an example in the left sidebar. Each example opens a details dialog where you can inspect and download its source files before choosing the next action. Files, Tasks and Capture Devices start collapsed and remain available for your own work.
+
+| Choose | Explore | Product value |
+|---|---|---|
+| **Model & site photos** | The reference IFC opens first; switch to the site photo and capture metadata, or explore a configured saved model-to-scan comparison | Investigate differences in their spatial and visual context |
+| **Drawing & installation** | A window drawing and two installation photographs, with prepared input files or a labelled saved comparison | Review the installation against its design requirements |
+| **Construction progress** | A reference IFC and seven dated synthetic survey photographs, or the configured saved weekly timeline | Follow the relationship between planned work and observed progress |
+
+**Prepared inputs** and **recorded results** have separate actions. **Use these inputs** adds the listed attachable files and prepares a task in chat; **Analyze these inputs** sends that task through the normal analysis path when a chat model is configured. New findings depend on the connected analysis services. **Show example result** opens a retained result and does not perform a fresh reconstruction or inspection. Browsing an example does not create a chat or add files automatically. The [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start) describes the steps and configuration.
+
+For new work, the entry point matches the task: **drawing + photo** for visual inspection, **RGB-D capture + IFC** for metric comparison, and **dated photo surveys + scheduled IFC** for progress analysis. An existing calibrated RGB-D session can be reprocessed without another phone capture. The [public real-room package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03) includes 99 observations, their 396 capture files, a pinned IFC, meshes and processing manifests. The [Progress4D input folder](resources/progress4d/inputs) contains the reference IFC, seven capture manifests and 312 synthetic survey photographs, separate from its sibling replay outputs.
+
+Demo labels distinguish real captures, synthetic inputs, recorded results and mock fixtures. A reference model, preview photo and capture manifest do not replace validated complete RGB-D intake. Complete capture archives remain separate from ordinary chat attachments.
 
 ## Measured results
 
