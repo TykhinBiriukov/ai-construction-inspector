@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1.0,<2",
     "websockets>=16,<17",
     "psycopg[binary]==3.3.6",
+    "Pillow==12.3.0",
 ]
 
 [project.optional-dependencies]

@@ -149,8 +149,14 @@ class DelegationInput(APIModel):
     def reference_content(cls, value):
         if isinstance(value, str):
             return value
-        if not 1 <= len(value) <= 2:
+        # Main text + up to eight source-bound photos (label + image) and one
+        # separately labelled document crop. Legacy text/image pairs stay valid.
+        if not 1 <= len(value) <= 19:
             raise ValueError("Invalid reference preview")
+        if sum(item.get("type") == "image_url" for item in value) > 9:
+            raise ValueError("Too many reference previews")
+        if len(json.dumps(value, ensure_ascii=False).encode("utf-8")) > MAX_BODY - 65536:
+            raise ValueError("Reference previews exceed the delegation budget")
         for item in value:
             if item.get("type") == "text" and set(item) == {"type", "text"} and isinstance(item["text"], str):
                 continue

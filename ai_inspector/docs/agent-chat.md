@@ -135,13 +135,15 @@ Commands, operation IDs, frozen model requests and tool results are durable befo
 
 Remote A2A workflows also continue through the poller without the browser. Drawing/photo tasks also continue through this durable poller; the result tool remains available for later follow-up. The existing capture worker alone owns source validation → Geometry dispatch/reconciliation; no agent tool creates a second initial job. A Geometry result triggers downstream analysis only for an explicitly registered review, using the [Geometry Engine adapter and review API](capture-to-geometry.md#downstream-discrepancy-review). The worker pins evidence, constructs typed batches, deterministically uses the configured remote Geometry Inspector and collects its accepted reports. Internal batch runs remain durable and are omitted from chat reply pagination; a separate tool-free model continuation explains the complete aggregate once. The full JSON is a scoped chat file. No candidates does not establish compliance. Review state/URLs remain private, not in phone events; chat exposes safe geometry_reviews progress. Stale/cancelled workers cannot publish, and the original completed capture-assignment run is not rewritten.
 
+For a user-requested inspection of the chat's already linked IFC capture, `geometry_review` registers that same downstream workflow without capture or Geometry dispatch. It is offered only with a linked session, freezes that session before execution, and returns an existing review instead of duplicating or restarting it. Viewing a result alone does not request review. Prepared demo actions retain their existing behavior.
+
 ## Files, work plans and observations
 
 Workspace needs 003_workspace.sql for PostgreSQL; native SQLite initializes its equivalent schema. APIs are operator/chat-scoped. Schemas and numeric limits come from [workspace.py](../src/ai_inspector/workspace.py), [document_selection.py](../src/ai_inspector/document_selection.py) and OpenAPI.
 
 Uploads are private immutable content-addressed blobs. Same file ID with changed bytes/metadata conflicts. Trash removes the current chat reference, not persisted blobs/history or earlier frozen model input; restore does not rewrite the original record. Derived reply/tool/capture JSON records are internal context, not user deliverables or independent evidence: workspace Files omits them, while existing scoped download links/history remain available. User-uploaded JSON remains visible. Files in Trash cannot be newly selected.
 
-Text formats yield bounded marked excerpts; opaque PDF/images are metadata-only without a sent preview or a real minion report. Opening a file alone sends no model input. A selected region sends a bounded crop; selected IFC elements send source-bound STEP identities and browser reference properties/view. One crop is not a whole document. IFC rendering and caller room IDs do not validate model geometry, units, room membership, alignment or measurements. Files, notes and previews remain untrusted data.
+Text formats yield bounded marked excerpts. In the normal user-data workflow, selected JPEG/PNG/WebP files supply full-image previews when the message is sent. The file inventory's `content_available` field continues to describe extracted text; the frozen run separately records image availability and provenance in `image_inputs`. A PDF remains metadata-only without an explicit page crop or a real minion report. Opening a file alone sends no model input. A selected region sends a separately labelled bounded crop; selected IFC elements send source-bound STEP identities and browser reference properties/view. One crop is not a whole document. IFC rendering and caller room IDs do not validate model geometry, units, room membership, alignment or measurements. Files, notes and previews remain untrusted data.
 
 Plan imports validate all rows before atomic request-ID replay. Plan edits require current revision. Observations preserve evidence snapshots and operator provenance; authors are self-reported under a shared credential. An AI output alone cannot confirm work; withdrawal retains history. Progress uses the latest active observation per planned item: no observation is no_data, never not_done. Equal-weight confirmed-item percentages are not physical/financial progress or certification. Models can explain the snapshot but cannot mutate plans or observations.
 
@@ -223,6 +225,24 @@ Experts can use the project's annotation queue and Scores interface. To attach e
 Cloudflare Python uses a bounded OTLP/HTTP JSON transport instead of native SDK threads. Set the same keys as Worker Secrets and other options as bindings; each fetch/process flushes up to 128 observations with bounded IO, dropping telemetry on failure. Prompt reads use the same frozen-snapshot rule. Native inspector deployments and the separate minion need their own configuration/deployment; putting keys in the local .env does not configure Cloudflare or remote services. There is no telemetry retry that re-executes business actions, and this is not a lossless audit log.
 
 ## Verification boundary
+
+Selected JPEG, PNG and WebP attachments now supply actual source-bound full-image
+previews to the model, with file IDs, original SHA256, preview SHA256 and the
+orientation/resize transform retained in the run's `workspace_context.image_inputs`.
+The existing configured demos retain their prior processing path: an exact prepared
+task plus the full matching source-hash set is recognized separately. A matching
+filename or task alone cannot classify the user's own files as demo inputs.
+Each source is limited to 16 MiB, 20 megapixels and one frame; invalid or oversized
+images fail before model inference instead of silently sending filenames alone.
+Up to eight selected files share the existing request limit. Each preview is at
+most 240 KB, with a shared 1,024,000-byte budget across attachment previews so
+they fit the bounded A2A envelope together with a document crop and metadata.
+Preview pixels are not metric measurements. Explicit document crops
+remain separately labelled and are not confused with full-image attachments.
+The frozen run stores the actual previews for retries and reopen. A request with
+new images cannot call `progress4d_result` to substitute a retained timeline.
+Weekly photo comparison is a new visual analysis of those inputs; quantitative
+4D reconstruction still uses the separately configured Progress4D survey workflow.
 
 Local fixtures cover model/tool validation, scopes, retries/restart, separate HTTP services/stores, Geometry compact-result import/continuation and cancellation fencing. They do not establish deployed connectivity, live Meta access, a real phone, inspection accuracy or a configured external Geometry service. Capture_task display in the actual phone, business messages and measurement accuracy require separate integration acceptance. Automatic Geometry reviews require the configured Geometry API, shared private Storage, supported capture, pinned IFC and registered Geometry Inspector/Geometry Verifier deployments.
 

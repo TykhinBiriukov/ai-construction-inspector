@@ -83,6 +83,8 @@ Set `INSPECTOR_GEOMETRY_REVIEW_INSPECTOR_ID` to a registered remote `discrepancy
 
 For an already linked session, an operator can register review before or after Geometry completion:
 
+In chat, a request to inspect the current IFC-bound capture uses `geometry_review` with no model-supplied IDs. The backend freezes the current session and user task before execution, then registers the same durable workflow below. Pending Geometry is awaited automatically. Repeated requests return the existing review state; they do not create another capture, Geometry job or review, and do not restart cancelled/failed reviews. A different capture requires `session_import` with the user-supplied ID or an explicitly requested new capture. Opening a saved demo result does not register a review.
+
 ```text
 POST /v1/chats/{chat_id}/geometry-review
 {"schema_version":"0.1","request_id":"<UUID>","session_id":"<UUID>","task":"Inspect the captured door against IFC","acceptance_tolerance_m":null}
