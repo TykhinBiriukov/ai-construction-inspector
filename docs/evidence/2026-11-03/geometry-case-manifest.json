@@ -30,9 +30,16 @@
   },
   "limitations": [
     "Historical runtime Git SHA mapping is not attached; implementation fingerprint identifies code and dependency versions",
-    "Independent physical reference measurements are not attached to this package",
+    "Reference IFC is laser-measured per team confirmation; raw laser readings and instrument metadata are not attached",
     "Geometry agent_review.executed is a pre-review computation flag; separate Inspector receipt records a cancelled attempt as of 2026-11-03",
     "Not an independent clean-environment rerun",
     "Selected evidence export; artifact-inclusion.json lists packaged and omitted original stage artifacts by SHA-256"
-  ]
+  ],
+  "reference_measurement_provenance": {
+    "method": "laser measurements used to construct the reference IFC",
+    "confirmed_by": "project team member Oleg Kulikov",
+    "confirmed_on": "2026-11-04",
+    "raw_readings_in_archive": false,
+    "comparison_metric": "observed reconstructed surface deviation from the laser-measured IFC after rigid alignment"
+  }
 }
