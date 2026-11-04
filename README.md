@@ -79,6 +79,8 @@ AI Inspector helps engineers connect the design requirement, the site observatio
 
 **Help reduce evidence-related waiting.** Put the selected sources and comparison results together so the reviewer can investigate a discrepancy without repeatedly assembling the same context. This targets the preparation and clarification work around a decision; approval schedules and formal sign-off remain with the responsible people and processes.
 
+**Preliminary estimate: faster acceptance inspections.** Based on our preliminary estimate, acceptance inspections could be completed at least **3–4 times faster** by eliminating specialist travel time and reducing the time spent coordinating inspections.
+
 **Make repeated checks more consistent.** Turn a selected drawing into explicit requirements, reuse compatible checklists for later photographs, and review geometric differences against the selected reference model. Each result shows the evidence and its limits, helping reviewers distinguish a supported discrepancy from an unanswered question.
 
 **Support earlier correction and safer decisions.** Surface potential issues for investigation while work is still accessible. When a detail is hidden or the evidence is insufficient, keep that uncertainty visible so the team can arrange a closer inspection, additional capture or appropriate testing. The intended contribution is better-supported review; the current prototype does not certify building safety or demonstrate a reduction in accidents.
@@ -160,6 +162,10 @@ Reference identity: `reference.ifc`, SHA256 `4a618081be81cad4b7bba0eec22486038bc
 The real-room Geometry run integrates **99/99 RGB-D frames** and produces **469,270 surface points and 896,924 mesh triangles**, with source identities preserved through reconstruction, segmentation and comparison. The public result includes six object candidates and five observed surfaces. The [evidence guide](docs/evidence/2026-11-03/README.md) connects the capture, model provenance, processing history and findings; the [download guide](docs/evidence/2026-11-03/data-access.md) provides versioned records and integrity checks.
 
 **Completed Inspector/Verifier review.** All **11 review batches** for the real-room result completed on 2 November 2026. A separate numerical check recomputed four matched door/window dimensions against the laser-derived IFC, including source hashes and signed differences. [Review outcomes and reference verification](docs/evidence/2026-11-04/README.md).
+
+**Demonstrated value: a traceable inspection package from site capture.** In the recorded real-room case, AI Inspector processes **99 RGB-D observations**, reconstructs the room, compares observed geometry with the laser-derived IFC, and delivers an interactive design-versus-scan view with source-linked findings. Four opening dimensions are independently recomputable from the packaged contours and IFC. The engineer receives the reference value, observed value and signed difference together with the evidence, rather than having to assemble that comparison manually.
+
+The Inspector/Verifier stage reviews **11 candidate cases** and records a disposition and rationale for every case. It rejects three candidates and turns eight into specific evidence requests—such as the project acceptance tolerance, complete opening coverage or alignment evidence—so the next inspection action is explicit. These are the outcomes of the archived 2 November review, not failed processing stages. The product value is a repeatable **capture → comparison → evidence review → next-action report** workflow that supports the manager's decision to progress, correct or request an engineering check.
 
 Controlled validation demonstrated the Inspector–Verifier workflow’s ability to identify a known discrepancy and support its conclusion with traceable evidence.
 
