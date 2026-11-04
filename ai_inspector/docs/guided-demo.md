@@ -26,6 +26,11 @@ Result asset routes check operator access and chat ownership. Demo stages are
 simulated; selecting a scenario reads existing results. Follow-up questions use
 the configured chat model. Disable the directory setting to restore normal mode.
 
+The central document area accepts dropped files through the same validation,
+upload queue and retry identities as the circular + button. Dropped URLs are not
+fetched and folders are not imported. A pending upload must be retried before a
+new file set can replace it. Uploading files does not itself start an inspection.
+
 Authenticated `GET /v1/demo/scenarios` returns `{scenarios: [{id, title, notice,
 mode, available, files: [{id, name, kind, url, description, attach, byte_length}]}]}`.
 Input examples additionally include `description` and `prompt`. File URLs use

@@ -59,7 +59,7 @@
     voice.cancel();$("voice-input").hidden=true;
     closeProgress4d();geometryViewer?.clear();
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
-    chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
+    chatChoices=null;workState=null;workspaceBusy=false;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
@@ -72,7 +72,7 @@
     $('room').readOnly=!!chat || !!create || sending;
     if(chat?.room_id) $('room').value=chat.room_id;
     $('message').disabled=sending || !!pending;
-    $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
+    $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy||!!uploadQueue.length;
     $('send').textContent=sending ? 'Working…' : 'Send';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
     $('run-status').textContent=sending ? 'AI Inspector is working. Progress appears in Work process.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
@@ -397,6 +397,7 @@
   }
   async function send() {
     if(sending||workspaceBusy||!token||!overview||chat?.runs?.at(-1)?.auto_resume) return;
+    if(uploadQueue.length){notify('Finish or retry the pending upload before sending the task.');return;}
     if(!pending && (!$('chat-form').reportValidity()||!$('message').value.trim())) return;
     const current=epoch; sending=true; notify();
     if(!pending) pending={schema_version:'0.1',request_id:uid(),text:$('message').value.trim(),file_ids:[...chosenFiles],...(documentContext?{document_selection:documentContext}:{})};
@@ -477,20 +478,44 @@
     downloadBlob(blob,file.name);
   }
   function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const link=node('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  async function uploadFiles() {
-    if(workspaceBusy||sending||pending)return;
+  function setAttachmentIcon(retry=false){
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'),path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');svg.setAttribute('focusable','false');svg.setAttribute('width','18');svg.setAttribute('height','18');
+    path.setAttribute('d',retry?'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15':'M12 5v14M5 12h14');
+    path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');path.setAttribute('stroke-width','1.8');path.setAttribute('stroke-linecap','round');path.setAttribute('stroke-linejoin','round');svg.append(path);
+    const button=$('attach-file');button.replaceChildren(svg);button.title=retry?'Retry upload':'Attach files';button.setAttribute('aria-label',button.title);
+  }
+  function canUploadFiles(){return !!token&&!!overview&&!workspaceBusy&&!sending&&!pending&&!chat?.runs?.at(-1)?.auto_resume&&!document.querySelector('.conversation').classList.contains('demo-working');}
+  function queueFiles(files){
+    if(!canUploadFiles()){notify('Wait for the current request to finish before adding files.');$('file-input').value='';return false;}
+    if(uploadQueue.length){notify('Retry the pending upload before adding other files.');$('file-input').value='';return false;}
+    if(!files.length)return false;
+    const limit=overview?.max_bim_bytes||8*1024*1024;
+    if(files.some(file=>file.size>limit)){notify(`Each file must be no larger than ${(limit/1024/1024).toLocaleString(undefined,{maximumFractionDigits:2})} MiB.`);$('file-input').value='';return false;}
+    uploadQueue=files.map(file=>({file,id:uid()}));uploadFiles();return true;
+  }
+  async function uploadFiles(forExample=false) {
+    const allowed=forExample?!!token&&!!overview&&!workspaceBusy&&!sending&&!pending&&!chat?.runs?.at(-1)?.auto_resume:canUploadFiles();
+    if(!allowed||!uploadQueue.length)return false;
+    const current=epoch,queue=uploadQueue;
     workspaceBusy=true;controls();notify();
     try{
       await ensureChat();
-      while(uploadQueue.length){
-        const entry=uploadQueue[0],form=new FormData();form.append('file_id',entry.id);form.append('file',entry.file);
-        await api(`${workspacePath()}/files`,{method:'POST',body:form});
-        uploadQueue.shift();await loadWorkspace(); if(chosenFiles.size<8)chosenFiles.add(entry.id);renderFiles();
-        const uploaded=workState?.files?.find(f=>f.file_id===entry.id);if(uploaded&&/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
+      const owner=chat?.chat_id,active=()=>current===epoch&&uploadQueue===queue&&chat?.chat_id===owner;
+      while(queue.length){
+        if(!active())return;
+        const entry=queue[0],form=new FormData();form.append('file_id',entry.id);form.append('file',entry.file);
+        await api(`/v1/chats/${encodeURIComponent(owner)}/files`,{method:'POST',body:form});
+        if(!active())return;
+        await loadWorkspace();if(!active())return;
+        const uploaded=workState?.files?.find(f=>f.file_id===entry.id);if(!uploaded)throw Error('The uploaded file is not visible in the workspace yet.');
+        queue.shift();if(chosenFiles.size<8)chosenFiles.add(entry.id);renderFiles();
+        if(/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
       }
-      $('file-input').value='';notify();
-    }catch(error){if(error.status>=400&&error.status<500&&![408,429].includes(error.status)){uploadQueue=[];$('file-input').value='';notify(`Upload rejected: ${error.message}. Choose a file again.`);}else notify(`Upload was not confirmed: ${error.message}. Use Retry upload to reuse the same upload ID.`);}
-    finally{workspaceBusy=false;controls();$('attach-file').textContent=uploadQueue.length?'Retry upload':'＋';}
+      if(!active())return;
+      $('file-input').value='';notify();return true;
+    }catch(error){if(current===epoch){if(error.status>=400&&error.status<500&&![408,429].includes(error.status)){uploadQueue=[];$('file-input').value='';notify(`Upload rejected: ${error.message}. Choose a file again.`);}else notify(`Upload was not confirmed: ${error.message}. Use Retry upload to reuse the same upload ID.`);}}
+    finally{if(current===epoch){workspaceBusy=false;controls();setAttachmentIcon(!!uploadQueue.length);}}
   }
   function renderProgress() {
     const progress=workState?.progress,items=(workState?.items||[]).filter(i=>!i.deleted);
@@ -539,12 +564,32 @@
     }
     if(!$('history-dialog').open)$('history-dialog').showModal();
   }
-  $('attach-file').addEventListener('click',()=>{if(uploadQueue.length)uploadFiles();else $('file-input').click();});
+  $('attach-file').addEventListener('click',()=>{if(!canUploadFiles())return;if(uploadQueue.length)uploadFiles();else $('file-input').click();});
   $('file-input').addEventListener('change',()=>{
-    const files=[...$('file-input').files];if(!files.length)return;
-    if(files.some(file=>file.size>(overview?.max_bim_bytes||8*1024*1024))){notify('Each file must be no larger than 8 MiB.');$('file-input').value='';return;}
-    uploadQueue=files.map(file=>({file,id:uid()}));uploadFiles();
+    queueFiles([...$('file-input').files]);
   });
+  const dropTarget=$('document-view'),dropStatus=node('p','sr-only');
+  dropStatus.id='document-drop-status';dropStatus.setAttribute('role','status');dropStatus.setAttribute('aria-live','polite');dropTarget.after(dropStatus);
+  dropTarget.dataset.dropTarget='files';let fileDragDepth=0;
+  const hasDraggedFiles=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
+  const clearFileDrag=()=>{fileDragDepth=0;dropTarget.classList.remove('file-drag-over');dropStatus.textContent='';};
+  dropTarget.addEventListener('dragenter',event=>{
+    if(!hasDraggedFiles(event))return;event.preventDefault();fileDragDepth++;
+    if(canUploadFiles()&&!uploadQueue.length){dropTarget.style.setProperty('--file-drop-scroll',dropTarget.scrollTop+'px');dropTarget.classList.add('file-drag-over');dropStatus.textContent='Drop files to add them to this conversation.';}
+  });
+  dropTarget.addEventListener('dragover',event=>{event.preventDefault();if(!event.dataTransfer)return;dropTarget.style.setProperty('--file-drop-scroll',dropTarget.scrollTop+'px');event.dataTransfer.dropEffect=hasDraggedFiles(event)&&canUploadFiles()&&!uploadQueue.length?'copy':'none';});
+  dropTarget.addEventListener('dragleave',event=>{if(hasDraggedFiles(event)&&--fileDragDepth<=0)clearFileDrag();});
+  dropTarget.addEventListener('drop',event=>{
+    event.preventDefault();clearFileDrag();if(!hasDraggedFiles(event))return;
+    const items=Array.from(event.dataTransfer.items||[]);
+    if(items.some(item=>item.kind==='file'&&item.webkitGetAsEntry?.()?.isDirectory)){notify('Drop individual files rather than folders.');return;}
+    queueFiles(Array.from(event.dataTransfer.files||[]));
+  });
+  // Prevent the browser navigating away when a file misses the document pane.
+  window.addEventListener('dragover',event=>{if(hasDraggedFiles(event)){event.preventDefault();if(!dropTarget.contains(event.target))clearFileDrag();}});
+  window.addEventListener('drop',event=>{if(hasDraggedFiles(event))event.preventDefault();clearFileDrag();});
+  window.addEventListener('dragend',clearFileDrag);window.addEventListener('blur',clearFileDrag);
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')clearFileDrag();});
   $('trash-toggle').addEventListener('click',()=>{showTrash=!showTrash;renderFiles();});
   $('add-plan-item').addEventListener('click',()=>openPlan());
   $('evidence-dialog').addEventListener('close',clearEvidence);
@@ -591,7 +636,7 @@
     $('document-context').hidden=!context;
     if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
   },text=>{$('document-status').textContent=/^(Rotate:|Drag on the drawing)/.test(text)?'':text.replace(' · drag to select an area','');});
-  function resetDocument(){viewerHelp.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
+  function resetDocument(){viewerHelp.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Drop files here, or choose them using + in chat.'));}
   async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;viewerHelp.hidden=true;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);if(generation===documentGeneration)showViewerHelp(file);}catch(e){if(generation===documentGeneration)notify(e.message);}}
   let savedDemoCleanup=()=>{};
   async function showSavedDemo(result){

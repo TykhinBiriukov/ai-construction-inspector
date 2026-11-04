@@ -124,6 +124,10 @@ button.quiet,.send,.primary,.suggestions button,.gv-tab{border-radius:999px;padd
 /* Keep dictation beside Send, with recording feedback in the same control row. */
 .composer-bottom{justify-content:flex-end}
 .composer-bottom .attach-button{margin-right:auto}
+.composer-bottom #attach-file{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;min-width:36px;max-width:36px;height:36px;min-height:36px;max-height:36px;aspect-ratio:1;border-radius:50%;padding:0;line-height:1;font-size:24px;overflow:hidden}
+.composer-bottom #attach-file svg{display:block;flex:none;width:18px;height:18px;margin:0;pointer-events:none}
+#document-view.file-drag-over{outline:2px dashed #7c9867;outline-offset:-7px}
+#document-view.file-drag-over::after{content:'Drop files to add them to this conversation';position:absolute;z-index:40;top:var(--file-drop-scroll,0px);left:0;right:0;height:100%;display:grid;place-items:center;padding:24px;box-sizing:border-box;text-align:center;font-size:16px;color:#45613b;background:#edf3e8ed;pointer-events:none}
 #voice-input{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--ink);flex:none}
 #voice-input[hidden]{display:none}
 #voice-input:hover{background:#eef1e8}
