@@ -23,11 +23,10 @@ No operator token is embedded in JavaScript or returned to visitors. Normal oper
 API routes retain their original authentication. Guest API requests use the
 `/public-demo` prefix; the same-origin viewer shares the guest session.
 
-To start a real phone capture from `/demo`, choose **Connect live project** and
-enter the operator credential for the iPhone's project. A prior same-tab Control
-Room login is reused automatically. The chat then uses the normal project API;
+To start a real phone capture from `/demo`, choose **Sign in** and
+enter the operator credential for the iPhone's project. An existing Control Room sign-in is reused automatically across open tabs in the same browser profile. The chat then uses the normal project API;
 the existing `session_create` tool can assign capture to the registered phone.
-The scope banner says **Live project**, and each new phone assignment shows its full session ID and
+The scope banner shows the shared project and device, and each new phone assignment shows its full session ID and
 acknowledgement state. Existing guest conversations and their task IDs remain in
 the separate demo workspace; repeat the capture request in the live chat.
 

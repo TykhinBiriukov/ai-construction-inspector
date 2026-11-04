@@ -1,10 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const AUTH_STORAGE_KEY = 'inspector-operator-session';
-function savedToken() { try { return sessionStorage.getItem(AUTH_STORAGE_KEY) || ''; } catch { return ''; } }
-function saveToken(value) {
-  try { if (value) sessionStorage.setItem(AUTH_STORAGE_KEY, value); else sessionStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* Storage may be disabled. */ }
-}
+function savedToken() { return window.InspectorOperatorSession.get(); }
+function saveToken(value) { window.InspectorOperatorSession.set(value); }
 function unlock() {
   $('token').value = ''; $('login').hidden = true; $('workspace').hidden = false;
   $('logout').hidden = false; $('refresh').disabled = false; fields();
@@ -300,6 +297,8 @@ fields();
 
 // Keep authentication through reloads in this tab; logout/401 clears it.
 (async function restoreLogin() {
+  await window.InspectorOperatorSession.ready;
+  window.InspectorOperatorSession.subscribe(() => location.reload());
   const saved = savedToken();
   if (!saved) return;
   token = saved; generation++; unlock(); $('connection').textContent = 'Reconnecting…';

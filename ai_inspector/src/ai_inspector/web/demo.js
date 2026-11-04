@@ -1,10 +1,10 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
-  const authKey = 'inspector-demo-session', operatorAuthKey = 'inspector-operator-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
+  const authKey = 'inspector-demo-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
   const read = (store, key) => { try { return store.getItem(key); } catch { return null; } };
   const write = (store, key, value) => { try { if (value == null) store.removeItem(key); else store.setItem(key,value); } catch {} };
-  const operatorToken = read(sessionStorage, operatorAuthKey) || '';
+  const operatorToken = window.InspectorOperatorSession.get();
   let token = operatorToken || read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
   let apiPrefix=operatorToken ? '' : read(sessionStorage,'inspector-demo-api-prefix')||'';
   let scopedSessions = [], scopedInspections = [];
@@ -59,7 +59,7 @@
   function lock() {
     voice.cancel();$("voice-input").hidden=true;
     closeProgress4d();geometryViewer?.clear();
-    if(!apiPrefix && read(sessionStorage,operatorAuthKey)===token)write(sessionStorage,operatorAuthKey,null);
+    if(!apiPrefix && window.InspectorOperatorSession.get()===token)window.InspectorOperatorSession.set('');
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;workspaceBusy=false;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('workspace-scope').hidden=true; $('token').value='';
@@ -68,12 +68,12 @@
   function unlock() {
     voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=!!apiPrefix; $('token').value='';
     if(apiPrefix){write(sessionStorage,authKey,token);write(sessionStorage,'inspector-demo-api-prefix',apiPrefix);}
-    else{write(sessionStorage,authKey,null);write(sessionStorage,'inspector-demo-api-prefix',null);write(sessionStorage,operatorAuthKey,token);}
+    else{write(sessionStorage,authKey,null);write(sessionStorage,'inspector-demo-api-prefix',null);window.InspectorOperatorSession.set(token);}
   }
   function renderWorkspaceScope(){
     const guest=!!apiPrefix;
     $('workspace-scope').hidden=false;
-    $('workspace-scope-text').textContent=guest?'Public demo · separate project. Phone capture is unavailable here.':'Live project · phone assignments use this project and device.';
+    $('workspace-scope-text').textContent=guest?'Sign in to use your connected phone. A Control Room sign-in is shared automatically.':`Project: ${overview.project_id} · ${overview.device_id}`;
     $('workspace-scope-link').hidden=!guest;
   }
   function controls() {
@@ -777,7 +777,7 @@
       if(!response.ok)throw Error(response.status===401?'Operator access was not accepted.':'The live project could not be reached.');
       const project=await response.json();
       if(!project.project_id||!project.device_id)throw Error('The live project response is incomplete.');
-      write(sessionStorage,operatorAuthKey,candidate);write(sessionStorage,authKey,null);
+      window.InspectorOperatorSession.set(candidate);write(sessionStorage,authKey,null);
       write(sessionStorage,'inspector-demo-api-prefix',null);
       location.reload();
     }catch(error){$('live-connect-error').textContent=error.message;$('live-connect-error').hidden=false;submit.disabled=false;}
@@ -1069,7 +1069,8 @@
 
   }
   async function beginDemo(){
-    const shared=read(sessionStorage,operatorAuthKey);
+    await window.InspectorOperatorSession.ready;
+    const shared=window.InspectorOperatorSession.get();
     if(shared){token=shared;apiPrefix='';}
     if(token.startsWith('demo.')&&Number(token.split('.')[2])*1000<=Date.now()){token='';write(sessionStorage,authKey,null);}
     if(!token){
@@ -1084,5 +1085,6 @@
     await startWorkspace();
   }
   $('demo-retry').onclick=()=>{notify();beginDemo();};
+  window.InspectorOperatorSession.subscribe(() => location.reload());
   beginDemo();
 })();
