@@ -197,58 +197,6 @@ text(ax, 34, 512, "Code preserves checklist identity, validates output schemas a
 save(fig, "drawing-photo-workflow")
 
 
-# 5a. Real-room observed surfaces; no accuracy or compliance aggregation.
-surface_rows = [row for row in read(GEO / "reports/scan_vs_bim/objects.json") if "statistics" in row]
-assert len(surface_rows) == 5
-fig, ax = canvas(1360, 570, "Measured results · real room", "Observed surfaces against the laser-derived IFC",
-                 "P95 absolute surface deviation after rigid alignment · all five reported surfaces · millimetres")
-plot = fig.add_axes([.15, .25, .65, .48], facecolor=BG)
-values = [row["statistics"]["p95_absolute_m"] * 1000 for row in surface_rows]
-names = ["Wall 01", "Wall 02 · door", "Wall 03", "Wall 04 · window", "Floor"]
-plot.barh(names, values, color=GREEN, height=.48)
-plot.invert_yaxis(); plot.set_xlim(0, 112); plot.set_xticks([0, 25, 50, 75, 100])
-plot.set_xlabel("P95 absolute deviation (mm)", labelpad=12)
-plot.set_axisbelow(True); plot.grid(axis="x", color=LINE)
-plot.tick_params(axis="both", length=0, pad=10)
-for spine in plot.spines.values(): spine.set_visible(False)
-for i, value in enumerate(values):
-    plot.text(value + 2, i, f"{value:.1f}", va="center", color=INK, weight="bold", fontsize=13)
-text(ax, 1140, 205, "99", 36, GREEN, "bold")
-text(ax, 1140, 245, "RGB-D frames", 11, MUTED)
-text(ax, 1140, 325, "5", 36, GREEN, "bold")
-text(ax, 1140, 365, "Observed surfaces", 11, MUTED)
-text(ax, 34, 521, "Measured on observed portions. Whole-element verification and hidden surfaces are outside this result's scope.", 11, MUTED)
-save(fig, "real-room-results")
-
-
-# 5b. The complete controlled wall experiment; separate from the real-room metric.
-summary = read(REPO / "docs/evidence/2026-11-03/controlled-benchmark/summary.json")
-wall = summary["wall"]
-assert wall["nearest_surface"]["n"] == wall["camera_side"]["n"] == 18
-fig, ax = canvas(1360, 570, "Measured results · controlled geometry", "Selecting the observed side of the wall",
-                 "18 predefined two-sided-wall cases · generated geometry with known displacement · same cases for both methods")
-plot = fig.add_axes([.20, .31, .54, .39], facecolor=BG)
-keys = ["nearest_surface", "camera_side"]
-labels = ["Nearest surface", "Camera-side selection"]
-vals = [wall[key]["mean_absolute_error_mm"] for key in keys]
-plot.barh(labels, vals, color=["#9ca99f", GREEN], height=.42)
-plot.invert_yaxis(); plot.set_ylim(1.65, -.65); plot.set_xlim(0, 102); plot.set_xticks([0, 20, 40, 60, 80, 100])
-plot.set_xlabel("Mean absolute signed-offset error (mm)", labelpad=14)
-plot.grid(axis="x", color=LINE); plot.set_axisbelow(True); plot.tick_params(length=0, pad=10)
-for spine in plot.spines.values(): spine.set_visible(False)
-for i, value in enumerate(vals):
-    label = "<0.001 mm" if value < .001 else f"{value:.2f} mm"
-    plot.text(value + 2, i, label, va="center", color=INK, weight="bold", fontsize=13)
-box(ax, 1070, 163, 256, 252, PALE, PALE)
-text(ax, 1092, 194, "ERRORS ABOVE 1 mm", 10, GREEN, "bold")
-text(ax, 1092, 242, f"{wall['nearest_surface']['above_1mm']}/18", 28, MUTED, "bold")
-text(ax, 1092, 277, "Nearest surface", 11, MUTED)
-text(ax, 1092, 332, f"{wall['camera_side']['above_1mm']}/18", 28, GREEN, "bold")
-text(ax, 1092, 371, "Camera-side selection", 11, GREEN, "bold")
-text(ax, 34, 480, "Known numerical answers make the surface-selection rule directly testable across all 18 cases.", 12, INK, "bold")
-text(ax, 34, 525, "Analytic geometry validation: numerical zero in this experiment does not represent physical scanner accuracy.", 11, MUTED)
-save(fig, "controlled-results")
-
 (OUT / "sources.json").write_text(json.dumps({
     "kind": "readme_figures_from_retained_evidence",
     "geometry_archive": "https://github.com/TykhinBiriukov/ai-construction-inspector/releases/download/evidence-2026-11-03/geometry-real-room-v1.zip",
@@ -256,4 +204,4 @@ save(fig, "controlled-results")
     "geometry_job_id": result["job_id"], "review_case_id": case["case_id"],
     "new_model_calls": 0, "sha256": sources,
 }, indent=2) + "\n")
-print("Rendered five figures; verified matching object, review, source frame and retained 3D lengths.")
+print("Rendered three figures; verified matching object, review, source frame and retained 3D lengths.")

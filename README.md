@@ -162,12 +162,6 @@ The implementation is accompanied by **real-room processing records, numerical c
 
 **A laser-measured physical reference.** The real-room IFC was constructed from laser measurements of the room, as confirmed by the team. The saved comparison reports reconstructed-surface deviations from this reference after rigid alignment: P95 values of approximately **27, 66, 31, 99 and 53 mm** across five observed surfaces. [Reference provenance and measurement definitions](docs/evidence/2026-11-03/README.md#what-the-result-means).
 
-![Real-room measurements: P95 absolute surface deviations of 26.6, 65.9, 30.9, 98.9 and 53.4 mm across four walls and the floor after rigid alignment to the laser-derived IFC.](demo/readme-figures/real-room-results.png)
-
-**Controlled numerical validation.** Across all **18 generated two-sided-wall cases**, selecting the camera-facing surface reduced signed-offset errors above 1 mm from **9/18 to 0/18**, compared with nearest-surface matching. The known geometry tests the correspondence rule directly; these numerical results are separate from the real-room measurements above. [Protocol and detailed results](docs/evidence/2026-11-03/controlled-comparison.md).
-
-![Controlled wall test: mean absolute signed-offset error falls from 82.22 mm to numerical zero, with errors above 1 mm reduced from 9 of 18 cases to 0 of 18.](demo/readme-figures/controlled-results.png)
-
 **Laser reference dimensions used in the opening checks.** The project owner confirms that the laser measurements match the reference IFC dimensions exactly. The values below are transcribed from that IFC reference, with object identities retained in the [numerical verification record](docs/evidence/2026-11-04/reference-verification.json).
 
 | Reference object | IFC GlobalId | Laser reference width | Laser reference height |

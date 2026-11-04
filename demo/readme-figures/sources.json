@@ -15,8 +15,6 @@
     "geometry-real-room-v1/demo/geometry-demo/geometry-186c494e12754e6a.jpg": "b6f0c159f961261afa4be78b709477be7c57cb08c899d87952c97b5d55eb176f",
     "geometry-real-room-v1/demo/geometry-demo/geometry-1a6d621d6b8e2a86.png": "02fa75f8ccc4b98bc5559630b5062e83edf7da2674ac519167f36d92ad306b85",
     "geometry-real-room-v1/demo/geometry-demo/geometry-21eba1ee8273bd3e.jpg": "80d65508876df45a31e5e74e3a2a856f84dcb4bdd8769dc7cb572d6871dd646f",
-    "drawing_photo_service/staged.py": "31d1678bcf9e2ad2c83a06090a695860209453a730fbb4b9c4b326408a0f68a7",
-    "geometry-real-room-v1/reports/scan_vs_bim/objects.json": "32994c3cd351fdb587433f1976c9a80789a2e5b54c6ec1c4ca777c5d8a1200c8",
-    "docs/evidence/2026-11-03/controlled-benchmark/summary.json": "977ac497f59edc0f5f5b8a8ae39bcd5ecb17eab42c85b885ec57b9b13fc72605"
+    "drawing_photo_service/staged.py": "31d1678bcf9e2ad2c83a06090a695860209453a730fbb4b9c4b326408a0f68a7"
   }
 }
