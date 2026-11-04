@@ -43,7 +43,7 @@
   function remember() {
     if(chat?.chat_id)write(sessionStorage,chatPendingKey(chat.chat_id),pending?JSON.stringify(pending):null);
     write(localStorage,pointerKey,chat?.chat_id ? JSON.stringify({chat_id:chat.chat_id, project_id:overview?.project_id}) : null);
-    write(sessionStorage,pendingKey,pending || create ? JSON.stringify({pending,create,chat_id:chat?.chat_id,project_id:overview?.project_id}) : null);
+    write(sessionStorage,pendingKey,pending || create ? JSON.stringify({pending,create,chat_id:chat?.chat_id,project_id:overview?.project_id,auth_mode:window.InspectorOperatorSession.mode()}) : null);
   }
   async function api(path, options={}) {
     const response=await fetch(path,{...options,headers:{...options.headers,...window.InspectorOperatorSession.headers(token)},signal:AbortSignal.timeout(60000)});
@@ -391,8 +391,8 @@
       if(!chat && !create) {
         try {
           const saved=JSON.parse(read(localStorage,pointerKey)||'null'), draft=JSON.parse(read(sessionStorage,pendingKey)||'null');
-          if(saved?.project_id===overview.project_id && saved.chat_id) chat={chat_id:saved.chat_id};
-          if(draft?.project_id===overview.project_id && (!draft.chat_id || draft.chat_id===chat?.chat_id)) { pending=draft.pending; create=draft.create; if(create) $('room').value=create.room_id; }
+          if(saved?.project_id===overview.project_id && chatChoices.some(item=>item.chat_id===saved.chat_id)) chat={chat_id:saved.chat_id};
+          if(draft?.project_id===overview.project_id && draft.auth_mode===window.InspectorOperatorSession.mode() && (!draft.chat_id || draft.chat_id===chat?.chat_id)) { pending=draft.pending; create=draft.create; if(create) $('room').value=create.room_id; }
         } catch {}
       }
       if(chat?.chat_id) { const id=chat.chat_id; const result=await api(`/v1/chats/${encodeURIComponent(id)}`); if(current!==epoch) return; if(chat?.chat_id===id) chat=result; }
