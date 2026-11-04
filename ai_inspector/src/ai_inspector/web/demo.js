@@ -765,12 +765,11 @@
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);
   setInterval(()=>{if(token)updateActivityStatus();},1000);
   const intro=$('demo-welcome');
-  let showScenarioGuide=()=>{};
+  let showExamples=()=>{};
   const dismissIntro=()=>intro.close();
-  $('demo-welcome-close').onclick=dismissIntro;$('demo-welcome-start').onclick=()=>{dismissIntro();write(sessionStorage,'inspector-guide-requested','1');showScenarioGuide();};
+  $('demo-welcome-close').onclick=dismissIntro;$('demo-welcome-start').onclick=()=>{dismissIntro();showExamples();};
   intro.addEventListener('close',()=>write(sessionStorage,'inspector-demo-intro-v1','seen'));
   $('demo-about').onclick=()=>intro.showModal();
-  if(!read(sessionStorage,'inspector-demo-intro-v1'))intro.showModal();
   let demoInstalled=false;
   async function startWorkspace(){
     if(demoInstalled){await refresh();return;}
@@ -867,101 +866,171 @@
     });
 
   };
-  let demoBusy=false, demoReady=false;
-  const demoHint=node('p','demo-next','Demo scenarios');
-  const demoSteps=node('section','demo-steps');demoSteps.hidden=true;demoSteps.setAttribute('aria-live','polite');
-  $('activity-open').after(demoSteps);
-  const demoTimeline=node('section','demo-steps');demoTimeline.hidden=true;$('activity').before(demoTimeline);
-  const demoActions=node('div','demo-actions');demoActions.id='demo-navigation-actions';
-  const ask=node('button','quiet','Ask about this result');ask.type='button';ask.hidden=true;
-  ask.onclick=()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('message').focus();$('message').placeholder='Ask a question about the current result…';};
-  const reset=node('button','quiet','Back to start');reset.type='button';
-  demoActions.append(ask,reset);$('suggestions').before(demoHint);$('suggestions').after(demoActions);
-  const scenarioGroup=node('div','demo-scenarios');demoHint.before(scenarioGroup);scenarioGroup.append(demoHint,$('suggestions'));
-  const coach=node('aside','demo-coachmark');coach.hidden=true;coach.setAttribute('role','note');coach.setAttribute('aria-label','About demo scenarios');
-  coach.append(node('p','','These scenario shortcuts are just for this demo. In the product, describe what you need in chat and attach your documents or share links to them.'));
-  const gotIt=node('button','quiet','Got it');gotIt.type='button';coach.append(gotIt);document.body.append(coach);
-  const dismissGuide=()=>{coach.hidden=true;scenarioGroup.classList.remove('is-guided');write(localStorage,'inspector-scenario-guide-v2','seen');write(sessionStorage,'inspector-guide-requested',null);};
-  gotIt.onclick=dismissGuide;
-  coach.addEventListener('keydown',event=>{if(event.key==='Escape')dismissGuide();});
-  $('suggestions').addEventListener('click',()=>{if(!coach.hidden)dismissGuide();});
-  function positionScenarioGuide(){
-    if(coach.hidden)return;
-    const collapsed=!!document.querySelector('.chat-hidden');
-    coach.style.visibility=collapsed||intro.open?'hidden':'visible';
-    const target=scenarioGroup.getBoundingClientRect(),divider=$('resize-dialogue').getBoundingClientRect();
-    const width=Math.min(360,window.innerWidth-32);
-    coach.style.width=width+'px';
-    const center=divider.width&&divider.height?divider.left+divider.width/2:target.left+target.width/2;
-    coach.style.left=Math.max(16,Math.min(window.innerWidth-width-16,center-width/2))+'px';
-    coach.style.top=Math.max(16,Math.min(window.innerHeight-coach.offsetHeight-16,target.top-coach.offsetHeight-16))+'px';
-  }
-  const guideResize=new ResizeObserver(positionScenarioGuide);
-  guideResize.observe(scenarioGroup);guideResize.observe(document.querySelector('.conversation'));
-  window.addEventListener('resize',positionScenarioGuide);
-  document.addEventListener('scroll',positionScenarioGuide,true);
-  showScenarioGuide=()=>{
-    if(demoReady&&!demoBusy&&!intro.open&&read(sessionStorage,'inspector-guide-requested')&&!read(localStorage,'inspector-scenario-guide-v2')){
-      coach.hidden=false;scenarioGroup.classList.add('is-guided');positionScenarioGuide();
-    }
+  const exampleInfo={
+    geometry:{title:'Model & site photos',short:'Compare design with the room.',description:'Explore a BIM model alongside a recorded room scan and the phone photos behind its measurements.',steps:['Explore the supplied BIM model and site photo.','Open the saved model-to-scan comparison.','Select a door or window to inspect measurements and photo evidence.'],result:'A 3D comparison with matched objects, recorded dimensions and their source photos.'},
+    drawing:{title:'Drawing & installation',short:'Look closer at a window detail.',description:'Compare a window installation drawing with two supplied photos, using prepared visual observations.',steps:['Inspect the drawing and both installation photos.','Open the prepared comparison.','Switch photos and select a detail to see the highlighted evidence.'],result:'The drawing and photos together, with selectable observations and highlighted details.'},
+    progress:{title:'Construction progress',short:'Follow the building over time.',description:'Explore a saved seven-week construction timeline with the models, photos and findings available for each week.',steps:['Explore the supplied timeline and its reference files.','Open the saved weekly progress analysis.','Move through the weeks to inspect models, photos and recorded findings.'],result:'An interactive weekly timeline with construction progress and supporting evidence.'}
   };
+  let demoBusy=false,demoReady=false,selectedExample=null,selectedExampleEntry=null,lastExample=null,lastExampleMode=null,exampleManifest=null,exampleFilesReady=false,previewVersion=0,previewModel=null;
+  const previewUrls=[],scenarioDialog=$('demo-scenario-dialog');
+  const demoSteps=$('demo-example-status'),demoTimeline=node('section','demo-steps');
+  demoTimeline.hidden=true;$('activity').before(demoTimeline);
+  const ask=node('button','quiet','Ask about this result'),about=node('button','quiet','Example details');
+  ask.type=about.type='button';about.id='demo-scenario-about';
+  $('demo-example-actions').append(about,ask);
+  ask.onclick=()=>{$('message').focus();$('message').placeholder=lastExampleMode==='inputs'?'Describe what you want to check…':'Ask a question about the current result…';};
+  about.onclick=()=>{if(lastExample)openExample(lastExample);};
   $('suggestions').replaceChildren();
+  $('demo-examples-section').hidden=false;
+  showExamples=()=>{layout.hideFiles=false;applyLayout();$('demo-examples-section').scrollIntoView({block:'nearest'});$('demo-examples').querySelector('button')?.focus();};
+  function clearExamplePreview(){
+    previewVersion++;previewModel?.clear?.();previewModel=null;
+    previewUrls.splice(0).forEach(url=>URL.revokeObjectURL(url));
+    $('demo-scenario-preview').replaceChildren(node('p','','Select a file to preview it.'));
+  }
+  scenarioDialog.addEventListener('close',clearExamplePreview);
+  $('demo-scenario-close').onclick=()=>scenarioDialog.close();
   function demoControls(){
-    showScenarioGuide();
+    demoReady=!!token&&!!overview;
+    const busy=!token||!overview||demoBusy||sending||workspaceBusy||!!uploadQueue.length||!!pending||!!chat?.runs?.at(-1)?.auto_resume;
     document.querySelector('.conversation').classList.toggle('demo-working',demoBusy);
-    for(const b of $('suggestions').querySelectorAll('button'))b.disabled=demoBusy||!demoReady||sending||!!pending;
-    reset.disabled=demoBusy||sending||!!pending;ask.disabled=demoBusy||sending||!!pending;
+    for(const b of $('demo-examples').querySelectorAll('button'))b.disabled=busy||!demoReady;
+    $('demo-scenario-run').disabled=busy||!demoReady||!exampleFilesReady;
+    ask.disabled=about.disabled=busy;
     if(demoBusy){$('new-chat').disabled=true;$('chat-picker').disabled=true;$('message').disabled=true;$('send').disabled=true;}
   }
   const originalControls=controls;
   controls=function(){originalControls();demoControls();};
-  function paintDemoStages(stages,position){
-    demoSteps.hidden=false;demoSteps.replaceChildren(node('strong','','Demo replay · simulated stages'));
-    stages.forEach((label,i)=>demoSteps.append(node('div',i===position?'demo-stage-active':'',`${i<position?'✓':i===position?'◌':'○'} ${label}`)));
-    demoTimeline.hidden=false;demoTimeline.replaceChildren(...[...demoSteps.childNodes].map(n=>n.cloneNode(true)));
-  }
-  async function runDemo(item){
-    if(demoBusy||!demoReady||sending||pending)return;
-    demoBusy=true;workspaceBusy=true;controls();notify();ask.hidden=true;
-    const stages=['Load prepared dataset',item[0]==='progress'?'Read saved weekly analysis':'Read saved comparison','Prepare viewer and findings'];
+  async function previewExampleFile(file,scenario){
+    clearExamplePreview();const version=previewVersion,current=epoch,host=$('demo-scenario-preview');
+    const active=()=>version===previewVersion&&current===epoch&&scenarioDialog.open;
+    host.replaceChildren(node('p','','Loading '+file.name+'…'));
+    for(const b of $('demo-scenario-files').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.demoFile===file.id));
     try{
-      for(let i=0;i<stages.length;i++){paintDemoStages(stages,i);await new Promise(resolve=>setTimeout(resolve,650));}
-      // A deterministic local adapter uses the normal persisted chat/tool path.
+      const prefix='/v1/demo/scenarios/'+scenario+'/assets/';
+      if(typeof file.url!=='string'||!file.url.startsWith(prefix)||!/^[-a-zA-Z0-9]+$/.test(file.url.slice(prefix.length)))throw Error('This example file is unavailable.');
+      const blob=await api(file.url,{blob:true});if(!active())return;
+      const caption=node('div','scenario-file-caption'),download=node('a','quiet','Download file'),url=URL.createObjectURL(blob);
+      previewUrls.push(url);download.href=url;download.download=file.name;caption.append(node('span','',file.name),download);host.replaceChildren(caption);
+      if(file.kind==='ifc'){
+        const canvas=node('div','scenario-model'),status=node('p','muted');host.append(canvas,status);
+        const model=new ProjectDocuments.GeometryModel(canvas,()=>{},text=>{if(active())status.textContent=text;});previewModel=model;
+        await model.openArtifact('ifc',blob);if(!active()){model.clear?.();return;}
+      }else if(file.kind==='image'){
+        const img=node('img');img.alt=file.description||file.name;img.src=url;host.append(img);
+      }else if(file.kind==='json'){
+        if(blob.size>4*1024*1024)throw Error('This file is too large to preview. Use Download file.');
+        const text=await blob.text();if(!active())return;const pre=node('pre');
+        try{pre.textContent=JSON.stringify(JSON.parse(text),null,2);}catch{pre.textContent=text;}host.append(pre);
+      }else host.append(node('p','','Download this file to explore it.'));
+      if(active()&&file.description)host.append(node('p','scenario-file-note',file.description));
+    }catch(error){if(active())host.append(node('p','scenario-file-note',error.message||'Could not open this example file.'));}
+  }
+  async function openExample(item){
+    if(!token||!overview||demoBusy||sending||pending)return;
+    selectedExample=item;selectedExampleEntry=null;exampleFilesReady=false;clearExamplePreview();const version=previewVersion,current=epoch,info=exampleInfo[item[0]];
+    scenarioDialog.querySelector('.scenario-heading .eyebrow').textContent='EXAMPLE';
+    $('demo-scenario-run').textContent='Show example result';
+    scenarioDialog.querySelector('.scenario-footer>span').textContent='Explore first, or go straight to the result.';
+    $('demo-scenario-title').textContent=info.title;$('demo-scenario-description').textContent=info.description;
+    $('demo-scenario-icon').src='/ui/demo-example-'+item[0]+'.png';
+    $('demo-scenario-steps').replaceChildren(...info.steps.map(text=>node('li','',text)));
+    $('demo-scenario-result').textContent=info.result;
+    $('demo-scenario-notice').textContent='A prepared example using saved results. No new scan or inspection is performed. Follow-up questions use the connected AI.';
+    $('demo-scenario-files').replaceChildren(node('p','muted','Loading source files…'));
+    if(!scenarioDialog.open)scenarioDialog.showModal();controls();
+    for(const b of $('demo-examples').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.scenario===item[0]));
+    try{
+      const manifest=exampleManifest||await api('/v1/demo/scenarios');
+      if(version!==previewVersion||current!==epoch||!scenarioDialog.open)return;
+      const entry=manifest.scenarios?.find(s=>s.id===item[0]);if(!entry||!Array.isArray(entry.files))throw Error('The source files for this example are unavailable.');
+      selectedExampleEntry=entry;
+      if(entry.mode==='inputs'){
+        scenarioDialog.querySelector('.scenario-heading .eyebrow').textContent='PREPARED INPUTS';
+        if(entry.description)$('demo-scenario-description').textContent=entry.description;
+        $('demo-scenario-steps').replaceChildren(...['Inspect the prepared source files.','Add the inputs to this conversation.','Send the task to AI Inspector for a new analysis when connected.'].map(text=>node('li','',text)));
+        $('demo-scenario-result').textContent='The source files and a task ready for analysis. Findings come from the configured analysis services, not a prepared answer.';
+        $('demo-scenario-run').textContent=caps?.agent_model_configured===true?'Analyze these inputs':'Use these inputs';
+        scenarioDialog.querySelector('.scenario-footer>span').textContent='Review the files, then start with these inputs.';
+      }
+      exampleManifest=manifest;const list=$('demo-scenario-files');list.replaceChildren();
+      for(const file of entry.files){const button=node('button','scenario-file',file.name);button.type='button';button.dataset.demoFile=file.id;button.setAttribute('aria-pressed','false');button.onclick=()=>previewExampleFile(file,item[0]);list.append(button);}
+      if(entry.notice)$('demo-scenario-notice').textContent=entry.notice;
+      exampleFilesReady=entry.available!==false&&entry.files.length>0&&entry.files.some(f=>f.attach!==false);controls();
+      if(!entry.files.length){list.append(node('p','muted','Prepared source files are not available here yet.'));$('demo-scenario-preview').replaceChildren(node('p','','Add the source dataset to enable this example.'));}
+      const first=entry.files[0];if(first)previewExampleFile(first,item[0]);
+    }catch(error){if(version===previewVersion&&current===epoch&&scenarioDialog.open)$('demo-scenario-files').replaceChildren(node('p','muted',error.message||'Could not load this example. Close and select it to retry.'));}
+  }
+  function paintExampleStatus(text){demoSteps.hidden=false;demoSteps.textContent=text;demoTimeline.hidden=false;demoTimeline.replaceChildren(node('p','',text));}
+  async function runDemo(item,entry){
+    if(!token||!overview||demoBusy||!demoReady||sending||workspaceBusy||uploadQueue.length||pending||chat?.runs?.at(-1)?.auto_resume)return;
+    const current=epoch,originalDraft=$('message').value,originalChat=chat?.chat_id,originalFiles=[...chosenFiles],originalContext=documentContext;
+    const originalDraftIsExample=exampleManifest?.scenarios?.some(s=>s.mode==='inputs'&&s.prompt===originalDraft);
+    let keepInputDraft=false;
+    demoBusy=true;controls();notify();$('demo-example-actions').hidden=true;
+    paintExampleStatus(entry?.mode==='inputs'?'Preparing source files…':'Opening saved example…');
+    try{
+      if(entry?.mode==='inputs'){
+        if(typeof entry.prompt!=='string'||!entry.prompt.trim()||entry.prompt.length>8000||demoCases.some(c=>c[2]===entry.prompt))throw Error('This example needs a task for a new analysis.');
+        const sources=entry.files.filter(f=>f.attach!==false);
+        if(!sources.length||sources.length>8)throw Error('An example must include between 1 and 8 input files.');
+        const prepared=[];
+        for(const file of sources){
+          const prefix='/v1/demo/scenarios/'+item[0]+'/assets/';
+          if(typeof file.url!=='string'||!file.url.startsWith(prefix)||!/^[-a-zA-Z0-9]+$/.test(file.url.slice(prefix.length)))throw Error('This example file is unavailable.');
+          const blob=await api(file.url,{blob:true});if(current!==epoch)return;
+          if(blob.size>(overview?.max_bim_bytes||8*1024*1024))throw Error('An example file exceeds this workspace upload limit.');
+          prepared.push({id:uid(),file:new File([blob],file.name,{type:blob.type})});
+        }
+        chosenFiles.clear();documentContext=null;$('document-context').hidden=true;
+        const fileIds=prepared.map(f=>f.id);uploadQueue=prepared;
+        $('message').value=entry.prompt;
+        const uploaded=await uploadFiles(true);if(current!==epoch)return;
+        if(!uploaded||uploadQueue.length){keepInputDraft=true;if(originalDraft)$('message').value=originalDraft;paintExampleStatus('The input upload is incomplete. Retry the upload before sending the task.');return;}
+        chosenFiles.clear();fileIds.forEach(id=>chosenFiles.add(id));renderFiles();
+        if(caps?.agent_model_configured!==true){
+          keepInputDraft=true;if(originalDraft&&!originalDraftIsExample)$('message').value=originalDraft;
+          lastExample=item;lastExampleMode='inputs';ask.textContent='Continue in chat';paintExampleStatus('Inputs attached. Review the task in chat; analysis requires a connected AI service.');$('demo-example-actions').hidden=false;return;
+        }
+        await send();if(current!==epoch)return;
+        const last=chat?.runs?.at(-1);
+        if(last?.text!==entry.prompt||last.status!=='completed')throw Error(last?.error?.message||'Analysis is not finished. Resume the saved request.');
+        lastExample=item;lastExampleMode='inputs';ask.textContent='Continue in chat';paintExampleStatus('Analysis request completed. Review the response and any available evidence.');$('demo-example-actions').hidden=false;return;
+      }
       chosenFiles.clear();documentContext=null;$('document-context').hidden=true;
-      renderFiles();$('message').value=item[2];workspaceBusy=false;
-      await send();
+      renderFiles();$('message').value=item[2];
+      await send();if(current!==epoch)return;
       const last=chat?.runs?.at(-1);
       if(last?.text!==item[2]||last.status!=='completed'||!last.tool_results?.some(t=>t.result?.viewer))throw new Error(last?.error?.message||'Result not ready. Resume the request or try again.');
-      paintDemoStages(stages,stages.length);
-      demoHint.textContent='Demo scenarios';ask.hidden=false;$('messages').scrollTop=$('messages').scrollHeight;
-    }catch(error){demoHint.textContent='The demo could not finish. You can retry the use case.';notify(error.message);demoSteps.append(node('p','','Replay interrupted.'));}
-    finally{demoBusy=false;workspaceBusy=false;controls();}
+      lastExample=item;lastExampleMode='recorded';ask.textContent='Ask about this result';paintExampleStatus('Saved example ready. Explore the result in the viewer.');$('demo-example-actions').hidden=false;
+      $('messages').scrollTop=$('messages').scrollHeight;
+    }catch(error){if(current===epoch){paintExampleStatus('The example could not finish. Your request is preserved.');notify(error.message);}}
+    finally{demoBusy=false;if(current===epoch){
+      if(!pending&&!keepInputDraft){
+        if(!$('message').value)$('message').value=originalDraft;
+        if(originalChat&&chat?.chat_id===originalChat){
+          const existing=new Set((workState?.files||[]).filter(f=>!f.deleted).map(f=>f.file_id));
+          chosenFiles.clear();for(const id of originalFiles)if(existing.has(id))chosenFiles.add(id);
+          documentContext=originalContext&&existing.has(originalContext.file_id)?originalContext:null;
+          $('document-context').hidden=!documentContext;if(documentContext)$('document-context').querySelector('span').textContent=documentContext.label;
+          renderFiles();
+        }
+      }
+      controls();
+    }}
   }
-  for(const item of demoCases){const b=node('button','',item[1]);b.type='button';b.dataset.scenario=item[0];const arrow=node('span','demo-case-arrow','→');arrow.setAttribute('aria-hidden','true');b.append(arrow);b.onclick=()=>runDemo(item);$('suggestions').append(b);}
-  async function startDemo(){
-    if(demoBusy||sending||pending)return;
-    demoReady=false;demoBusy=true;controls();
-    try{
-      $('message').value='';await switchConversation('');
-      await ensureChat();await refresh();
-      layout.hideFiles=false;layout.hideChat=false;applyLayout();
-      presentedProgress.clear();resetDocument();showTrash=false;chosenFiles.clear();renderFiles();
-      demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Demo scenarios';ask.hidden=true;
-      $('message').placeholder='Ask Inspector…';
-      write(sessionStorage,'inspector-guided-demo-chat',chat.chat_id);demoReady=true;
-    }catch(error){notify('Could not prepare the demo: '+error.message);}
-    finally{demoBusy=false;controls();}
+  $('demo-scenario-run').onclick=()=>{if(!selectedExample||!exampleFilesReady||$('demo-scenario-run').disabled)return;const item=selectedExample,entry=selectedExampleEntry;scenarioDialog.close();runDemo(item,entry);};
+  for(const item of demoCases){
+    const info=exampleInfo[item[0]],button=node('button','demo-example-card'),image=node('img'),copy=node('span','example-card-copy');
+    button.type='button';button.dataset.scenario=item[0];button.setAttribute('aria-pressed','false');button.setAttribute('aria-haspopup','dialog');
+    image.src='/ui/demo-example-'+item[0]+'.png';image.alt='';image.width=image.height=54;
+    copy.append(node('strong','',info.title),node('small','',info.short));button.append(image,copy,node('span','example-card-arrow','↗'));
+    button.onclick=()=>openExample(item);$('demo-examples').append(button);
   }
-  reset.onclick=startDemo;
-  // New conversation is the same reversible reset; existing chats remain saved.
-  $('new-chat').addEventListener('click',event=>{event.stopImmediatePropagation();startDemo();},true);
-  $('chat-picker').addEventListener('change',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Demo scenarios';},true);
-  document.querySelector('.welcome-instruction').textContent='Choose a use case in chat. Stages are simulated and results are saved; no new scan or inspection runs. Follow-up questions use the connected AI.';
-  if(token)(async()=>{
-    await refresh();
-    if(read(sessionStorage,'inspector-guided-demo-chat')===chat?.chat_id){demoReady=true;ask.hidden=!(chat?.runs?.length);if(!ask.hidden)demoHint.textContent='Demo scenarios';controls();}
-    else await startDemo();
-  })();
+  $('chat-picker').addEventListener('change',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('demo-example-actions').hidden=true;},true);
+  $('new-chat').addEventListener('click',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('demo-example-actions').hidden=true;});
+  document.querySelector('.welcome-instruction').textContent='Choose an example in the left sidebar to explore its source files and start with prepared inputs. Saved results, when provided, are labelled separately. You can also drop your own documents into the centre or add them using + in chat.';
+  await refresh();demoReady=!!overview;controls();
 
   }
   async function beginDemo(){
@@ -977,6 +1046,6 @@
     }
     await startWorkspace();
   }
-  $('demo-retry').onclick=()=>beginDemo();
+  $('demo-retry').onclick=()=>{notify();beginDemo();};
   beginDemo();
 })();

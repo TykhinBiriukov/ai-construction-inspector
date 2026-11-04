@@ -21,10 +21,40 @@ The read-only mount comes from `/opt/inspector-backend/demo-assets` and contains
 
 These assets are deployed separately, not committed to Git. The original remote
 result with signed URLs, credentials, local databases and captures are excluded.
-No example files are automatically uploaded when a chat is created. Existing conversations retain their documents.
-Result asset routes check operator access and chat ownership. Demo stages are
-simulated; selecting a scenario reads existing results. Follow-up questions use
-the configured chat model. Disable the directory setting to restore normal mode.
+Result asset routes check operator access and chat ownership. Follow-up questions
+use the configured chat model. Disable the directory setting to restore normal mode.
+
+The left sidebar presents three illustrated examples above Files, Tasks and Capture
+Devices. Those workspace sections start collapsed and remain available for ordinary
+work. The examples and red coachmark have been removed from the conversation area.
+The welcome introduction is available through About demo; it does not open automatically.
+
+Selecting an example opens a dismissible details dialog with its source files,
+read-only previews/downloads, the steps to explore and the expected next action.
+Browsing does not create a chat, attach documents or start an inspection. Source
+previews are read from the configured example library, independently of the user's files.
+The first listed source opens automatically. For Model & site photos this is
+`room.ifc`; selecting another file switches the preview.
+The recorded library uses the IFC and source frame referenced by its Geometry result,
+the drawing and two photos for Drawing, and the timeline and labelled references for
+Progress. Input-only libraries list their actual available source files independently.
+No example files are automatically uploaded when a chat is created.
+Existing conversations retain their documents.
+
+Examples distinguish prepared inputs from recorded results. For an input example,
+Use these inputs uploads the listed attachable files through the ordinary scoped
+workspace upload API and prepares its task in chat. When the server reports a
+configured chat model, Analyze these inputs submits that task with the uploaded
+file IDs through the normal analysis path. It does not use the recorded-demo
+shortcut or include evaluator answers. Without model configuration it keeps the
+files and draft ready, rather than substituting an answer. Model configuration
+does not itself establish a successful analysis or available downstream services.
+
+Recorded examples retain Show example result and the existing saved-result path;
+this label does not claim fresh reconstruction or inspection. Repeated clicks
+are disabled while uploads or requests are active, and pending requests retain
+their existing retry identity. A completed request preserves the user's prior
+draft and selected attachments. New chat returns to the ordinary empty conversation.
 
 The central document area accepts dropped files through the same validation,
 upload queue and retry identities as the circular + button. Dropped URLs are not
@@ -65,6 +95,8 @@ IFC, one RGB preview and a capture manifest do not constitute validated Geometry
 intake or a completed comparison. Preserve capture identity and use the existing
 capture/Geometry path when processing the complete source. Real, generated and
 recorded material must keep its provenance labels.
+
+The sidebar and welcome dialog use the bundled SVG Inspector logo.
 
 Set `INSPECTOR_VOICE_ENABLED=true` to enable Meta Muse Voice Transcribe 1.0 with
 the existing server-side Meta API key. Voice records up to 60 seconds, converts
