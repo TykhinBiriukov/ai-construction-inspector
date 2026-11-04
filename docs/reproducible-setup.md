@@ -66,6 +66,7 @@ Edit the ignored `ai_inspector/.env` privately. Replace the example operator/dev
 | `INSPECTOR_DEVICE_TOKEN` | Different phone credential; keep it separate from the operator token |
 | `INSPECTOR_PROJECT_ID`, `INSPECTOR_DEVICE_ID` | Stable local scope, for example `demo-building` / `iphone-1` |
 | `INSPECTOR_DATA_DIR` | Absolute persistent path, for example the `inspector-data` subdirectory of your runtime directory |
+| `INSPECTOR_BROWSER_ORIGIN` | `http://127.0.0.1:8000`; must match the browser address, including its port. Use your public HTTPS origin when hosting. |
 | `INSPECTOR_META_API_KEY` | Your server-side Meta Model API key |
 | `INSPECTOR_META_BASE_URL`, `INSPECTOR_META_MODEL` | Keep the example defaults `https://api.meta.ai/v1` / `muse-spark-1.3` |
 | `INSPECTOR_REMOTE_AGENTS_JSON` | Keep `[]` until you configure the A2A profile below |
@@ -77,6 +78,13 @@ Local SQLite and local BIM storage require no external database. Leave optional 
 ```
 
 Open [the chat workspace](http://127.0.0.1:8000/ui/demo.html) and authenticate with the operator token. The [operational console](http://127.0.0.1:8000/), [OpenAPI UI](http://127.0.0.1:8000/docs) and [capabilities](http://127.0.0.1:8000/v1/capabilities) expose the running instance. `GET /health` executes a database query; it does not call Meta. `agent_model_configured=true` reports nonempty configuration, not a successful model request.
+
+The workspace can bootstrap a scoped public-browser session; use the operational
+console for operator login. Both pages share the session cookie. With the explicit
+loopback HTTP origin, local cookies work over HTTP. Hosted HTTPS retains Secure
+`__Host-` cookies. Cookie-authenticated writes still require the exact configured
+Origin. Changing `127.0.0.1` to `localhost` or changing the port requires updating
+the setting and restarting the service. Non-loopback HTTP origins are rejected.
 
 Submitting a chat message invokes the configured model and may consume API usage. File rendering alone does not send a document to the model. See [backend setup](../ai_inspector/README.md), [agent contract](../ai_inspector/docs/agent-chat.md) and [web integration](../ai_inspector/docs/web-integration.md).
 
@@ -208,7 +216,7 @@ Supply the referenced task/tool secrets privately to the backend and set `INSPEC
 & "$runtimeRoot\inspector-env\Scripts\python.exe" -m uvicorn ai_inspector.discrepancy_agents:create_inspector_app_from_env --factory --host 127.0.0.1 --port 8101
 ```
 
-Inspect each `/.well-known/agent-card.json` and `/contracts`; compare service IDs, profile version, caller scopes and both registrations. Cards do not prove a successful authenticated delegation or model response. Explicitly request an IFC/scan inspection with one selected IFC to register downstream review; Geometry completion alone does not start an unsolicited review. The full [A2A configuration and contracts](../ai_inspector/docs/ifc-discrepancy-review.md#13-настройка-и-использование) cover task headers, budgets, evidence limits and retry identities.
+Inspect each `/.well-known/agent-card.json` and `/contracts`; compare service IDs, profile version, caller scopes and both registrations. Cards do not prove a successful authenticated delegation or model response. Explicitly request an IFC/scan inspection with one selected IFC to register downstream review; Geometry completion alone does not start an unsolicited review. The full [A2A configuration and contracts](../ai_inspector/docs/ifc-discrepancy-review.md#13-configuration-and-usage) cover task headers, budgets, evidence limits and retry identities.
 
 ## 6. Progress4D: dated photo surveys and construction monitoring
 

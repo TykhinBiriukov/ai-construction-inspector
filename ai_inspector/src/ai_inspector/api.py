@@ -139,11 +139,11 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     def authenticate(request: Request, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> Principal:
         if credentials:
             return authenticate_token(credentials.credentials)
-        if browser_session.verify(settings.operator_token, request.cookies.get(browser_session.COOKIE)):
+        if browser_session.verify(settings.operator_token, request.cookies.get(browser_session.cookie_settings(settings)[0])):
             if request.method not in ("GET", "HEAD", "OPTIONS"):
                 require_browser_origin(request)
             return Principal("operator", settings.project_id)
-        visitor = public_access.visitor(settings, request.cookies.get(public_access.COOKIE))
+        visitor = public_access.visitor(settings, request.cookies.get(browser_session.cookie_settings(settings, public=True)[0]))
         if visitor:
             if request.method not in ("GET", "HEAD", "OPTIONS"):
                 require_browser_origin(request)
@@ -231,8 +231,9 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         principal = authenticate_token(credentials.credentials if credentials else None)
         require_role(principal, "operator")
         response = JSONResponse({"authenticated": True})
-        response.set_cookie(browser_session.COOKIE, browser_session.mint(settings.operator_token),
-                            max_age=browser_session.MAX_AGE, httponly=True, secure=True,
+        name, secure = browser_session.cookie_settings(settings)
+        response.set_cookie(name, browser_session.mint(settings.operator_token),
+                            max_age=browser_session.MAX_AGE, httponly=True, secure=secure,
                             samesite="strict", path="/")
         return response
 
@@ -244,19 +245,21 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     def sign_out_browser(request: Request):
         require_browser_origin(request)
         response = JSONResponse({"authenticated": False})
-        for cookie in (browser_session.COOKIE, public_access.COOKIE):
-            response.delete_cookie(cookie, httponly=True, secure=True, samesite="strict", path="/")
+        for public in (False, True):
+            name, secure = browser_session.cookie_settings(settings, public=public)
+            response.delete_cookie(name, httponly=True, secure=secure, samesite="strict", path="/")
         return response
 
     @app.post('/v1/demo/session')
     def public_browser_session(request: Request):
         require_browser_origin(request)
-        value = request.cookies.get(public_access.COOKIE)
+        name, secure = browser_session.cookie_settings(settings, public=True)
+        value = request.cookies.get(name)
         if not public_access.visitor(settings, value):
             value = browser_session.mint(settings.operator_token + ":public")
         response = JSONResponse({"authenticated": True, "mode": "public"})
-        response.set_cookie(public_access.COOKIE, value, max_age=browser_session.MAX_AGE,
-                            httponly=True, secure=True, samesite="strict", path="/")
+        response.set_cookie(name, value, max_age=browser_session.MAX_AGE,
+                            httponly=True, secure=secure, samesite="strict", path="/")
         return response
 
     if settings.saved_demo_dir:

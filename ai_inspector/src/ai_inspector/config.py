@@ -1,6 +1,7 @@
 import os
 import re
 import math
+import ipaddress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
@@ -73,6 +74,27 @@ class Settings:
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig, repr=False)
 
     def __post_init__(self) -> None:
+        origin = urlsplit(self.browser_origin)
+        if (origin.scheme not in ('http', 'https') or not origin.hostname
+                or origin.username is not None or origin.password is not None
+                or origin.path not in ('', '/') or origin.query or origin.fragment
+                or any(c.isspace() for c in self.browser_origin)
+                or any(c in self.browser_origin for c in ('\\', '%', '?', '#'))
+                or any(ord(c) < 32 or ord(c) == 127 for c in self.browser_origin)
+                or (origin.scheme == 'http' and origin.hostname not in ('localhost', '127.0.0.1', '::1'))):
+            raise ValueError('INSPECTOR_BROWSER_ORIGIN must be an HTTPS origin; HTTP is allowed only on loopback')
+        hostname = origin.hostname
+        try:
+            hostname = str(ipaddress.ip_address(hostname))
+        except ValueError:
+            label = r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
+            if (len(hostname) > 253 or not re.fullmatch(label + r'(?:\.' + label + r')*\.?', hostname, re.I)
+                    or re.fullmatch(r'(?:[0-9]+|0x[0-9a-f]*)', hostname.rstrip('.').rsplit('.', 1)[-1], re.I)):
+                raise ValueError('INSPECTOR_BROWSER_ORIGIN requires a valid IP address or ASCII DNS hostname') from None
+        port = origin.port  # Reject invalid/out-of-range ports at startup.
+        host = f'[{hostname}]' if ':' in hostname else hostname
+        port_suffix = f':{port}' if port is not None and port != (443 if origin.scheme == 'https' else 80) else ''
+        object.__setattr__(self, 'browser_origin', f'{origin.scheme}://{host}{port_suffix}')
         if (len(self.geometry_api_username) > 128 or ':' in self.geometry_api_username
                 or any(ord(c) < 33 or ord(c) > 126 for c in self.geometry_api_username)):
             raise ValueError('Invalid Geometry API username')
