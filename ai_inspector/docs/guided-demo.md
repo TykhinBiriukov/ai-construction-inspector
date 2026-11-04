@@ -60,6 +60,10 @@ The central document area accepts dropped files through the same validation,
 upload queue and retry identities as the circular + button. Dropped URLs are not
 fetched and folders are not imported. A pending upload must be retried before a
 new file set can replace it. Uploading files does not itself start an inspection.
+Opening an IFC, PDF or image shows a single Fit View button instead of an expanded
+Controls panel. It fits the current document and is hidden when the document is
+cleared or a result viewer takes its place. Sidebar branding uses compact spacing
+before the project label and example library.
 
 Authenticated `GET /v1/demo/scenarios` returns `{scenarios: [{id, title, notice,
 mode, available, files: [{id, name, kind, url, description, attach, byte_length}]}]}`.

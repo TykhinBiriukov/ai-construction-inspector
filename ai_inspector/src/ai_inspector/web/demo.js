@@ -612,22 +612,13 @@
   });
 
   let documentContext=null,documentOpenId=null,documentGeneration=0;
-  const viewerHelp=node('details','viewer-help');viewerHelp.hidden=true;
-  viewerHelp.append(node('summary','','? Controls'));
-  const viewerHints=node('div','viewer-hints');viewerHelp.append(viewerHints);
-  $('document-view').after(viewerHelp);
-  const selectionModifier=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
-  function showViewerHelp(file){
+  const fitView=node('button','viewer-fit-view quiet','Fit View');
+  fitView.id='document-fit-view';fitView.type='button';fitView.hidden=true;
+  fitView.setAttribute('aria-label','Fit document to view');fitView.onclick=()=>viewer.zoom(1);
+  $('document-view').after(fitView);
+  function showFitView(file){
     const ext=file?.name?.split('.').pop().toLowerCase();
-    viewerHelp.hidden=!['ifc','pdf','png','jpg','jpeg','webp'].includes(ext);
-    viewerHints.replaceChildren();if(viewerHelp.hidden)return;
-    viewerHelp.open=true;
-    const hints=ext==='ifc'?[['Drag','Rotate'],['Right-drag','Pan'],['Scroll / pinch','Zoom'],['Click','Select an element'],[selectionModifier+' + click','Add / remove elements']]:[['Drag','Select an area for Inspector'],['Scroll / pinch','Zoom'],['Scrollbars','Move around the enlarged image']];
-    for(const [gesture,action] of hints){const row=node('div','viewer-hint');row.append(node('kbd','',gesture),node('span','',action));viewerHints.append(row);}
-    const actions=node('div','viewer-help-actions');
-    const fit=node('button','quiet','Fit view');fit.type='button';fit.onclick=()=>viewer.zoom(1);actions.append(fit);
-    if(ext==='pdf')for(const [label,delta] of [['Previous page',-1],['Next page',1]]){const b=node('button','quiet',label);b.type='button';b.onclick=()=>viewer.next(delta).catch(e=>notify(e.message));actions.append(b);}
-    viewerHints.append(actions);
+    fitView.hidden=!['ifc','pdf','png','jpg','jpeg','webp'].includes(ext);
   }
 
   const viewer=new ProjectDocuments.Viewer($('document-view'),context=>{
@@ -636,8 +627,8 @@
     $('document-context').hidden=!context;
     if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
   },text=>{$('document-status').textContent=/^(Rotate:|Drag on the drawing)/.test(text)?'':text.replace(' · drag to select an area','');});
-  function resetDocument(){viewerHelp.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Drop files here, or choose them using + in chat.'));}
-  async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;viewerHelp.hidden=true;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);if(generation===documentGeneration)showViewerHelp(file);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  function resetDocument(){fitView.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Drop files here, or choose them using + in chat.'));}
+  async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;fitView.hidden=true;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);if(generation===documentGeneration)showFitView(file);}catch(e){if(generation===documentGeneration)notify(e.message);}}
   let savedDemoCleanup=()=>{};
   async function showSavedDemo(result){
     const prefix=`/v1/chats/${encodeURIComponent(chat.chat_id)}/saved-demo-assets/`;if(result.viewer?.chat_id!==chat.chat_id||[result.drawing,result.photo,result.model].filter(Boolean).some(path=>!path.startsWith(prefix)||!/^[-a-z0-9]+$/.test(path.slice(prefix.length))))return;
@@ -653,7 +644,7 @@
   async function showProgressInline(){
     savedDemoCleanup();savedDemoCleanup=()=>{};
     if(!chat?.chat_id)return;
-    viewerHelp.hidden=true;const chatId=chat.chat_id,generation=++documentGeneration;
+    fitView.hidden=true;const chatId=chat.chat_id,generation=++documentGeneration;
     viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;
     document.querySelector('.document-workspace').classList.add('showing-progress');
     $('document-name').textContent='Construction progress · 4D';$('document-download').disabled=true;$('document-status').textContent='Loading progress…';
