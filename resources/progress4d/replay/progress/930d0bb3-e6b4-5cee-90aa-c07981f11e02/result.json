@@ -1,0 +1,56 @@
+{
+  "status": "inconclusive",
+  "processing_complete": true,
+  "analysis_scope": "single_room_observed_geometry_and_product_progress",
+  "artifacts": [
+    {
+      "name": "synthetic-scene.glb",
+      "mime_type": "model/gltf-binary",
+      "sha256": "8648a395dd48682559ff9ff8ff412d3a7d28961d372415141871a4540a0c2c96",
+      "bytes": 2058388
+    }
+  ],
+  "geometric_quality": "unverified",
+  "implementation_sha256": "c8064f88406ffb803b8ff676ae79eb673a917c5a9ada54006bb1c362a0db0699",
+  "ifc_sha256": "0d5879e87d5a2fef76e85e02a472a13ad9b9a1375a63c73d8d56385070186b4e",
+  "reconstruction": {
+    "status": "sparse_reconstructed",
+    "photo_count": 36,
+    "registered_images": 34,
+    "points": 2140,
+    "metric_scale_known": false,
+    "kind": "sparse_photogrammetry",
+    "matching": "exhaustive_fallback_after_incomplete_ordered_capture",
+    "limitations": [
+      "Sparse points are not a dense surface or installed-volume estimate.",
+      "Reconstruction has arbitrary similarity scale until independently registered."
+    ],
+    "selected_model": "exhaustive-1",
+    "mean_reprojection_error_px": 0.9753812807002469,
+    "elapsed_seconds": 29.564,
+    "computation": "computed"
+  },
+  "registration": {
+    "status": "inconclusive",
+    "reason": "Insufficient stable reconstruction tracks"
+  },
+  "reason": "IFC alignment unsupported or ambiguous",
+  "visualization": {
+    "kind": "synthetic_scene",
+    "source": "week-seven/evaluator/normal/week-07.blend",
+    "room_bounds_m": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        7.219,
+        3.331,
+        2.775
+      ]
+    ],
+    "analysis_evidence": false,
+    "cutaway": "Room-facing wall surfaces only for interior viewing"
+  }
+}
