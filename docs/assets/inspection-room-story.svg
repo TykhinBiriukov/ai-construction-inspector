@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="420" viewBox="0 0 1000 420" role="img" aria-labelledby="title description">
+  <title id="title">One room, from design requirements to inspection findings</title>
+  <desc id="description">A simple cutaway room with a window and a door, beside three connected questions: what should be here, what can we observe, and what does the evidence support? This is a concept illustration, not a measured inspection result.</desc>
+  <rect width="1000" height="420" fill="#f8faf8"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="42" y="48" fill="#23483e" font-size="24" font-weight="700">One room. Three questions.</text>
+
+    <!-- A schematic room; no measured dimensions or inspection outcomes. -->
+    <g transform="translate(10 18) scale(0.94)" stroke="#526c63" stroke-width="2.5" stroke-linejoin="round">
+      <path d="M88 264 263 174 428 259 253 349Z" fill="#e9eeea"/>
+      <path d="M88 264V143L263 53V174Z" fill="#f0f4f1"/>
+      <path d="M263 53 428 138V259L263 174Z" fill="#dfe8e1"/>
+      <!-- Window in the left wall. -->
+      <path d="m137 155 78-40v58l-78 40Z" fill="#c9e3e7" stroke="#48777b"/>
+      <path d="m176 135v58m-39-9 78-40" fill="none" stroke="#48777b" stroke-width="2"/>
+      <path d="m130 217 92-47" fill="none" stroke="#48777b"/>
+      <!-- Door in the right wall. -->
+      <path d="m324 116 55 28v90l-55-29Z" fill="#d5c8b5"/>
+      <path d="m334 131 35 18v68l-35-18Z" fill="none" stroke="#9b8b74" stroke-width="1.5"/>
+      <path d="m366 182 7 4" fill="none" stroke="#526c63" stroke-width="3" stroke-linecap="round"/>
+      <!-- A few floor joints make the open room legible. -->
+      <g fill="none" stroke="#c8d4cb" stroke-width="1.3">
+        <path d="m143 292 175-90m-120 118 175-90M147 234l165 85m-107-115 165 85"/>
+      </g>
+    </g>
+
+    <!-- Each stage asks a different question about the same room. -->
+    <path d="M530 106V287" fill="none" stroke="#c8d8cd" stroke-width="3"/>
+    <g>
+      <circle cx="530" cy="106" r="19" fill="#e2ece6"/>
+      <text x="530" y="112" text-anchor="middle" fill="#345e4f" font-size="16" font-weight="700">01</text>
+      <text x="567" y="101" fill="#23483e" font-size="26" font-weight="700">Design requirement</text>
+      <text x="567" y="130" fill="#566860" font-size="19">What should be here?</text>
+    </g>
+    <g>
+      <circle cx="530" cy="198" r="19" fill="#e2ece6"/>
+      <text x="530" y="204" text-anchor="middle" fill="#345e4f" font-size="16" font-weight="700">02</text>
+      <text x="567" y="193" fill="#23483e" font-size="26" font-weight="700">Site evidence</text>
+      <text x="567" y="222" fill="#566860" font-size="19">What can we observe?</text>
+    </g>
+    <g>
+      <circle cx="530" cy="290" r="19" fill="#345e4f"/>
+      <text x="530" y="296" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="700">03</text>
+      <text x="567" y="285" fill="#23483e" font-size="26" font-weight="700">Inspection finding</text>
+      <text x="567" y="314" fill="#566860" font-size="19">What does the evidence support?</text>
+    </g>
+
+    <path d="M42 371H958" fill="none" stroke="#dfe7e1"/>
+    <text x="42" y="398" fill="#5d6d64" font-size="16">Concept illustration — not a measured inspection result</text>
+  </g>
+</svg>

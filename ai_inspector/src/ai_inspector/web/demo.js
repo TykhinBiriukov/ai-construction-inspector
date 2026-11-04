@@ -59,7 +59,7 @@
     voice.cancel();$("voice-input").hidden=true;
     closeProgress4d();geometryViewer?.clear();
     epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
-    chatChoices=null;workState=null;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
+    chatChoices=null;workState=null;workspaceBusy=false;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
@@ -72,7 +72,7 @@
     $('room').readOnly=!!chat || !!create || sending;
     if(chat?.room_id) $('room').value=chat.room_id;
     $('message').disabled=sending || !!pending;
-    $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy;
+    $('send').hidden=!!pending && !sending; $('send').disabled=sending||workspaceBusy||!!uploadQueue.length;
     $('send').textContent=sending ? 'Working…' : 'Send';
     $('resume').hidden=!pending || sending || !!chat?.runs?.at(-1)?.auto_resume; $('resume').disabled=sending;
     $('run-status').textContent=sending ? 'AI Inspector is working. Progress appears in Work process.' : chat?.runs?.at(-1)?.auto_resume ? 'Analysis is continuing automatically. You can return later.' : pending ? 'Request pending. Resume uses the same request ID.' : 'Ready when you are.';
@@ -397,6 +397,7 @@
   }
   async function send() {
     if(sending||workspaceBusy||!token||!overview||chat?.runs?.at(-1)?.auto_resume) return;
+    if(uploadQueue.length){notify('Finish or retry the pending upload before sending the task.');return;}
     if(!pending && (!$('chat-form').reportValidity()||!$('message').value.trim())) return;
     const current=epoch; sending=true; notify();
     if(!pending) pending={schema_version:'0.1',request_id:uid(),text:$('message').value.trim(),file_ids:[...chosenFiles],...(documentContext?{document_selection:documentContext}:{})};
@@ -477,20 +478,44 @@
     downloadBlob(blob,file.name);
   }
   function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const link=node('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  async function uploadFiles() {
-    if(workspaceBusy||sending||pending)return;
+  function setAttachmentIcon(retry=false){
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'),path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');svg.setAttribute('focusable','false');svg.setAttribute('width','18');svg.setAttribute('height','18');
+    path.setAttribute('d',retry?'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15':'M12 5v14M5 12h14');
+    path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');path.setAttribute('stroke-width','1.8');path.setAttribute('stroke-linecap','round');path.setAttribute('stroke-linejoin','round');svg.append(path);
+    const button=$('attach-file');button.replaceChildren(svg);button.title=retry?'Retry upload':'Attach files';button.setAttribute('aria-label',button.title);
+  }
+  function canUploadFiles(){return !!token&&!!overview&&!workspaceBusy&&!sending&&!pending&&!chat?.runs?.at(-1)?.auto_resume&&!document.querySelector('.conversation').classList.contains('demo-working');}
+  function queueFiles(files){
+    if(!canUploadFiles()){notify('Wait for the current request to finish before adding files.');$('file-input').value='';return false;}
+    if(uploadQueue.length){notify('Retry the pending upload before adding other files.');$('file-input').value='';return false;}
+    if(!files.length)return false;
+    const limit=overview?.max_bim_bytes||8*1024*1024;
+    if(files.some(file=>file.size>limit)){notify(`Each file must be no larger than ${(limit/1024/1024).toLocaleString(undefined,{maximumFractionDigits:2})} MiB.`);$('file-input').value='';return false;}
+    uploadQueue=files.map(file=>({file,id:uid()}));uploadFiles();return true;
+  }
+  async function uploadFiles(forExample=false) {
+    const allowed=forExample?!!token&&!!overview&&!workspaceBusy&&!sending&&!pending&&!chat?.runs?.at(-1)?.auto_resume:canUploadFiles();
+    if(!allowed||!uploadQueue.length)return false;
+    const current=epoch,queue=uploadQueue;
     workspaceBusy=true;controls();notify();
     try{
       await ensureChat();
-      while(uploadQueue.length){
-        const entry=uploadQueue[0],form=new FormData();form.append('file_id',entry.id);form.append('file',entry.file);
-        await api(`${workspacePath()}/files`,{method:'POST',body:form});
-        uploadQueue.shift();await loadWorkspace(); if(chosenFiles.size<8)chosenFiles.add(entry.id);renderFiles();
-        const uploaded=workState?.files?.find(f=>f.file_id===entry.id);if(uploaded&&/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
+      const owner=chat?.chat_id,active=()=>current===epoch&&uploadQueue===queue&&chat?.chat_id===owner;
+      while(queue.length){
+        if(!active())return;
+        const entry=queue[0],form=new FormData();form.append('file_id',entry.id);form.append('file',entry.file);
+        await api(`/v1/chats/${encodeURIComponent(owner)}/files`,{method:'POST',body:form});
+        if(!active())return;
+        await loadWorkspace();if(!active())return;
+        const uploaded=workState?.files?.find(f=>f.file_id===entry.id);if(!uploaded)throw Error('The uploaded file is not visible in the workspace yet.');
+        queue.shift();if(chosenFiles.size<8)chosenFiles.add(entry.id);renderFiles();
+        if(/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
       }
-      $('file-input').value='';notify();
-    }catch(error){if(error.status>=400&&error.status<500&&![408,429].includes(error.status)){uploadQueue=[];$('file-input').value='';notify(`Upload rejected: ${error.message}. Choose a file again.`);}else notify(`Upload was not confirmed: ${error.message}. Use Retry upload to reuse the same upload ID.`);}
-    finally{workspaceBusy=false;controls();$('attach-file').textContent=uploadQueue.length?'Retry upload':'＋';}
+      if(!active())return;
+      $('file-input').value='';notify();return true;
+    }catch(error){if(current===epoch){if(error.status>=400&&error.status<500&&![408,429].includes(error.status)){uploadQueue=[];$('file-input').value='';notify(`Upload rejected: ${error.message}. Choose a file again.`);}else notify(`Upload was not confirmed: ${error.message}. Use Retry upload to reuse the same upload ID.`);}}
+    finally{if(current===epoch){workspaceBusy=false;controls();setAttachmentIcon(!!uploadQueue.length);}}
   }
   function renderProgress() {
     const progress=workState?.progress,items=(workState?.items||[]).filter(i=>!i.deleted);
@@ -539,12 +564,32 @@
     }
     if(!$('history-dialog').open)$('history-dialog').showModal();
   }
-  $('attach-file').addEventListener('click',()=>{if(uploadQueue.length)uploadFiles();else $('file-input').click();});
+  $('attach-file').addEventListener('click',()=>{if(!canUploadFiles())return;if(uploadQueue.length)uploadFiles();else $('file-input').click();});
   $('file-input').addEventListener('change',()=>{
-    const files=[...$('file-input').files];if(!files.length)return;
-    if(files.some(file=>file.size>(overview?.max_bim_bytes||8*1024*1024))){notify('Each file must be no larger than 8 MiB.');$('file-input').value='';return;}
-    uploadQueue=files.map(file=>({file,id:uid()}));uploadFiles();
+    queueFiles([...$('file-input').files]);
   });
+  const dropTarget=$('document-view'),dropStatus=node('p','sr-only');
+  dropStatus.id='document-drop-status';dropStatus.setAttribute('role','status');dropStatus.setAttribute('aria-live','polite');dropTarget.after(dropStatus);
+  dropTarget.dataset.dropTarget='files';let fileDragDepth=0;
+  const hasDraggedFiles=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
+  const clearFileDrag=()=>{fileDragDepth=0;dropTarget.classList.remove('file-drag-over');dropStatus.textContent='';};
+  dropTarget.addEventListener('dragenter',event=>{
+    if(!hasDraggedFiles(event))return;event.preventDefault();fileDragDepth++;
+    if(canUploadFiles()&&!uploadQueue.length){dropTarget.style.setProperty('--file-drop-scroll',dropTarget.scrollTop+'px');dropTarget.classList.add('file-drag-over');dropStatus.textContent='Drop files to add them to this conversation.';}
+  });
+  dropTarget.addEventListener('dragover',event=>{event.preventDefault();if(!event.dataTransfer)return;dropTarget.style.setProperty('--file-drop-scroll',dropTarget.scrollTop+'px');event.dataTransfer.dropEffect=hasDraggedFiles(event)&&canUploadFiles()&&!uploadQueue.length?'copy':'none';});
+  dropTarget.addEventListener('dragleave',event=>{if(hasDraggedFiles(event)&&--fileDragDepth<=0)clearFileDrag();});
+  dropTarget.addEventListener('drop',event=>{
+    event.preventDefault();clearFileDrag();if(!hasDraggedFiles(event))return;
+    const items=Array.from(event.dataTransfer.items||[]);
+    if(items.some(item=>item.kind==='file'&&item.webkitGetAsEntry?.()?.isDirectory)){notify('Drop individual files rather than folders.');return;}
+    queueFiles(Array.from(event.dataTransfer.files||[]));
+  });
+  // Prevent the browser navigating away when a file misses the document pane.
+  window.addEventListener('dragover',event=>{if(hasDraggedFiles(event)){event.preventDefault();if(!dropTarget.contains(event.target))clearFileDrag();}});
+  window.addEventListener('drop',event=>{if(hasDraggedFiles(event))event.preventDefault();clearFileDrag();});
+  window.addEventListener('dragend',clearFileDrag);window.addEventListener('blur',clearFileDrag);
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')clearFileDrag();});
   $('trash-toggle').addEventListener('click',()=>{showTrash=!showTrash;renderFiles();});
   $('add-plan-item').addEventListener('click',()=>openPlan());
   $('evidence-dialog').addEventListener('close',clearEvidence);
@@ -567,22 +612,13 @@
   });
 
   let documentContext=null,documentOpenId=null,documentGeneration=0;
-  const viewerHelp=node('details','viewer-help');viewerHelp.hidden=true;
-  viewerHelp.append(node('summary','','? Controls'));
-  const viewerHints=node('div','viewer-hints');viewerHelp.append(viewerHints);
-  $('document-view').after(viewerHelp);
-  const selectionModifier=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
-  function showViewerHelp(file){
+  const fitView=node('button','viewer-fit-view quiet','Fit View');
+  fitView.id='document-fit-view';fitView.type='button';fitView.hidden=true;
+  fitView.setAttribute('aria-label','Fit document to view');fitView.onclick=()=>viewer.zoom(1);
+  $('document-view').after(fitView);
+  function showFitView(file){
     const ext=file?.name?.split('.').pop().toLowerCase();
-    viewerHelp.hidden=!['ifc','pdf','png','jpg','jpeg','webp'].includes(ext);
-    viewerHints.replaceChildren();if(viewerHelp.hidden)return;
-    viewerHelp.open=true;
-    const hints=ext==='ifc'?[['Drag','Rotate'],['Right-drag','Pan'],['Scroll / pinch','Zoom'],['Click','Select an element'],[selectionModifier+' + click','Add / remove elements']]:[['Drag','Select an area for Inspector'],['Scroll / pinch','Zoom'],['Scrollbars','Move around the enlarged image']];
-    for(const [gesture,action] of hints){const row=node('div','viewer-hint');row.append(node('kbd','',gesture),node('span','',action));viewerHints.append(row);}
-    const actions=node('div','viewer-help-actions');
-    const fit=node('button','quiet','Fit view');fit.type='button';fit.onclick=()=>viewer.zoom(1);actions.append(fit);
-    if(ext==='pdf')for(const [label,delta] of [['Previous page',-1],['Next page',1]]){const b=node('button','quiet',label);b.type='button';b.onclick=()=>viewer.next(delta).catch(e=>notify(e.message));actions.append(b);}
-    viewerHints.append(actions);
+    fitView.hidden=!['ifc','pdf','png','jpg','jpeg','webp'].includes(ext);
   }
 
   const viewer=new ProjectDocuments.Viewer($('document-view'),context=>{
@@ -591,8 +627,8 @@
     $('document-context').hidden=!context;
     if(context){chosenFiles.add(context.file_id);$('document-context').querySelector('span').textContent=context.label;renderFiles();}
   },text=>{$('document-status').textContent=/^(Rotate:|Drag on the drawing)/.test(text)?'':text.replace(' · drag to select an area','');});
-  function resetDocument(){viewerHelp.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Open a BIM model or drawing from Files.'));}
-  async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;viewerHelp.hidden=true;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);if(generation===documentGeneration)showViewerHelp(file);}catch(e){if(generation===documentGeneration)notify(e.message);}}
+  function resetDocument(){fitView.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Drop files here, or choose them using + in chat.'));}
+  async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;fitView.hidden=true;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);if(generation===documentGeneration)showFitView(file);}catch(e){if(generation===documentGeneration)notify(e.message);}}
   let savedDemoCleanup=()=>{};
   async function showSavedDemo(result){
     const prefix=`/v1/chats/${encodeURIComponent(chat.chat_id)}/saved-demo-assets/`;if(result.viewer?.chat_id!==chat.chat_id||[result.drawing,result.photo,result.model].filter(Boolean).some(path=>!path.startsWith(prefix)||!/^[-a-z0-9]+$/.test(path.slice(prefix.length))))return;
@@ -608,7 +644,7 @@
   async function showProgressInline(){
     savedDemoCleanup();savedDemoCleanup=()=>{};
     if(!chat?.chat_id)return;
-    viewerHelp.hidden=true;const chatId=chat.chat_id,generation=++documentGeneration;
+    fitView.hidden=true;const chatId=chat.chat_id,generation=++documentGeneration;
     viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;
     document.querySelector('.document-workspace').classList.add('showing-progress');
     $('document-name').textContent='Construction progress · 4D';$('document-download').disabled=true;$('document-status').textContent='Loading progress…';
@@ -720,12 +756,11 @@
   setInterval(()=>{if(token&&!document.hidden)refresh();},5000);
   setInterval(()=>{if(token)updateActivityStatus();},1000);
   const intro=$('demo-welcome');
-  let showScenarioGuide=()=>{};
+  let showExamples=()=>{};
   const dismissIntro=()=>intro.close();
-  $('demo-welcome-close').onclick=dismissIntro;$('demo-welcome-start').onclick=()=>{dismissIntro();write(sessionStorage,'inspector-guide-requested','1');showScenarioGuide();};
+  $('demo-welcome-close').onclick=dismissIntro;$('demo-welcome-start').onclick=()=>{dismissIntro();showExamples();};
   intro.addEventListener('close',()=>write(sessionStorage,'inspector-demo-intro-v1','seen'));
   $('demo-about').onclick=()=>intro.showModal();
-  if(!read(sessionStorage,'inspector-demo-intro-v1'))intro.showModal();
   let demoInstalled=false;
   async function startWorkspace(){
     if(demoInstalled){await refresh();return;}
@@ -822,101 +857,171 @@
     });
 
   };
-  let demoBusy=false, demoReady=false;
-  const demoHint=node('p','demo-next','Demo scenarios');
-  const demoSteps=node('section','demo-steps');demoSteps.hidden=true;demoSteps.setAttribute('aria-live','polite');
-  $('activity-open').after(demoSteps);
-  const demoTimeline=node('section','demo-steps');demoTimeline.hidden=true;$('activity').before(demoTimeline);
-  const demoActions=node('div','demo-actions');demoActions.id='demo-navigation-actions';
-  const ask=node('button','quiet','Ask about this result');ask.type='button';ask.hidden=true;
-  ask.onclick=()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('message').focus();$('message').placeholder='Ask a question about the current result…';};
-  const reset=node('button','quiet','Back to start');reset.type='button';
-  demoActions.append(ask,reset);$('suggestions').before(demoHint);$('suggestions').after(demoActions);
-  const scenarioGroup=node('div','demo-scenarios');demoHint.before(scenarioGroup);scenarioGroup.append(demoHint,$('suggestions'));
-  const coach=node('aside','demo-coachmark');coach.hidden=true;coach.setAttribute('role','note');coach.setAttribute('aria-label','About demo scenarios');
-  coach.append(node('p','','These scenario shortcuts are just for this demo. In the product, describe what you need in chat and attach your documents or share links to them.'));
-  const gotIt=node('button','quiet','Got it');gotIt.type='button';coach.append(gotIt);document.body.append(coach);
-  const dismissGuide=()=>{coach.hidden=true;scenarioGroup.classList.remove('is-guided');write(localStorage,'inspector-scenario-guide-v2','seen');write(sessionStorage,'inspector-guide-requested',null);};
-  gotIt.onclick=dismissGuide;
-  coach.addEventListener('keydown',event=>{if(event.key==='Escape')dismissGuide();});
-  $('suggestions').addEventListener('click',()=>{if(!coach.hidden)dismissGuide();});
-  function positionScenarioGuide(){
-    if(coach.hidden)return;
-    const collapsed=!!document.querySelector('.chat-hidden');
-    coach.style.visibility=collapsed||intro.open?'hidden':'visible';
-    const target=scenarioGroup.getBoundingClientRect(),divider=$('resize-dialogue').getBoundingClientRect();
-    const width=Math.min(360,window.innerWidth-32);
-    coach.style.width=width+'px';
-    const center=divider.width&&divider.height?divider.left+divider.width/2:target.left+target.width/2;
-    coach.style.left=Math.max(16,Math.min(window.innerWidth-width-16,center-width/2))+'px';
-    coach.style.top=Math.max(16,Math.min(window.innerHeight-coach.offsetHeight-16,target.top-coach.offsetHeight-16))+'px';
-  }
-  const guideResize=new ResizeObserver(positionScenarioGuide);
-  guideResize.observe(scenarioGroup);guideResize.observe(document.querySelector('.conversation'));
-  window.addEventListener('resize',positionScenarioGuide);
-  document.addEventListener('scroll',positionScenarioGuide,true);
-  showScenarioGuide=()=>{
-    if(demoReady&&!demoBusy&&!intro.open&&read(sessionStorage,'inspector-guide-requested')&&!read(localStorage,'inspector-scenario-guide-v2')){
-      coach.hidden=false;scenarioGroup.classList.add('is-guided');positionScenarioGuide();
-    }
+  const exampleInfo={
+    geometry:{title:'Model & site photos',short:'Compare design with the room.',description:'Explore a BIM model alongside a recorded room scan and the phone photos behind its measurements.',steps:['Explore the supplied BIM model and site photo.','Open the saved model-to-scan comparison.','Select a door or window to inspect measurements and photo evidence.'],result:'A 3D comparison with matched objects, recorded dimensions and their source photos.'},
+    drawing:{title:'Drawing & installation',short:'Look closer at a window detail.',description:'Compare a window installation drawing with two supplied photos, using prepared visual observations.',steps:['Inspect the drawing and both installation photos.','Open the prepared comparison.','Switch photos and select a detail to see the highlighted evidence.'],result:'The drawing and photos together, with selectable observations and highlighted details.'},
+    progress:{title:'Construction progress',short:'Follow the building over time.',description:'Explore a saved seven-week construction timeline with the models, photos and findings available for each week.',steps:['Explore the supplied timeline and its reference files.','Open the saved weekly progress analysis.','Move through the weeks to inspect models, photos and recorded findings.'],result:'An interactive weekly timeline with construction progress and supporting evidence.'}
   };
+  let demoBusy=false,demoReady=false,selectedExample=null,selectedExampleEntry=null,lastExample=null,lastExampleMode=null,exampleManifest=null,exampleFilesReady=false,previewVersion=0,previewModel=null;
+  const previewUrls=[],scenarioDialog=$('demo-scenario-dialog');
+  const demoSteps=$('demo-example-status'),demoTimeline=node('section','demo-steps');
+  demoTimeline.hidden=true;$('activity').before(demoTimeline);
+  const ask=node('button','quiet','Ask about this result'),about=node('button','quiet','Example details');
+  ask.type=about.type='button';about.id='demo-scenario-about';
+  $('demo-example-actions').append(about,ask);
+  ask.onclick=()=>{$('message').focus();$('message').placeholder=lastExampleMode==='inputs'?'Describe what you want to check…':'Ask a question about the current result…';};
+  about.onclick=()=>{if(lastExample)openExample(lastExample);};
   $('suggestions').replaceChildren();
+  $('demo-examples-section').hidden=false;
+  showExamples=()=>{layout.hideFiles=false;applyLayout();$('demo-examples-section').scrollIntoView({block:'nearest'});$('demo-examples').querySelector('button')?.focus();};
+  function clearExamplePreview(){
+    previewVersion++;previewModel?.clear?.();previewModel=null;
+    previewUrls.splice(0).forEach(url=>URL.revokeObjectURL(url));
+    $('demo-scenario-preview').replaceChildren(node('p','','Select a file to preview it.'));
+  }
+  scenarioDialog.addEventListener('close',clearExamplePreview);
+  $('demo-scenario-close').onclick=()=>scenarioDialog.close();
   function demoControls(){
-    showScenarioGuide();
+    demoReady=!!token&&!!overview;
+    const busy=!token||!overview||demoBusy||sending||workspaceBusy||!!uploadQueue.length||!!pending||!!chat?.runs?.at(-1)?.auto_resume;
     document.querySelector('.conversation').classList.toggle('demo-working',demoBusy);
-    for(const b of $('suggestions').querySelectorAll('button'))b.disabled=demoBusy||!demoReady||sending||!!pending;
-    reset.disabled=demoBusy||sending||!!pending;ask.disabled=demoBusy||sending||!!pending;
+    for(const b of $('demo-examples').querySelectorAll('button'))b.disabled=busy||!demoReady;
+    $('demo-scenario-run').disabled=busy||!demoReady||!exampleFilesReady;
+    ask.disabled=about.disabled=busy;
     if(demoBusy){$('new-chat').disabled=true;$('chat-picker').disabled=true;$('message').disabled=true;$('send').disabled=true;}
   }
   const originalControls=controls;
   controls=function(){originalControls();demoControls();};
-  function paintDemoStages(stages,position){
-    demoSteps.hidden=false;demoSteps.replaceChildren(node('strong','','Demo replay · simulated stages'));
-    stages.forEach((label,i)=>demoSteps.append(node('div',i===position?'demo-stage-active':'',`${i<position?'✓':i===position?'◌':'○'} ${label}`)));
-    demoTimeline.hidden=false;demoTimeline.replaceChildren(...[...demoSteps.childNodes].map(n=>n.cloneNode(true)));
-  }
-  async function runDemo(item){
-    if(demoBusy||!demoReady||sending||pending)return;
-    demoBusy=true;workspaceBusy=true;controls();notify();ask.hidden=true;
-    const stages=['Load prepared dataset',item[0]==='progress'?'Read saved weekly analysis':'Read saved comparison','Prepare viewer and findings'];
+  async function previewExampleFile(file,scenario){
+    clearExamplePreview();const version=previewVersion,current=epoch,host=$('demo-scenario-preview');
+    const active=()=>version===previewVersion&&current===epoch&&scenarioDialog.open;
+    host.replaceChildren(node('p','','Loading '+file.name+'…'));
+    for(const b of $('demo-scenario-files').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.demoFile===file.id));
     try{
-      for(let i=0;i<stages.length;i++){paintDemoStages(stages,i);await new Promise(resolve=>setTimeout(resolve,650));}
-      // A deterministic local adapter uses the normal persisted chat/tool path.
+      const prefix='/v1/demo/scenarios/'+scenario+'/assets/';
+      if(typeof file.url!=='string'||!file.url.startsWith(prefix)||!/^[-a-zA-Z0-9]+$/.test(file.url.slice(prefix.length)))throw Error('This example file is unavailable.');
+      const blob=await api(file.url,{blob:true});if(!active())return;
+      const caption=node('div','scenario-file-caption'),download=node('a','quiet','Download file'),url=URL.createObjectURL(blob);
+      previewUrls.push(url);download.href=url;download.download=file.name;caption.append(node('span','',file.name),download);host.replaceChildren(caption);
+      if(file.kind==='ifc'){
+        const canvas=node('div','scenario-model'),status=node('p','muted');host.append(canvas,status);
+        const model=new ProjectDocuments.GeometryModel(canvas,()=>{},text=>{if(active())status.textContent=text;});previewModel=model;
+        await model.openArtifact('ifc',blob);if(!active()){model.clear?.();return;}
+      }else if(file.kind==='image'){
+        const img=node('img');img.alt=file.description||file.name;img.src=url;host.append(img);
+      }else if(file.kind==='json'){
+        if(blob.size>4*1024*1024)throw Error('This file is too large to preview. Use Download file.');
+        const text=await blob.text();if(!active())return;const pre=node('pre');
+        try{pre.textContent=JSON.stringify(JSON.parse(text),null,2);}catch{pre.textContent=text;}host.append(pre);
+      }else host.append(node('p','','Download this file to explore it.'));
+      if(active()&&file.description)host.append(node('p','scenario-file-note',file.description));
+    }catch(error){if(active())host.append(node('p','scenario-file-note',error.message||'Could not open this example file.'));}
+  }
+  async function openExample(item){
+    if(!token||!overview||demoBusy||sending||pending)return;
+    selectedExample=item;selectedExampleEntry=null;exampleFilesReady=false;clearExamplePreview();const version=previewVersion,current=epoch,info=exampleInfo[item[0]];
+    scenarioDialog.querySelector('.scenario-heading .eyebrow').textContent='EXAMPLE';
+    $('demo-scenario-run').textContent='Show example result';
+    scenarioDialog.querySelector('.scenario-footer>span').textContent='Explore first, or go straight to the result.';
+    $('demo-scenario-title').textContent=info.title;$('demo-scenario-description').textContent=info.description;
+    $('demo-scenario-icon').src='/ui/demo-example-'+item[0]+'.png';
+    $('demo-scenario-steps').replaceChildren(...info.steps.map(text=>node('li','',text)));
+    $('demo-scenario-result').textContent=info.result;
+    $('demo-scenario-notice').textContent='A prepared example using saved results. No new scan or inspection is performed. Follow-up questions use the connected AI.';
+    $('demo-scenario-files').replaceChildren(node('p','muted','Loading source files…'));
+    if(!scenarioDialog.open)scenarioDialog.showModal();controls();
+    for(const b of $('demo-examples').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.scenario===item[0]));
+    try{
+      const manifest=exampleManifest||await api('/v1/demo/scenarios');
+      if(version!==previewVersion||current!==epoch||!scenarioDialog.open)return;
+      const entry=manifest.scenarios?.find(s=>s.id===item[0]);if(!entry||!Array.isArray(entry.files))throw Error('The source files for this example are unavailable.');
+      selectedExampleEntry=entry;
+      if(entry.mode==='inputs'){
+        scenarioDialog.querySelector('.scenario-heading .eyebrow').textContent='PREPARED INPUTS';
+        if(entry.description)$('demo-scenario-description').textContent=entry.description;
+        $('demo-scenario-steps').replaceChildren(...['Inspect the prepared source files.','Add the inputs to this conversation.','Send the task to AI Inspector for a new analysis when connected.'].map(text=>node('li','',text)));
+        $('demo-scenario-result').textContent='The source files and a task ready for analysis. Findings come from the configured analysis services, not a prepared answer.';
+        $('demo-scenario-run').textContent=caps?.agent_model_configured===true?'Analyze these inputs':'Use these inputs';
+        scenarioDialog.querySelector('.scenario-footer>span').textContent='Review the files, then start with these inputs.';
+      }
+      exampleManifest=manifest;const list=$('demo-scenario-files');list.replaceChildren();
+      for(const file of entry.files){const button=node('button','scenario-file',file.name);button.type='button';button.dataset.demoFile=file.id;button.setAttribute('aria-pressed','false');button.onclick=()=>previewExampleFile(file,item[0]);list.append(button);}
+      if(entry.notice)$('demo-scenario-notice').textContent=entry.notice;
+      exampleFilesReady=entry.available!==false&&entry.files.length>0&&entry.files.some(f=>f.attach!==false);controls();
+      if(!entry.files.length){list.append(node('p','muted','Prepared source files are not available here yet.'));$('demo-scenario-preview').replaceChildren(node('p','','Add the source dataset to enable this example.'));}
+      const first=entry.files[0];if(first)previewExampleFile(first,item[0]);
+    }catch(error){if(version===previewVersion&&current===epoch&&scenarioDialog.open)$('demo-scenario-files').replaceChildren(node('p','muted',error.message||'Could not load this example. Close and select it to retry.'));}
+  }
+  function paintExampleStatus(text){demoSteps.hidden=false;demoSteps.textContent=text;demoTimeline.hidden=false;demoTimeline.replaceChildren(node('p','',text));}
+  async function runDemo(item,entry){
+    if(!token||!overview||demoBusy||!demoReady||sending||workspaceBusy||uploadQueue.length||pending||chat?.runs?.at(-1)?.auto_resume)return;
+    const current=epoch,originalDraft=$('message').value,originalChat=chat?.chat_id,originalFiles=[...chosenFiles],originalContext=documentContext;
+    const originalDraftIsExample=exampleManifest?.scenarios?.some(s=>s.mode==='inputs'&&s.prompt===originalDraft);
+    let keepInputDraft=false;
+    demoBusy=true;controls();notify();$('demo-example-actions').hidden=true;
+    paintExampleStatus(entry?.mode==='inputs'?'Preparing source files…':'Opening saved example…');
+    try{
+      if(entry?.mode==='inputs'){
+        if(typeof entry.prompt!=='string'||!entry.prompt.trim()||entry.prompt.length>8000||demoCases.some(c=>c[2]===entry.prompt))throw Error('This example needs a task for a new analysis.');
+        const sources=entry.files.filter(f=>f.attach!==false);
+        if(!sources.length||sources.length>8)throw Error('An example must include between 1 and 8 input files.');
+        const prepared=[];
+        for(const file of sources){
+          const prefix='/v1/demo/scenarios/'+item[0]+'/assets/';
+          if(typeof file.url!=='string'||!file.url.startsWith(prefix)||!/^[-a-zA-Z0-9]+$/.test(file.url.slice(prefix.length)))throw Error('This example file is unavailable.');
+          const blob=await api(file.url,{blob:true});if(current!==epoch)return;
+          if(blob.size>(overview?.max_bim_bytes||8*1024*1024))throw Error('An example file exceeds this workspace upload limit.');
+          prepared.push({id:uid(),file:new File([blob],file.name,{type:blob.type})});
+        }
+        chosenFiles.clear();documentContext=null;$('document-context').hidden=true;
+        const fileIds=prepared.map(f=>f.id);uploadQueue=prepared;
+        $('message').value=entry.prompt;
+        const uploaded=await uploadFiles(true);if(current!==epoch)return;
+        if(!uploaded||uploadQueue.length){keepInputDraft=true;if(originalDraft)$('message').value=originalDraft;paintExampleStatus('The input upload is incomplete. Retry the upload before sending the task.');return;}
+        chosenFiles.clear();fileIds.forEach(id=>chosenFiles.add(id));renderFiles();
+        if(caps?.agent_model_configured!==true){
+          keepInputDraft=true;if(originalDraft&&!originalDraftIsExample)$('message').value=originalDraft;
+          lastExample=item;lastExampleMode='inputs';ask.textContent='Continue in chat';paintExampleStatus('Inputs attached. Review the task in chat; analysis requires a connected AI service.');$('demo-example-actions').hidden=false;return;
+        }
+        await send();if(current!==epoch)return;
+        const last=chat?.runs?.at(-1);
+        if(last?.text!==entry.prompt||last.status!=='completed')throw Error(last?.error?.message||'Analysis is not finished. Resume the saved request.');
+        lastExample=item;lastExampleMode='inputs';ask.textContent='Continue in chat';paintExampleStatus('Analysis request completed. Review the response and any available evidence.');$('demo-example-actions').hidden=false;return;
+      }
       chosenFiles.clear();documentContext=null;$('document-context').hidden=true;
-      renderFiles();$('message').value=item[2];workspaceBusy=false;
-      await send();
+      renderFiles();$('message').value=item[2];
+      await send();if(current!==epoch)return;
       const last=chat?.runs?.at(-1);
       if(last?.text!==item[2]||last.status!=='completed'||!last.tool_results?.some(t=>t.result?.viewer))throw new Error(last?.error?.message||'Result not ready. Resume the request or try again.');
-      paintDemoStages(stages,stages.length);
-      demoHint.textContent='Demo scenarios';ask.hidden=false;$('messages').scrollTop=$('messages').scrollHeight;
-    }catch(error){demoHint.textContent='The demo could not finish. You can retry the use case.';notify(error.message);demoSteps.append(node('p','','Replay interrupted.'));}
-    finally{demoBusy=false;workspaceBusy=false;controls();}
+      lastExample=item;lastExampleMode='recorded';ask.textContent='Ask about this result';paintExampleStatus('Saved example ready. Explore the result in the viewer.');$('demo-example-actions').hidden=false;
+      $('messages').scrollTop=$('messages').scrollHeight;
+    }catch(error){if(current===epoch){paintExampleStatus('The example could not finish. Your request is preserved.');notify(error.message);}}
+    finally{demoBusy=false;if(current===epoch){
+      if(!pending&&!keepInputDraft){
+        if(!$('message').value)$('message').value=originalDraft;
+        if(originalChat&&chat?.chat_id===originalChat){
+          const existing=new Set((workState?.files||[]).filter(f=>!f.deleted).map(f=>f.file_id));
+          chosenFiles.clear();for(const id of originalFiles)if(existing.has(id))chosenFiles.add(id);
+          documentContext=originalContext&&existing.has(originalContext.file_id)?originalContext:null;
+          $('document-context').hidden=!documentContext;if(documentContext)$('document-context').querySelector('span').textContent=documentContext.label;
+          renderFiles();
+        }
+      }
+      controls();
+    }}
   }
-  for(const item of demoCases){const b=node('button','',item[1]);b.type='button';b.dataset.scenario=item[0];const arrow=node('span','demo-case-arrow','→');arrow.setAttribute('aria-hidden','true');b.append(arrow);b.onclick=()=>runDemo(item);$('suggestions').append(b);}
-  async function startDemo(){
-    if(demoBusy||sending||pending)return;
-    demoReady=false;demoBusy=true;controls();
-    try{
-      $('message').value='';await switchConversation('');
-      await ensureChat();await refresh();
-      layout.hideFiles=false;layout.hideChat=false;applyLayout();
-      presentedProgress.clear();resetDocument();showTrash=false;chosenFiles.clear();renderFiles();
-      demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Demo scenarios';ask.hidden=true;
-      $('message').placeholder='Ask Inspector…';
-      write(sessionStorage,'inspector-guided-demo-chat',chat.chat_id);demoReady=true;
-    }catch(error){notify('Could not prepare the demo: '+error.message);}
-    finally{demoBusy=false;controls();}
+  $('demo-scenario-run').onclick=()=>{if(!selectedExample||!exampleFilesReady||$('demo-scenario-run').disabled)return;const item=selectedExample,entry=selectedExampleEntry;scenarioDialog.close();runDemo(item,entry);};
+  for(const item of demoCases){
+    const info=exampleInfo[item[0]],button=node('button','demo-example-card'),image=node('img'),copy=node('span','example-card-copy');
+    button.type='button';button.dataset.scenario=item[0];button.setAttribute('aria-pressed','false');button.setAttribute('aria-haspopup','dialog');
+    image.src='/ui/demo-example-'+item[0]+'.png';image.alt='';image.width=image.height=54;
+    copy.append(node('strong','',info.title),node('small','',info.short));button.append(image,copy,node('span','example-card-arrow','↗'));
+    button.onclick=()=>openExample(item);$('demo-examples').append(button);
   }
-  reset.onclick=startDemo;
-  // New conversation is the same reversible reset; existing chats remain saved.
-  $('new-chat').addEventListener('click',event=>{event.stopImmediatePropagation();startDemo();},true);
-  $('chat-picker').addEventListener('change',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;demoHint.textContent='Demo scenarios';},true);
-  document.querySelector('.welcome-instruction').textContent='Choose a use case in chat. Stages are simulated and results are saved; no new scan or inspection runs. Follow-up questions use the connected AI.';
-  if(token)(async()=>{
-    await refresh();
-    if(read(sessionStorage,'inspector-guided-demo-chat')===chat?.chat_id){demoReady=true;ask.hidden=!(chat?.runs?.length);if(!ask.hidden)demoHint.textContent='Demo scenarios';controls();}
-    else await startDemo();
-  })();
+  $('chat-picker').addEventListener('change',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('demo-example-actions').hidden=true;},true);
+  $('new-chat').addEventListener('click',()=>{demoSteps.hidden=true;demoTimeline.hidden=true;$('demo-example-actions').hidden=true;});
+  document.querySelector('.welcome-instruction').textContent='Choose an example in the left sidebar to explore its source files and start with prepared inputs. Saved results, when provided, are labelled separately. You can also drop your own documents into the centre or add them using + in chat.';
+  await refresh();demoReady=!!overview;controls();
 
   }
   async function beginDemo(){
@@ -932,6 +1037,6 @@
     }
     await startWorkspace();
   }
-  $('demo-retry').onclick=()=>beginDemo();
+  $('demo-retry').onclick=()=>{notify();beginDemo();};
   beginDemo();
 })();

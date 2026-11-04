@@ -10,6 +10,12 @@ from fastapi.responses import Response
 from .errors import APIError
 
 
+def has_saved_result(settings):
+    """An input-only example library does not provide a monitoring result."""
+    from pathlib import Path
+    return bool(settings.saved_demo_dir) and (Path(settings.saved_demo_dir)/'timeline.json').is_file()
+
+
 def validate_config(settings):
     if bool(settings.progress4d_base_url) != bool(settings.progress4d_service_token):
         raise ValueError('Configure both Progress4D endpoint and dedicated token')
@@ -33,7 +39,7 @@ def project_for_chat(service, principal, chat_id):
     with service.database.connection() as conn:
         service.workspace.check(conn, principal, chat_id)
     settings = service.settings
-    if settings.saved_demo_dir:
+    if has_saved_result(settings):
         from pathlib import Path
         return json.loads((Path(settings.saved_demo_dir) / 'timeline.json').read_text())['project_id']
     if not settings.progress4d_base_url or not settings.progress4d_service_token:
@@ -49,7 +55,7 @@ async def read_response(settings, project, path, byte_range=None, *, transport=N
     artifact = re.fullmatch(r'jobs/([0-9a-f-]{36})/artifacts/([A-Za-z0-9_.-]{1,160})', path)
     if path not in ('timeline', 'report') and not artifact:
         raise APIError(404, 'not_found', 'Unknown 4D resource')
-    if settings.saved_demo_dir:
+    if has_saved_result(settings):
         from pathlib import Path
         from fastapi.responses import FileResponse
         root = Path(settings.saved_demo_dir)
@@ -94,7 +100,7 @@ def agent_result(service, principal, chat_id, expected_project, *, transport=Non
         raise APIError(409, 'progress4d_binding_changed', 'The monitoring project binding changed. Submit a new request.')
     settings = service.settings
     try:
-        if settings.saved_demo_dir:
+        if has_saved_result(settings):
             from pathlib import Path
             value=json.loads((Path(settings.saved_demo_dir)/'timeline.json').read_text())
         else:

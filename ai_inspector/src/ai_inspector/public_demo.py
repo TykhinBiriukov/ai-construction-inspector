@@ -44,7 +44,8 @@ class PublicDemo:
             return await JSONResponse({'message':'Demo session expired. Reload the demo.'},401)(scope,receive,send)
         path = scope['path'][len(PREFIX):]
         allowed = (path in ('/v1/operator/overview','/v1/capabilities','/v1/demo/config','/v1/voice/config','/v1/voice/transcribe','/v1/chats')
-                   or path == '/v1/devices/iphone-1/status' or path.startswith('/v1/chats/'))
+                   or path == '/v1/devices/iphone-1/status' or path.startswith('/v1/chats/')
+                   or (scope['method'] in ('GET', 'HEAD') and (path == '/v1/demo/scenarios' or path.startswith('/v1/demo/scenarios/'))))
         if not allowed or scope['method'] not in ('GET','POST','HEAD'):
             return await JSONResponse({'message':'This action is unavailable in the demo'},403)(scope,receive,send)
         if scope['method']=='POST' and (path.endswith('/messages') or path=='/v1/voice/transcribe'):

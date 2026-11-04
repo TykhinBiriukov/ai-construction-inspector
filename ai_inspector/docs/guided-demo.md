@@ -1,12 +1,12 @@
-# Guided recorded demo and dictation
+# Guided examples and dictation
 
 ## Reviewer quick start
 
 1. Open [the hosted workspace](https://inspector.campuscompile.eu/demo). The configured public demo creates a visitor session; no operator token, device or local service setup is needed for the prepared walkthrough.
-2. Choose **Compare the 3D model with site photos**. Select an object and a frame, then inspect the model, original photograph, mask/overlay and saved measurements.
-3. Choose **Check installation against the drawing**. Compare the supplied drawing with both photographs and inspect the prepared observations and marked regions. These observations are curated, not fresh model verdicts.
-4. Choose **Review construction progress**. Select a week and inspect its saved model and observations. The seventh scene is prepared visualization.
-5. Reopen a result from the conversation. Follow-up chat uses the configured model; the scenario buttons themselves select retained results rather than performing fresh reconstruction or inspection.
+2. In the left sidebar, choose **Model & site photos**, **Drawing & installation** or **Construction progress**. A details dialog explains the example and lets you inspect its source files; the model example opens `room.ifc` first.
+3. For a **Prepared inputs** example, choose **Use these inputs** to attach its files and prepare the task. With a configured model, **Analyze these inputs** submits a new analysis request. Uploaded inputs alone do not establish a successful analysis.
+4. For a recorded example, choose **Show example result**. Inspect the model and source images, switch between the drawing photographs or explore the saved weekly timeline. Window observations are curated; Progress4D uses rendered surveys and a prepared seventh scene.
+5. Reopen a result from the conversation or use **Example details** to inspect its sources again. Follow-up chat uses the configured model. Recorded results and new input analysis are labelled separately.
 
 For review without the hosted service, inspect the [compact records in Git and versioned evidence archives](../../docs/evidence/2026-11-03/data-access.md). The evidence release and the web demo runtime directory serve different purposes: an evidence archive is not automatically an installable `/demo-assets` directory.
 
@@ -38,20 +38,104 @@ Cloudflare can reject the default Python `urllib` User-Agent with HTTP 403 / err
 Set `INSPECTOR_SAVED_DEMO_DIR=/demo-assets` to enable the three guided scenarios.
 The read-only mount comes from `/opt/inspector-backend/demo-assets` and contains:
 
-- `room.ifc`, `week-06-photo.jpg` (the initial file list);
+- `room.ifc`, `week-06-photo.jpg` (example reference files);
 - `window-demo/`: supplied photos/drawing and curated `observations.json`;
 - `geometry-demo/`: sanitized result/asset manifests, images, IFC, scan and
   `comparison.json.gz` from the supplied three-model viewer;
 - `timeline.json`, `progress-assets.json`, `progress/`: exported seven-week
   result and its immutable artifacts.
 
-The current startup check requires `geometry-demo/result.json` and `timeline.json` under the configured directory. `Saved demo dataset is incomplete` means one of those runtime files is missing or the directory/mount is wrong; it does not mean the public evidence release is absent. The remaining assets listed above are also needed by scenario execution. A source clone or an extracted evidence archive alone does not configure this mount.
+A recorded-result library requires `geometry-demo/result.json`, `timeline.json`
+and `window-demo/observations.json` under the configured directory. Alternatively,
+an input-only library requires `scenario-inputs.json`, as described below.
+`Saved demo dataset is incomplete` means neither configuration is complete or
+the directory/mount is wrong; it does not mean the public evidence release is
+absent. The remaining assets listed above are also needed by recorded scenario
+execution. A source clone or an extracted evidence archive alone does not
+configure this mount.
 
 Runtime assets are deployed separately. Compact evidence records are committed to Git, and the selected real-room input/model archive is available in the evidence release. The original remote
 result with signed URLs, credentials and local databases are excluded. Raw captures are excluded from the runtime demo mount; the selected capture is preserved in the prepared evidence archive.
-All asset routes check operator access and chat ownership. Demo stages are
-simulated; selecting a scenario reads existing results. Follow-up questions use
-the configured chat model. Disable the directory setting to restore normal mode.
+Result asset routes check operator access and chat ownership. Follow-up questions
+use the configured chat model. Disable the directory setting to restore normal mode.
+
+The left sidebar presents three illustrated examples above Files, Tasks and Capture
+Devices. Those workspace sections start collapsed and remain available for ordinary
+work. The examples and red coachmark have been removed from the conversation area.
+The welcome introduction is available through About demo; it does not open automatically.
+
+Selecting an example opens a dismissible details dialog with its source files,
+read-only previews/downloads, the steps to explore and the expected next action.
+Browsing does not create a chat, attach documents or start an inspection. Source
+previews are read from the configured example library, independently of the user's files.
+The first listed source opens automatically. For Model & site photos this is
+`room.ifc`; selecting another file switches the preview.
+The recorded library uses the IFC and source frame referenced by its Geometry result,
+the drawing and two photos for Drawing, and the timeline and labelled references for
+Progress. Input-only libraries list their actual available source files independently.
+No example files are automatically uploaded when a chat is created.
+Existing conversations retain their documents.
+
+Examples distinguish prepared inputs from recorded results. For an input example,
+Use these inputs uploads the listed attachable files through the ordinary scoped
+workspace upload API and prepares its task in chat. When the server reports a
+configured chat model, Analyze these inputs submits that task with the uploaded
+file IDs through the normal analysis path. It does not use the recorded-demo
+shortcut or include evaluator answers. Without model configuration it keeps the
+files and draft ready, rather than substituting an answer. Model configuration
+does not itself establish a successful analysis or available downstream services.
+
+Recorded examples retain Show example result and the existing saved-result path;
+this label does not claim fresh reconstruction or inspection. Repeated clicks
+are disabled while uploads or requests are active, and pending requests retain
+their existing retry identity. A completed request preserves the user's prior
+draft and selected attachments. New chat returns to the ordinary empty conversation.
+
+The central document area accepts dropped files through the same validation,
+upload queue and retry identities as the circular + button. Dropped URLs are not
+fetched and folders are not imported. A pending upload must be retried before a
+new file set can replace it. Uploading files does not itself start an inspection.
+Opening an IFC, PDF or image shows a single Fit View button instead of an expanded
+Controls panel. It fits the current document and is hidden when the document is
+cleared or a result viewer takes its place. Sidebar branding uses compact spacing
+before the project label and example library.
+
+Authenticated `GET /v1/demo/scenarios` returns `{scenarios: [{id, title, notice,
+mode, available, files: [{id, name, kind, url, description, attach, byte_length}]}]}`.
+Input examples additionally include `description` and `prompt`. File URLs use
+`/v1/demo/scenarios/{scenario}/assets/{asset}` with GET/HEAD and a fixed allowlist;
+they do not accept filesystem paths. These read-only library routes require
+operator or isolated visitor access and do not require or create a chat. The public
+demo prefix admits only GET/HEAD for these previews. Chat-scoped result assets keep
+their existing access checks. Responses are private and not cached.
+
+An input-only library can be configured under `INSPECTOR_SAVED_DEMO_DIR` with
+`scenario-inputs.json`, without recorded Geometry/timeline outputs. Its shape is
+`{scenarios: [{id, title, description, prompt, notice, files: [{id, path,
+description, attach}]}]}`. Scenario IDs are `geometry`, `drawing`, `progress`;
+file paths are relative to that directory and confined to it. Inputs use a new
+analysis task, not one of the exact recorded-result prompts. ZIP archives must
+be download-only (`attach: false`). An example can list up to sixteen files,
+with at most eight attachable files; the chat attachment limit is unchanged.
+Never include expected answers or evaluation truth among model inputs. A missing
+source set is marked unavailable, not replaced with reports or a prepared scene.
+An input-only directory does not establish a connected Progress4D result.
+
+The prepared Progress4D source package is published under
+[`resources/progress4d/inputs`](https://github.com/TykhinBiriukov/ai-construction-inspector/tree/main/resources/progress4d/inputs).
+Keep it separate from the sibling replay data. A compact input example can attach
+`project-materials.ifc` and one original photograph for each of seven dated weeks;
+the full input-only archive contains all 312 synthetic survey photographs, seven
+capture manifests and the reference IFC. These rendered survey inputs are not
+real-site evidence or inspection verdicts. Preserve the source dates and hashes.
+
+Complete RGB-D archives remain separate from ordinary chat attachments. A reference
+IFC, one RGB preview and a capture manifest do not constitute validated Geometry
+intake or a completed comparison. Preserve capture identity and use the existing
+capture/Geometry path when processing the complete source. Real, generated and
+recorded material must keep its provenance labels.
+
+The sidebar and welcome dialog use the bundled SVG Inspector logo.
 
 Set `INSPECTOR_VOICE_ENABLED=true` to enable Meta Muse Voice Transcribe 1.0 with
 the existing server-side Meta API key. Voice records up to 60 seconds, converts

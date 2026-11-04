@@ -1,26 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="370" viewBox="0 0 1000 370" role="img" aria-labelledby="title desc">
-  <title id="title">2018 U.S. construction rework attribution</title>
-  <desc id="desc">Poor project data accounts for 22 percent, poor communication for 26 percent, and other factors for 52 percent. Historical survey-based industry estimates from PlanGrid and FMI, not measured AI Inspector performance.</desc>
-  <rect width="1000" height="370" rx="18" fill="#f6f8fb"/>
-  <g font-family="Arial, Helvetica, sans-serif" fill="#15263b">
-    <text x="32" y="45" font-size="25" font-weight="700">Why connected evidence matters</text>
-    <text x="32" y="74" font-size="16" fill="#475569">Attribution of U.S. construction rework costs · PlanGrid/FMI, 2018</text>
-    <g stroke="#dbe2ea" stroke-width="1">
-      <path d="M290 106V278 M390 106V278 M490 106V278 M590 106V278 M690 106V278 M790 106V278 M890 106V278"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="250" viewBox="0 0 1000 250" role="img" aria-labelledby="title desc">
+  <title id="title">$31.3 billion in estimated U.S. construction rework, 2018</title>
+  <desc id="desc">PlanGrid and FMI estimated 31.3 billion U.S. dollars in construction rework linked to poor project data and communication in 2018. Historical industry context, not measured AI Inspector savings or the cost of inspection delays.</desc>
+  <rect width="1000" height="250" rx="14" fill="#fff3df"/>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#192b3a">
+    <text x="36" y="49" font-size="20" letter-spacing="2">THE COST OF DISCONNECTED INFORMATION</text>
+    <text x="32" y="157" font-size="100" font-weight="700" letter-spacing="-5">$31.3B</text>
+    <g font-size="27">
+      <text x="415" y="100">Estimated U.S. construction rework</text>
+      <text x="415" y="137">linked to poor project data</text>
+      <text x="415" y="174">and communication.</text>
     </g>
-    <text x="32" y="140" font-size="18">Poor project data</text>
-    <rect x="290" y="116" width="220" height="34" rx="5" fill="#087f8c"/>
-    <text x="524" y="140" font-size="18" font-weight="700">22%</text>
-    <text x="32" y="200" font-size="18">Poor communication</text>
-    <rect x="290" y="176" width="260" height="34" rx="5" fill="#2864b7"/>
-    <text x="564" y="200" font-size="18" font-weight="700">26%</text>
-    <text x="32" y="260" font-size="18">Other factors</text>
-    <rect x="290" y="236" width="520" height="34" rx="5" fill="#748398"/>
-    <text x="824" y="260" font-size="18" font-weight="700">52%</text>
-    <g font-size="13" fill="#475569" text-anchor="middle">
-      <text x="290" y="297">0%</text><text x="390" y="297">10%</text><text x="490" y="297">20%</text>
-      <text x="590" y="297">30%</text><text x="690" y="297">40%</text><text x="790" y="297">50%</text><text x="890" y="297">60%</text>
-    </g>
-    <text x="32" y="335" font-size="14" fill="#475569">Historical industry context. These figures are not AI Inspector accuracy, savings or benchmark results.</text>
+    <text x="36" y="219" font-size="18" fill="#5a4d37">2018 · PlanGrid / FMI · Historical industry estimate, not measured product savings</text>
   </g>
 </svg>

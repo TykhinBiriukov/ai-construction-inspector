@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/inspector-logo.jpg" alt="Inspector — IA · Inspector Agent" width="640">
+</p>
+
 # AI Construction Inspector
 
 **A powerful multi-agent system for construction quality control and progress monitoring.**
@@ -18,27 +22,55 @@
 | Meta models | **Muse Spark 1.3 · SAM 3.1 · Muse Voice Transcribe 1.0** |
 | Creators | Tykhin Biriukov, Egor Pichugin and Oleg Kulikov |
 
-[Demo walkthrough](#demo-walkthrough) · [Problem and value](#problem-and-value) · [Measured results](#measured-results) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons)
+[Demo walkthrough](#demo-walkthrough) · [Problem](#problem) · [Value](#value) · [Measured results](#measured-results) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons)
 
 ## Demo walkthrough
 
-[Open AI Inspector](https://inspector.campuscompile.eu/demo) and select a scenario. Prepared inputs and saved computations make the product immediately explorable in the browser, without a phone or local installation.
+[Open AI Inspector](https://inspector.campuscompile.eu/demo) and choose an example in the left sidebar. Each example opens a details dialog where you can inspect and download its source files before choosing the next action. Files, Tasks and Capture Devices start collapsed and remain available for your own work.
 
 | Choose | Explore | Product value |
 |---|---|---|
-| **Check installation against the drawing** | Drawing, site photograph and linked findings | Review the installation against its design requirements |
-| **Compare the 3D model with site photos** | IFC model, reconstructed geometry, measurements and source images | Investigate differences in their spatial and visual context |
-| **Review construction progress** | Dated observations and a seven-week walkthrough | Follow the relationship between planned work and observed progress |
+| **Model & site photos** | The reference IFC opens first; switch to the site photo and capture metadata, or explore a configured saved model-to-scan comparison | Investigate differences in their spatial and visual context |
+| **Drawing & installation** | A window drawing and two installation photographs, with prepared input files or a labelled saved comparison | Review the installation against its design requirements |
+| **Construction progress** | A reference IFC and seven dated synthetic survey photographs, or the configured saved weekly timeline | Follow the relationship between planned work and observed progress |
 
-The [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start) provides the steps and expected output. Scenario selection opens retained results; fresh analysis and model follow-up questions use their respective processing paths.
+**Prepared inputs** and **recorded results** have separate actions. **Use these inputs** adds the listed attachable files and prepares a task in chat; **Analyze these inputs** sends that task through the normal analysis path when a chat model is configured. New findings depend on the connected analysis services. **Show example result** opens a retained result and does not perform a fresh reconstruction or inspection. Browsing an example does not create a chat or add files automatically. The [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start) describes the steps and configuration.
 
-For new work, the entry point matches the task: **drawing + photo** for visual inspection, **RGB-D capture + IFC** for metric comparison, and **dated photo surveys + scheduled IFC** for progress analysis. An existing calibrated RGB-D session can be reprocessed without another phone capture. The [public real-room package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03) includes 99 observations, their 396 capture files, a pinned IFC, meshes and processing manifests.
+For new work, the entry point matches the task: **drawing + photo** for visual inspection, **RGB-D capture + IFC** for metric comparison, and **dated photo surveys + scheduled IFC** for progress analysis. An existing calibrated RGB-D session can be reprocessed without another phone capture. The [public real-room package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03) includes 99 observations, their 396 capture files, a pinned IFC, meshes and processing manifests. The [Progress4D input folder](resources/progress4d/inputs) contains the reference IFC, seven capture manifests and 312 synthetic survey photographs, separate from its sibling replay outputs.
 
-## Problem and value
+Demo labels distinguish real captures, synthetic inputs, recorded results and mock fixtures. A reference model, preview photo and capture manifest do not replace validated complete RGB-D intake. Complete capture archives remain separate from ordinary chat attachments.
 
-**Control work while it is happening, and put actionable evidence in the hands of the people making decisions.** A specialist-led site check can involve scheduling, travel and coordination before the inspection even begins. Meanwhile, managers need to decide whether work can advance, an installation needs correction, or a specialist should investigate further.
+<a id="problem-and-value"></a>
 
-**AI Inspector is designed around a more responsive, agent-assisted workflow:** a person already on site supplies observations, the system processes the evidence, and a manager reviews the findings. Inspection requests, capture assignments, model analysis and evidence validation connect field observations to that decision. The commercial value is clear: reduce the wait for information, focus specialist attention where it matters and help teams address discrepancies before they affect subsequent work.
+## Problem
+
+### A simple question: can the next stage start?
+
+A room looks ready. The next crew is scheduled. Before work continues, someone must establish whether what was built matches the design and whether the required checks are complete. The answer may be scattered across drawing revisions, BIM models, site photographs and inspection records.
+
+![Conceptual room illustration: connect a design requirement, site evidence and an inspection finding before deciding what needs checking next. This is not a measured inspection result.](docs/assets/inspection-room-story.svg)
+
+**While the decision waits, work can wait too.** Coordinating an inspection, resolving missing information and obtaining sign-off can hold up the next stage while project costs continue. New Zealand's building regulator explicitly identifies inspection delays as a source of additional costs and missing information as a reason applications are put on hold. [MBIE: inspection wait-times and requests for information](https://www.building.govt.nz/getting-started/how-the-building-system-protects-you/building-consent-system-performance-monitoring).
+
+**A completed inspection can still miss an important detail.** Attention lapses, incomplete evidence and inconsistent checks can leave a defect unnoticed. If it is discovered after subsequent work has covered the area, the team may need to reopen finished work, revise the design or rebuild the affected installation. The [Lean Construction Institute](https://leanconstruction.org/lean-topics/8-wastes-of-lean/) identifies both waiting and defects requiring correction as sources of wasted time and resources.
+
+**Some consequences go beyond time and money.** An unresolved defect in a safety-critical system can put people's lives at risk. The [Grenfell Tower Inquiry, Phase 2, Volume 4, §§64.41–64.44](https://assets.publishing.service.gov.uk/media/66d817d9c52d5fb4c82dddf0/CCS0923434692-004_GTI_Phase_2_Volume_4_BOOKMARKED.pdf) documents inspections that failed to detect serious workmanship defects in cavity barriers. It shows why reliable inspection, evidence and follow-through matter beyond project handover.
+
+![31.3 billion U.S. dollars: estimated U.S. construction rework linked to poor project data and communication in 2018. Source: PlanGrid and FMI.](docs/assets/rework-context.svg)
+
+**$31.3 billion** was PlanGrid and FMI's estimate for U.S. construction rework attributable to poor project data and communication in **2018**—48% of estimated rework costs. This historical figure describes the wider industry problem; it is not a total for inspection delays, a valuation of safety harm or a claim about savings from AI Inspector. [Construction Disconnected, pp. 19–20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
+
+## Value
+
+### Bring the evidence into the decision earlier.
+
+AI Inspector helps engineers connect the design requirement, the site observation and the finding in one review. It compares supplied drawings and photographs, reviews scan-to-BIM evidence, and keeps findings linked to their sources. The goal is to reduce the effort needed to prepare a sound decision and make important gaps harder to overlook.
+
+**Help reduce evidence-related waiting.** Put the selected sources and comparison results together so the reviewer can investigate a discrepancy without repeatedly assembling the same context. This targets the preparation and clarification work around a decision; approval schedules and formal sign-off remain with the responsible people and processes.
+
+**Make repeated checks more consistent.** Turn a selected drawing into explicit requirements, reuse compatible checklists for later photographs, and review geometric differences against the selected reference model. Each result shows the evidence and its limits, helping reviewers distinguish a supported discrepancy from an unanswered question.
+
+**Support earlier correction and safer decisions.** Surface potential issues for investigation while work is still accessible. When a detail is hidden or the evidence is insufficient, keep that uncertainty visible so the team can arrange a closer inspection, additional capture or appropriate testing. The intended contribution is better-supported review; the current prototype does not certify building safety or demonstrate a reduction in accidents.
 
 | Step | People and agents working together | Value for the construction team |
 |---|---|---|
@@ -48,11 +80,35 @@ For new work, the entry point matches the task: **drawing + photo** for visual i
 | Make the next decision | The manager reviews findings and decides on progression, correction or specialist involvement | An informed handoff between inspection and project execution |
 | Repeat as work advances | New observations reuse applicable requirements and feed subsequent reviews | Consistent follow-up throughout the work |
 
-PlanGrid and FMI's *Construction Disconnected* study estimated that poor project data and communication accounted for **$31.3 billion in U.S. construction rework in 2018**, or **48% of rework costs**, based on a survey of 599 industry participants. This quantifies the economic problem AI Inspector addresses. [Study, printed pages 4 and 19–20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
+<details>
+<summary>Follow one inspection question</summary>
 
-![2018 U.S. construction rework attribution: poor project data 22%, poor communication 26%, other factors 52%.](docs/assets/rework-context.svg)
+**Question:** “Does this room match the design, and what still needs checking before the next stage?”
 
-*Source: [PlanGrid/FMI, Construction Disconnected (2018), printed page 20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf). Industry rework-cost estimates.*
+1. **Requirement:** select the relevant drawing or IFC and define the inspection task.
+2. **Observation:** supply the corresponding photograph or complete capture; preserve its source identity.
+3. **Finding:** inspect the comparison and supporting evidence. An observable discrepancy and an unobserved detail remain different outcomes.
+4. **Next action:** the responsible reviewer decides whether to correct work, obtain more evidence or proceed with the applicable acceptance process.
+
+This is an illustrative review workflow, not a recorded result or an automatic authorization to continue construction. Implementation links: [drawing/photo checks](#drawingphoto-structured-reasoning-reusable-requirements-and-a-fresh-review), [Geometry review](#geometry-inspector-and-geometry-verifier-focused-expertise-and-rigorous-review), [capture and result contract](ai_inspector/docs/capture-to-geometry.md).
+
+</details>
+
+<details>
+<summary>How we will evaluate the value—and make capture more accessible</summary>
+
+| Intended benefit | Evidence needed on real projects |
+|---|---|
+| Less preparation and clarification time | Engineer time per reviewed finding and time spent collecting missing evidence; distinguish these from administrative waiting |
+| Fewer overlooked defects | False and missed findings against independently reviewed cases, including safety-critical cases within the supported scope |
+| More traceable decisions | Time to locate the original source and verify the finding |
+| Useful repeat inspections | Agreement of dated observations with independently reviewed site records |
+
+Professional mobile mapping systems such as [NavVis VLX 3](https://www.navvis.com/vlx-3) and [Leica Pegasus:Backpack](https://leica-geosystems.com/ja-jp/about-us/news-room/customer-magazine/reporter-79/capturing-reality-on-the-go) already support reality capture. Our direction is more accessible collection through compatible LiDAR-equipped consumer devices and, later, autonomous equipment. Price, survey-accuracy parity and project savings still require field evaluation.
+
+The PlanGrid/FMI study surveyed 599 construction industry participants, including 500 in the U.S. Its survey and industry-level estimates establish context, not measured product performance. [Study demographics, p. 4](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
+
+</details>
 
 | Who uses it | The job | What AI Inspector brings together |
 |---|---|---|

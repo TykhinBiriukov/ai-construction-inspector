@@ -11,8 +11,11 @@ Python 3.12+ is required. From this directory in PowerShell, create the environm
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m uvicorn ai_inspector.main:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn ai_inspector.main:app --app-dir src --host 127.0.0.1 --port 8000
 ```
+
+`--app-dir src` loads the current source tree directly, including when the package
+has not been installed into the selected environment.
 
 Create an ignored `.env` from [.env.example](.env.example) if needed. Set distinct random operator/device tokens; preserve existing credentials and data on restart. Settings load from the working directory's `.env`, with process environment taking precedence. The example lists configuration names, not working credentials. A fresh clone is not preconfigured.
 
