@@ -20,7 +20,7 @@ function uuid() {
   return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, {...options, headers: {...options.headers, ...window.InspectorOperatorSession.headers(token)}, signal: AbortSignal.timeout(60000)});
+  const response = await fetch(path, {...options, headers: {...options.headers, ...window.InspectorOperatorSession.headers(token)}, signal: AbortSignal.timeout(path.endsWith('/messages') ? 150000 : 60000)});
   if (!response.ok) {
     let body; try { body = await response.json(); } catch { body = {}; }
     if (response.status === 401) lock();

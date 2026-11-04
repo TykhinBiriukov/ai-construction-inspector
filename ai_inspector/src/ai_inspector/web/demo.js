@@ -46,7 +46,7 @@
     write(sessionStorage,pendingKey,pending || create ? JSON.stringify({pending,create,chat_id:chat?.chat_id,project_id:overview?.project_id,auth_mode:window.InspectorOperatorSession.mode()}) : null);
   }
   async function api(path, options={}) {
-    const response=await fetch(path,{...options,headers:{...options.headers,...window.InspectorOperatorSession.headers(token)},signal:AbortSignal.timeout(60000)});
+    const response=await fetch(path,{...options,headers:{...options.headers,...window.InspectorOperatorSession.headers(token)},signal:AbortSignal.timeout(path.endsWith('/messages') ? 150000 : 60000)});
     if(response.ok && options.blob) return response.blob();
     let body; try { body=await response.json(); } catch { body={}; }
     if (!response.ok) { if(response.status===401) lock(); const error=new Error(body.message || `Request failed (${response.status})`); error.status=response.status; error.code=body.code; throw error; }
