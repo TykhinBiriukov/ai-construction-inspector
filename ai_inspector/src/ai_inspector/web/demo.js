@@ -2,12 +2,11 @@
 (() => {
   const $ = id => document.getElementById(id);
   const deviceName = id => id === 'iphone-1' ? 'Bob device' : id;
-  const authKey = 'inspector-demo-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
+  const pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
   const read = (store, key) => { try { return store.getItem(key); } catch { return null; } };
   const write = (store, key, value) => { try { if (value == null) store.removeItem(key); else store.setItem(key,value); } catch {} };
   const operatorToken = window.InspectorOperatorSession.get();
-  let token = operatorToken || read(sessionStorage, authKey) || '', epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
-  let apiPrefix=operatorToken ? '' : read(sessionStorage,'inspector-demo-api-prefix')||'';
+  let token = operatorToken, epoch = 0, overview, caps, device, chat = null, pending = null, create = null;
   let scopedSessions = [], scopedInspections = [];
   let geometryViewer=null;
   const presentedProgress=new Set();
@@ -47,7 +46,7 @@
     write(sessionStorage,pendingKey,pending || create ? JSON.stringify({pending,create,chat_id:chat?.chat_id,project_id:overview?.project_id}) : null);
   }
   async function api(path, options={}) {
-    const response=await fetch(apiPrefix+path,{...options,headers:{...options.headers,Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(60000)});
+    const response=await fetch(path,{...options,headers:{...options.headers,...window.InspectorOperatorSession.headers(token)},signal:AbortSignal.timeout(60000)});
     if(response.ok && options.blob) return response.blob();
     let body; try { body=await response.json(); } catch { body={}; }
     if (!response.ok) { if(response.status===401) lock(); const error=new Error(body.message || `Request failed (${response.status})`); error.status=response.status; error.code=body.code; throw error; }
@@ -60,22 +59,20 @@
   function lock() {
     voice.cancel();$("voice-input").hidden=true;
     closeProgress4d();geometryViewer?.clear();
-    if(!apiPrefix && window.InspectorOperatorSession.get()===token)window.InspectorOperatorSession.set('');
-    epoch++; token=''; write(sessionStorage,authKey,null); chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
+    if(window.InspectorOperatorSession.get()===token)window.InspectorOperatorSession.set('').catch(error=>notify(error.message));
+    epoch++; token=''; chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;workspaceBusy=false;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
-    $('workspace').hidden=true; $('login').hidden=false; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('workspace-scope').hidden=true; $('token').value='';
+    $('workspace').hidden=true; $('login').hidden=false; $('sidebar-devices').hidden=true; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('workspace-scope').hidden=true; $('token').value='';
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
   function unlock() {
-    voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=!!apiPrefix; $('token').value='';
-    if(apiPrefix){write(sessionStorage,authKey,token);write(sessionStorage,'inspector-demo-api-prefix',apiPrefix);}
-    else{write(sessionStorage,authKey,null);write(sessionStorage,'inspector-demo-api-prefix',null);window.InspectorOperatorSession.set(token);}
+    voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value='';
+    $('sidebar-devices').hidden=false;
+    if(!read(sessionStorage,'inspector-demo-intro-v1')&&!intro.open)intro.showModal();
   }
   function renderWorkspaceScope(){
-    const guest=!!apiPrefix;
     $('workspace-scope').hidden=false;
-    $('workspace-scope-text').textContent=guest?'Sign in to use your connected phone. A Control Room sign-in is shared automatically.':`Project: ${overview.project_id} · ${deviceName(overview.device_id)}`;
-    $('workspace-scope-link').hidden=!guest;
+    $('workspace-scope-text').textContent=`Project: ${overview.project_id} · ${deviceName(overview.device_id)}`;
   }
   function controls() {
     $('chat-picker').disabled=sending||workspaceBusy;
@@ -116,22 +113,21 @@
     const updated=review?.updated_at||run?.updated_at;if(updated)panel.append(node('small','',`Last update: ${new Date(updated).toLocaleTimeString()}`));
   }
   function renderRails() {
-    $('project-name').textContent=apiPrefix?'Demo project':overview.project_id;
+    $('project-name').textContent=overview.project_id;
     renderFiles();renderProgress();
     $('tasks').replaceChildren(); $('task-count').textContent=scopedSessions.length;
     for(const session of scopedSessions) {
-      const button=node('button','',`◌  ${session.room_id}`); button.append(node('small','',`${apiPrefix?'Demo only · ':''}${session.capture_state} · ${session.processing_state} · ${session.session_id.slice(0,8)}`));
+      const button=node('button','',`◌  ${session.room_id}`); button.append(node('small','',`${session.capture_state} · ${session.processing_state} · ${session.session_id.slice(0,8)}`));
       button.addEventListener('click',()=>showTask(session)); $('tasks').append(button);
     }
-    if(!scopedSessions.length) $('tasks').append(node('p','muted',apiPrefix?'Phone capture is available in the live project.':'No capture tasks yet. Ask AI Inspector to create one.'));
-    $('device-state').textContent=apiPrefix?'Unavailable in demo':device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',!apiPrefix&&device.online);
+    if(!scopedSessions.length) $('tasks').append(node('p','muted','No capture tasks yet. Ask AI Inspector to create one.'));
+    $('device-state').textContent=device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',device.online);
     $('device-name').textContent=deviceName(device.device_id);
     if(selected) { const session=scopedSessions.find(s=>s.session_id===selected); if(session) showTask(session); }
   }
   function showTask(session) {
     selected=session.session_id; const box=$('selection'); box.hidden=false; box.className='selection';
     box.replaceChildren(node('h3','',`Task · ${session.room_id}`),node('p','',session.capture_task?.text || 'Capture assignment'),node('p','',`Capture: ${session.capture_state}\nProcessing: ${session.processing_state}`),node('p','',`Created ${timestamp(session.created_at)}`));
-    if(apiPrefix)box.append(node('p','','Demo-only task · not sent to an iPhone.'));
     if(session.error) box.append(node('p','',session.error.message || 'Processing error reported'));
     if(session.geometry_result) box.append(geometryResultCard(session.session_id));
     box.append(node('p','',`Session ${session.session_id}`));
@@ -247,7 +243,7 @@
     if(tool.name==='session_import')return r.new_geometry_computation===false?'Saved result connected. Evidence review continues automatically.':'Saved capture connected.';
     if(tool.name==='device_status')return `${deviceName(r.device_id)||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
     const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
-    if(tool.name==='session_create'||tool.name==='session_get')return apiPrefix?'Demo-only task · no phone assignment':session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
+    if(tool.name==='session_create'||tool.name==='session_get')return session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
     return 'Completed';
   }
   function actionEvents(run){
@@ -346,9 +342,8 @@
             if(tool.name==='session_create'&&tool.result?.session?.session_id){
               const saved=tool.result.session,session=scopedSessions.find(item=>item.session_id===saved.session_id)||saved;
               const card=node('section','assignment-card');
-              card.append(node('strong','',apiPrefix?'Demo-only task':'Phone assignment'),node('code','',session.session_id));
-              card.append(node('small','',apiPrefix?'This task cannot reach your iPhone. Open the live project to assign a new one.':
-                session.device_acknowledged_at?'Acknowledged by the phone.':`Waiting for the phone to acknowledge this exact task · ${session.capture_state}.`));
+              card.append(node('strong','','Phone assignment'),node('code','',session.session_id));
+              card.append(node('small','',session.device_acknowledged_at?'Acknowledged by the phone.':`Waiting for the phone to acknowledge this exact task · ${session.capture_state}.`));
               grid.append(card);
             }
             if(tool.result?.viewer?.kind==='saved_demo'&&tool.result.viewer.chat_id===chat.chat_id){
@@ -388,8 +383,7 @@
     if(!token||refreshing) return; const current=epoch; refreshing=true;
     try {
       const [data,capabilities]=await Promise.all([api('/v1/operator/overview'),api('/v1/capabilities')]);
-      const status=apiPrefix?{device_id:'No phone in public demo',online:null}:
-        await api(`/v1/devices/${encodeURIComponent(data.device_id)}/status`);
+      const status=await api(`/v1/devices/${encodeURIComponent(data.device_id)}/status`);
       if(current!==epoch) return;
       overview=data; caps=capabilities; device=status;
       if(chatChoices===null)chatChoices=(await api('/v1/chats')).chats;
@@ -765,25 +759,23 @@
     $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();
   }
   $('chat-picker').addEventListener('change',()=>switchConversation($('chat-picker').value));
-  $('login-form').addEventListener('submit',async event=>{event.preventDefault(); token=$('token').value.trim(); epoch++; notify(); event.submitter.disabled=true; await startWorkspace(); event.submitter.disabled=false;});
-  $('workspace-scope-link').addEventListener('click',()=>{$('live-connect-error').hidden=true;$('live-connect-dialog').showModal();$('live-token').focus();});
-  $('live-connect-cancel').addEventListener('click',()=>{$('live-token').value='';$('live-connect-dialog').close();});
-  $('live-connect-form').addEventListener('submit',async event=>{
+  $('login-form').addEventListener('submit',async event=>{
     event.preventDefault();
-    const candidate=$('live-token').value.trim(),submit=$('live-connect-submit');
+    const candidate=$('token').value.trim(),submit=event.submitter;
     if(!candidate)return;
-    submit.disabled=true;$('live-connect-error').hidden=true;
+    submit.disabled=true;notify();
     try{
       const response=await fetch('/v1/operator/overview',{headers:{Authorization:`Bearer ${candidate}`},signal:AbortSignal.timeout(10000)});
-      if(!response.ok)throw Error(response.status===401?'Operator access was not accepted.':'The live project could not be reached.');
+      if(!response.ok)throw Error(response.status===401?'Operator access was not accepted.':'Inspector could not be reached. Try again.');
       const project=await response.json();
-      if(!project.project_id||!project.device_id)throw Error('The live project response is incomplete.');
-      window.InspectorOperatorSession.set(candidate);write(sessionStorage,authKey,null);
-      write(sessionStorage,'inspector-demo-api-prefix',null);
-      location.reload();
-    }catch(error){$('live-connect-error').textContent=error.message;$('live-connect-error').hidden=false;submit.disabled=false;}
+      if(!project.project_id||!project.device_id)throw Error('The project response is incomplete.');
+      await window.InspectorOperatorSession.set(candidate);
+      token=window.InspectorOperatorSession.get();epoch++;
+      await startWorkspace();
+    }catch(error){notify(error.message);}
+    finally{submit.disabled=false;}
   });
-  $('lock').addEventListener('click',()=>{lock();beginDemo();});
+  $('lock').addEventListener('click',lock);
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
   $('new-chat').addEventListener('click',()=>switchConversation(''));
@@ -1071,21 +1063,13 @@
   }
   async function beginDemo(){
     await window.InspectorOperatorSession.ready;
-    const shared=window.InspectorOperatorSession.get();
-    if(shared){token=shared;apiPrefix='';}
-    if(token.startsWith('demo.')&&Number(token.split('.')[2])*1000<=Date.now()){token='';write(sessionStorage,authKey,null);}
+    token=window.InspectorOperatorSession.get();
     if(!token){
-      try{
-        const response=await fetch('/v1/demo/session',{method:'POST'});
-        if(!response.ok)throw Error('The demo is temporarily unavailable. Please retry.');
-        const session=await response.json();
-        if(session.api_prefix!=='/public-demo'||typeof session.token!=='string')throw Error('Invalid demo session');
-        token=session.token;apiPrefix=session.api_prefix;write(sessionStorage,authKey,token);write(sessionStorage,'inspector-demo-api-prefix',apiPrefix);
-      }catch(error){notify(error.message);return;}
+      $('login').hidden=false; $('workspace').hidden=true; $('sidebar-devices').hidden=true;
+      return;
     }
     await startWorkspace();
   }
-  $('demo-retry').onclick=()=>{notify();beginDemo();};
   window.InspectorOperatorSession.subscribe(() => location.reload());
   beginDemo();
 })();

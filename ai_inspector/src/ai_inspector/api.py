@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
-from . import drawing_photo, progress4d
+from . import drawing_photo, progress4d, browser_session
 from .workspace import WorkItem, Observation, ImportPlan
 from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
@@ -132,8 +132,18 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
                 return Principal("device", settings.project_id, settings.device_id)
         raise APIError(401, "unauthorized", "A valid bearer token is required")
 
-    def authenticate(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> Principal:
-        return authenticate_token(credentials.credentials if credentials else None)
+    def require_browser_origin(request: Request):
+        if request.headers.get("origin") != settings.browser_origin:
+            raise APIError(403, "forbidden", "A same-origin browser request is required")
+
+    def authenticate(request: Request, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> Principal:
+        if credentials:
+            return authenticate_token(credentials.credentials)
+        if browser_session.verify(settings.operator_token, request.cookies.get(browser_session.COOKIE)):
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                require_browser_origin(request)
+            return Principal("operator", settings.project_id)
+        return authenticate_token(None)
 
     def operator(principal: Annotated[Principal, Depends(authenticate)]) -> Principal:
         require_role(principal, "operator")
@@ -202,13 +212,32 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     if static_ui:
         app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "web"), name="operator-ui")
 
-    if settings.public_demo_enabled and settings.saved_demo_dir:
-        from .public_demo import PublicDemo, mint
-        app.add_middleware(PublicDemo, settings=settings)
+    @app.post("/v1/operator/browser-session")
+    def sign_in_browser(request: Request, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
+        require_browser_origin(request)
+        principal = authenticate_token(credentials.credentials if credentials else None)
+        require_role(principal, "operator")
+        response = JSONResponse({"authenticated": True})
+        response.set_cookie(browser_session.COOKIE, browser_session.mint(settings.operator_token),
+                            max_age=browser_session.MAX_AGE, httponly=True, secure=True,
+                            samesite="strict", path="/")
+        return response
 
-        @app.post('/v1/demo/session')
-        def new_demo_session():
-            return {'token': mint(settings), 'api_prefix': '/public-demo'}
+    @app.get("/v1/operator/browser-session")
+    def get_browser_session(principal: Annotated[Principal, Depends(operator)]):
+        return {"authenticated": True}
+
+    @app.delete("/v1/operator/browser-session")
+    def sign_out_browser(request: Request):
+        require_browser_origin(request)
+        response = JSONResponse({"authenticated": False})
+        response.delete_cookie(browser_session.COOKIE, httponly=True, secure=True,
+                               samesite="strict", path="/")
+        return response
+
+    @app.post('/v1/demo/session')
+    def retired_guest_session():
+        return JSONResponse({"message": "Sign in to Inspector. Demo and Control Room share one project."}, status_code=410)
 
     if settings.saved_demo_dir:
         from .saved_demo import configure

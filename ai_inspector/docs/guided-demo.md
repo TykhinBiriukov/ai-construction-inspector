@@ -2,7 +2,7 @@
 
 ## Reviewer quick start
 
-1. Open [the hosted workspace](https://inspector.campuscompile.eu/demo). The configured public demo creates a visitor session; no operator token, device or local service setup is needed for the prepared walkthrough. It has no iPhone connection and cannot assign a real capture.
+1. Open [the hosted workspace](https://inspector.campuscompile.eu/demo) and sign in with the same operator token as Control Room. One browser sign-in persists after closing and reopening tabs, until you sign out. Both interfaces use the same project and connected phone.
 2. In the left sidebar, choose **Model & site photos**, **Drawing & installation** or **Construction progress**. A details dialog explains the example and lets you inspect its source files; the model example opens `room.ifc` first.
 3. For a **Prepared inputs** example, choose **Use these inputs** to attach its files and prepare the task. With a configured model, **Analyze these inputs** submits a new analysis request. Uploaded inputs alone do not establish a successful analysis.
 4. For a recorded example, choose **Show example result**. Inspect the model and source images, switch between the drawing photographs or explore the saved weekly timeline. Window observations are curated; Progress4D uses rendered surveys and a prepared seventh scene.
@@ -16,19 +16,20 @@ Saved-result viewing and fresh analysis are separate: the package proves retaine
 
 Production frontend deploys from `main` through `deploy-inspector-web.yml`.
 The existing GCP backend polls `main` with `inspector-backend-update.timer`.
-With `INSPECTOR_PUBLIC_DEMO_ENABLED=true`, the demo automatically issues a signed
-24-hour visitor session. Each visitor has a separate local SQLite workspace under
-the backend cache volume; production DB/storage/device credentials are not inherited.
-No operator token is embedded in JavaScript or returned to visitors. Normal operator
-API routes retain their original authentication. Guest API requests use the
-`/public-demo` prefix; the same-origin viewer shares the guest session.
+Demo and Control Room now use the same authenticated operator API, project and
+capture queue. The former guest-project middleware is no longer mounted;
+`POST /v1/demo/session` returns 410 and `/public-demo/*` cannot access a workspace.
+The former `INSPECTOR_PUBLIC_DEMO_ENABLED` setting no longer enables guest access.
+No operator credential is returned to anonymous visitors.
 
-To start a real phone capture from `/demo`, choose **Sign in** and
-enter the operator credential for the iPhone's project. An existing Control Room sign-in is reused automatically across open tabs in the same browser profile. The chat then uses the normal project API;
-the existing `session_create` tool can assign capture to the registered phone.
-The scope banner shows the shared project and device, and each new phone assignment shows its full session ID and
-acknowledgement state. Existing guest conversations and their task IDs remain in
-the separate demo workspace; repeat the capture request in the live chat.
+The shared browser sign-in uses a signed, Secure, HttpOnly, SameSite=Strict cookie
+with a 30-day lifetime. No operator token is stored in localStorage. Sign-out is
+shared across tabs; cookie-authenticated writes require the configured browser Origin.
+A prior operator session is migrated on the first reload. Old guest credentials
+are discarded. Historical guest conversations are not migrated into the live
+project; existing operator history, phone identity and assignments are preserved.
+The scope banner shows the project and device, and new phone assignments include
+the exact session ID and acknowledgement state.
 
 ## Automated HTTP checks
 

@@ -2,7 +2,7 @@
 const $ = id => document.getElementById(id);
 const deviceName = id => id === 'iphone-1' ? 'Bob device' : id;
 function savedToken() { return window.InspectorOperatorSession.get(); }
-function saveToken(value) { window.InspectorOperatorSession.set(value); }
+function saveToken(value) { return window.InspectorOperatorSession.set(value); }
 function unlock() {
   $('token').value = ''; $('login').hidden = true; $('workspace').hidden = false;
   $('logout').hidden = false; $('refresh').disabled = false; fields();
@@ -20,7 +20,7 @@ function uuid() {
   return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, {...options, headers: {...options.headers, Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(60000)});
+  const response = await fetch(path, {...options, headers: {...options.headers, ...window.InspectorOperatorSession.headers(token)}, signal: AbortSignal.timeout(60000)});
   if (!response.ok) {
     let body; try { body = await response.json(); } catch { body = {}; }
     if (response.status === 401) lock();
@@ -33,7 +33,7 @@ async function api(path, options = {}) {
 }
 function lock() {
   if (typeof resetBacklog === 'function') resetBacklog();
-  saveToken(''); token = ''; generation++; selected = null; sessions = []; overview = null; capabilities = null;
+  saveToken('').catch(error => notice(error.message)); token = ''; generation++; selected = null; sessions = []; overview = null; capabilities = null;
   $('token').value = ''; $('login').hidden = false; $('workspace').hidden = true;
   $('logout').hidden = true; $('refresh').disabled = true; $('connection').textContent = 'Locked';
   $('session-json').textContent = ''; $('geometry-result').textContent = ''; $('inspection-json').textContent = '';
@@ -157,8 +157,8 @@ $('abort-dialog').addEventListener('cancel', () => { abortCandidate = null; });
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault(); if (polling) return; token = $('token').value.trim(); generation++; notice();
   const button = event.submitter; button.disabled = true;
-  try { await refresh(); if (token) { saveToken(token); unlock(); } }
-  catch (e) { token = ''; saveToken(''); notice(`Could not connect: ${e.message}`); }
+  try { await refresh(); if (token) { await saveToken(token); token = savedToken(); unlock(); } }
+  catch (e) { token = ''; notice(`Could not connect: ${e.message}`); }
   finally { button.disabled = false; }
 });
 $('logout').addEventListener('click', lock);

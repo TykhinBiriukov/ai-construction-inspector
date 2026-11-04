@@ -50,6 +50,7 @@ class Settings:
     supabase_secret_key: str = field(default="", repr=False)
     geometry_poll_interval_s: float = 2.0
     cors_origins: tuple[str, ...] = ()
+    browser_origin: str = "https://inspector.campuscompile.eu"
     max_capture_file_bytes: int = 50 * 1024 * 1024
     max_archive_bytes: int = 50 * 1024 * 1024
     max_unpacked_archive_bytes: int = 2 * 1024**3
@@ -203,6 +204,7 @@ class Settings:
         credential_refs = {name for profile in profiles for name in (profile.token_env, profile.tool_token_env) if name}
         return cls(
             observability=ObservabilityConfig.from_mapping(values),
+            browser_origin=get("INSPECTOR_BROWSER_ORIGIN", "https://inspector.campuscompile.eu").rstrip("/"),
             meta_base_url=get("INSPECTOR_META_BASE_URL", "https://api.meta.ai/v1"),
             public_demo_enabled=get("INSPECTOR_PUBLIC_DEMO_ENABLED", "false").lower() == "true",
             saved_demo_dir=get("INSPECTOR_SAVED_DEMO_DIR", ""),
