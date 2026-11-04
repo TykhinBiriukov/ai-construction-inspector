@@ -170,6 +170,10 @@ def _scenario_library(root, assets, recorded=True, input_root=None):
                 not path.is_file() for entry in entries.values() for _, path, _, _ in entry['files'])):
             raise RuntimeError('Configured demo input library is incomplete')
         for scenario, entry in entries.items():
+            # The first example opens the retained comparison, including mesh and
+            # linked evidence. Bundled raw inputs must not replace that viewer.
+            if scenario == 'geometry' and recorded:
+                continue
             definitions[scenario] = {key: entry[key] for key in ('title', 'description', 'prompt', 'notice')}
             definitions[scenario].update(mode='inputs', files=[])
             paths = {key: path for key, path in paths.items() if key[0] != scenario}
