@@ -269,6 +269,14 @@ These mechanisms give the product a durable foundation: operations retain their 
 
 The [shared agent harness](ai_inspector/src/ai_inspector/agent_runtime.py) manages durable model requests and tool execution. The [Meta adapter](ai_inspector/src/ai_inspector/model_client.py) validates returned messages. The [SAM adapter](geometry-engine/geometry_engine/segmentation/sam_backend.py) uses hosted inference and the official decoder; metric reconstruction and comparison run on CPU. The [voice adapter](ai_inspector/src/ai_inspector/voice.py) turns push-to-talk speech into an editable draft, with audio handled in memory. Model interfaces: [Meta model catalog](https://dev.meta.ai/docs/models) · [SAM API](https://dev.meta.ai/docs/sam/overview).
 
+### Why Meta models matter to the solution
+
+Meta models connect our agentic inspection system to the physical world through drawings, site photographs and visual evidence linked to 3D captures. They help agents understand the task, interpret design requirements, choose relevant inspection steps and identify building elements in what was actually observed. Voice transcription lets an engineer express the task naturally on site.
+
+Their role continues after the initial analysis. Our pipeline gathers the evidence, and a separate agent powered by a Meta model reviews proposed findings against the supplied measurements, images and known limitations. For drawing and photo checks, a fresh model context revisits the conclusions using the original sources and fixed requirements. These reviews can challenge unsupported claims and ask for more evidence when a conclusion cannot be justified.
+
+The distinctive contribution is this combination of perception, coordinated action and verification. The model capabilities that help one agent investigate a construction question also help another review the evidence behind the answer. This gives engineers a clearer basis for trust: they can see what supports a finding and what remains uncertain.
+
 ## Service details
 
 ### Inspector: a cohesive, capable engineering workspace
