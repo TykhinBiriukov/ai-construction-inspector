@@ -168,6 +168,7 @@ def _scenario_library(root, assets, recorded=True):
         for identity, path, description, attach in entry['files']:
             add(scenario, identity, path, description, attach)
     for value in definitions.values():
+        value['files'].sort(key=lambda item: item['kind'] != 'ifc')
         value['available'] = bool(value['files'])
     return [dict(id=identity, **value) for identity, value in definitions.items()], paths
 

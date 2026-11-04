@@ -70,6 +70,9 @@ Browsing does not create a chat, attach documents or start an inspection. Source
 previews are read from the configured example library, independently of the user's files.
 The first listed source opens automatically. For Model & site photos this is
 `room.ifc`; selecting another file switches the preview.
+IFC models precede the other sources in every example, including Construction
+progress. After adding prepared inputs, the workspace opens that model first
+instead of the last uploaded photograph or metadata file.
 The recorded library uses the IFC and source frame referenced by its Geometry result,
 the drawing and two photos for Drawing, and the timeline and labelled references for
 Progress. Input-only libraries list their actual available source files independently.

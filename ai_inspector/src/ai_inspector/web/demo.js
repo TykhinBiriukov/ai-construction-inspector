@@ -510,7 +510,7 @@
         await loadWorkspace();if(!active())return;
         const uploaded=workState?.files?.find(f=>f.file_id===entry.id);if(!uploaded)throw Error('The uploaded file is not visible in the workspace yet.');
         queue.shift();if(chosenFiles.size<8)chosenFiles.add(entry.id);renderFiles();
-        if(/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
+        if(!forExample&&/\.(ifc|pdf|png|jpe?g|webp)$/i.test(uploaded.name))await openDocument(uploaded);
       }
       if(!active())return;
       $('file-input').value='';notify();return true;
@@ -864,6 +864,7 @@
   };
   let demoBusy=false,demoReady=false,selectedExample=null,selectedExampleEntry=null,lastExample=null,lastExampleMode=null,exampleManifest=null,exampleFilesReady=false,previewVersion=0,previewModel=null;
   const previewUrls=[],scenarioDialog=$('demo-scenario-dialog');
+  const isExampleModel=file=>file.kind==='ifc'||/\.ifc$/i.test(file.name||'');
   const demoSteps=$('demo-example-status'),demoTimeline=node('section','demo-steps');
   demoTimeline.hidden=true;$('activity').before(demoTimeline);
   const ask=node('button','quiet','Ask about this result'),about=node('button','quiet','Example details');
@@ -934,7 +935,8 @@
     try{
       const manifest=exampleManifest||await api('/v1/demo/scenarios');
       if(version!==previewVersion||current!==epoch||!scenarioDialog.open)return;
-      const entry=manifest.scenarios?.find(s=>s.id===item[0]);if(!entry||!Array.isArray(entry.files))throw Error('The source files for this example are unavailable.');
+      const source=manifest.scenarios?.find(s=>s.id===item[0]);if(!source||!Array.isArray(source.files))throw Error('The source files for this example are unavailable.');
+      const entry={...source,files:[...source.files].sort((a,b)=>Number(isExampleModel(b))-Number(isExampleModel(a)))};
       selectedExampleEntry=entry;
       if(entry.mode==='inputs'){
         scenarioDialog.querySelector('.scenario-heading .eyebrow').textContent='PREPARED INPUTS';
@@ -979,6 +981,9 @@
         const uploaded=await uploadFiles(true);if(current!==epoch)return;
         if(!uploaded||uploadQueue.length){keepInputDraft=true;if(originalDraft)$('message').value=originalDraft;paintExampleStatus('The input upload is incomplete. Retry the upload before sending the task.');return;}
         chosenFiles.clear();fileIds.forEach(id=>chosenFiles.add(id));renderFiles();
+        const first=workState?.files?.find(file=>file.file_id===fileIds[0]);
+        if(first&&/\.(ifc|pdf|png|jpe?g|webp)$/i.test(first.name))await openDocument(first);
+        if(current!==epoch)return;
         if(caps?.agent_model_configured!==true){
           keepInputDraft=true;if(originalDraft&&!originalDraftIsExample)$('message').value=originalDraft;
           lastExample=item;lastExampleMode='inputs';ask.textContent='Continue in chat';paintExampleStatus('Inputs attached. Review the task in chat; analysis requires a connected AI service.');$('demo-example-actions').hidden=false;return;
