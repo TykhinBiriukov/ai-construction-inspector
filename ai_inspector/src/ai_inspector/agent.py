@@ -220,6 +220,8 @@ class OrchestratorAgent:
         if row is None:
             raise APIError(404, "not_found", "Chat was not found")
         chat = json.loads(row["data"])
+        if principal.browser_id and chat.get("public_owner") != principal.browser_id:
+            raise APIError(403, "forbidden", "Conversation belongs to another browser")
         self.service._check_access(principal, chat)
         return chat
 
@@ -228,7 +230,7 @@ class OrchestratorAgent:
         if principal.project_id != self.settings.project_id:
             raise APIError(403, "forbidden", "Project is outside this server's scope")
         body = request.model_dump(mode="json")
-        scope = "create-chat:" + principal.project_id
+        scope = "create-chat:" + principal.project_id + (":" + principal.browser_id if principal.browser_id else "")
         with self.database.transaction() as connection:
             replay = self.database.replay(connection, scope, str(request.request_id), body)
             if replay is not None:
@@ -236,6 +238,8 @@ class OrchestratorAgent:
             chat = {"schema_version": "0.1", "chat_id": str(uuid4()), "project_id": principal.project_id,
                     "device_id": self.settings.device_id, "room_id": request.room_id,
                     "created_at": utc_now(), "session_id": None, "active_run_id": None}
+            if principal.browser_id:
+                chat["public_owner"] = principal.browser_id
             connection.execute("INSERT INTO chats(chat_id, project_id, data) VALUES (?, ?, ?)",
                                (chat["chat_id"], principal.project_id, canonical_json(chat)))
             self.database.save_receipt(connection, scope, str(request.request_id), body, chat)
@@ -385,6 +389,8 @@ class OrchestratorAgent:
                 row = connection.execute("SELECT data FROM chats WHERE chat_id=?", (run["chat_id"],)).fetchone()
                 chat = json.loads(row["data"])
                 chat["session_id"] = link_session
+                if chat.get("public_owner"):
+                    chat["public_sessions"] = sorted(set(chat.get("public_sessions", [])) | {link_session})
                 connection.execute("UPDATE chats SET data=? WHERE chat_id=?", (canonical_json(chat), chat["chat_id"]))
                 if run.get('geometry_review_requested'):
                     from .geometry_review import GeometryReviewRequest, identity
@@ -423,6 +429,9 @@ class OrchestratorAgent:
         operation_id = str(uuid5(UUID(run["run_id"]), "tool:" + str(run["steps"])))
         plan = {"name": name, "tool_call_id": call["id"], "operation_id": operation_id}
         if name == 'session_import':
+            chat, _ = self._context(principal, run)
+            if chat.get('public_owner'):
+                raise APIError(403, 'forbidden', 'Public conversations can capture new evidence but cannot import private sessions')
             from . import saved_geometry
             # A model may not attach an arbitrary guessed session from history or file content.
             import re
@@ -865,6 +874,8 @@ class OrchestratorAgent:
                        "registered_inspectors": self.inspectors.catalog()}
             tools = [tool for tool in TOOLS if tool['function']['name'] != 'drawing_photo_compare'
                      or len(run.get('file_ids', [])) >= 2]
+            if chat.get('public_owner'):
+                tools = [tool for tool in tools if tool['function']['name'] != 'session_import']
             if not self.settings.phone_handoff_enabled:
                 tools = [tool for tool in tools if tool['function']['name'] not in PHONE_TOOLS]
             if run.get('geometry_continuation', {}).get('summary'):

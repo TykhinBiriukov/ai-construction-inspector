@@ -190,8 +190,7 @@ def routes(app,service,recorded=True):
     assets['geometry-comparison']=root/'geometry-demo/comparison.json.gz'
     scenarios, preview_paths = _scenario_library(root, assets, recorded, input_root)
     def authorize(request):
-        if not hmac.compare_digest(request.headers.get('authorization',''), 'Bearer '+service.settings.operator_token):
-            raise HTTPException(401)
+        return app.state.authorize_browser_request(request)
     @app.get('/v1/demo/scenarios')
     def scenario_manifest(request:Request):
         authorize(request)
@@ -209,8 +208,8 @@ def routes(app,service,recorded=True):
             headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
     @app.get('/v1/chats/{chat_id}/saved-demo-assets/{asset}')
     def asset(chat_id:UUID,asset:str,request:Request):
-        authorize(request)
-        with service.database.connection() as conn:service.workspace.check(conn,Principal('operator',service.settings.project_id),str(chat_id))
+        principal=authorize(request)
+        with service.database.connection() as conn:service.workspace.check(conn,principal,str(chat_id))
         if asset not in assets:raise HTTPException(404)
         if not recorded or not assets[asset].is_file():raise HTTPException(404)
         if asset=='geometry-comparison':return FileResponse(assets[asset],media_type='application/json',headers={'Content-Encoding':'gzip','Cache-Control':'private, no-store'})

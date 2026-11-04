@@ -2,7 +2,7 @@
 
 ## Reviewer quick start
 
-1. Open [the hosted workspace](https://inspector.campuscompile.eu/demo) and sign in with the same operator token as Control Room. One browser sign-in persists after closing and reopening tabs, until you sign out. Both interfaces use the same project and connected phone.
+1. Open [the hosted workspace](https://inspector.campuscompile.eu/demo). No token is needed. Each browser receives a persistent scoped cookie and can chat, use examples and assign capture to Bob device in the same project and queue as Control Room.
 2. In the left sidebar, choose **Model & site photos**, **Drawing & installation** or **Construction progress**. A details dialog explains the example and lets you inspect its source files; the model example opens `room.ifc` first.
 3. For a **Prepared inputs** example, choose **Use these inputs** to attach its files and prepare the task. With a configured model, **Analyze these inputs** submits a new analysis request. Uploaded inputs alone do not establish a successful analysis.
 4. For a recorded example, choose **Show example result**. Inspect the model and source images, switch between the drawing photographs or explore the saved weekly timeline. Window observations are curated; Progress4D uses rendered surveys and a prepared seventh scene.
@@ -16,20 +16,9 @@ Saved-result viewing and fresh analysis are separate: the package proves retaine
 
 Production frontend deploys from `main` through `deploy-inspector-web.yml`.
 The existing GCP backend polls `main` with `inspector-backend-update.timer`.
-Demo and Control Room now use the same authenticated operator API, project and
-capture queue. The former guest-project middleware is no longer mounted;
-`POST /v1/demo/session` returns 410 and `/public-demo/*` cannot access a workspace.
-The former `INSPECTOR_PUBLIC_DEMO_ENABLED` setting no longer enables guest access.
-No operator credential is returned to anonymous visitors.
+Demo uses the real project, database, connected phone and capture queue. It does not create isolated projects or duplicate backend applications. `POST /v1/demo/session` grants a signed HttpOnly cookie scoped to that browser's conversations. Any visitor can assign a new capture to Bob device; Control Room sees those assignments. Public visitors cannot list private/operator conversations, access another browser's files or import private capture sessions. Prepared example sources remain available to all visitors.
 
-The shared browser sign-in uses a signed, Secure, HttpOnly, SameSite=Strict cookie
-with a 30-day lifetime. No operator token is stored in localStorage. Sign-out is
-shared across tabs; cookie-authenticated writes require the configured browser Origin.
-A prior operator session is migrated on the first reload. Old guest credentials
-are discarded. Historical guest conversations are not migrated into the live
-project; existing operator history, phone identity and assignments are preserved.
-The scope banner shows the project and device, and new phone assignments include
-the exact session ID and acknowledgement state.
+Operator sign-in in Control Room uses its separate Secure, HttpOnly cookie and also applies to Demo in that browser. Both cookies persist for 30 days. No operator token is returned to anonymous visitors or stored in localStorage. Browser writes require the configured Origin; bearer device/API authentication is unchanged. The old `/public-demo/*` isolated-project endpoints remain unavailable.
 
 ## Automated HTTP checks
 

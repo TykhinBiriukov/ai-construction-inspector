@@ -23,6 +23,7 @@ class Principal:
     role: Literal["operator", "device"]
     project_id: str
     device_id: str | None = None
+    browser_id: str | None = None
 
 
 def require_role(principal: Principal, role: str) -> None:

@@ -21,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.formparsers import MultiPartException
 
-from . import drawing_photo, progress4d, browser_session
+from . import drawing_photo, progress4d, browser_session, public_access
 from .workspace import WorkItem, Observation, ImportPlan
 from .backlog import BacklogWrite, list_items, save_item
 from .config import Settings
@@ -143,11 +143,24 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
             if request.method not in ("GET", "HEAD", "OPTIONS"):
                 require_browser_origin(request)
             return Principal("operator", settings.project_id)
+        visitor = public_access.visitor(settings, request.cookies.get(public_access.COOKIE))
+        if visitor:
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                require_browser_origin(request)
+            principal = Principal("operator", settings.project_id, browser_id=visitor)
+            public_access.authorize(service, principal, request)
+            return principal
         return authenticate_token(None)
 
-    def operator(principal: Annotated[Principal, Depends(authenticate)]) -> Principal:
+    def operator(request: Request, principal: Annotated[Principal, Depends(authenticate)]) -> Principal:
         require_role(principal, "operator")
         return principal
+
+    def authorize_browser_request(request):
+        header = request.headers.get("authorization", "")
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=header[7:]) if header.startswith("Bearer ") else None
+        return operator(request, authenticate(request, credentials))
+    app.state.authorize_browser_request = authorize_browser_request
 
     @app.middleware("http")
     async def private_responses(request: Request, call_next):
@@ -225,19 +238,26 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
 
     @app.get("/v1/operator/browser-session")
     def get_browser_session(principal: Annotated[Principal, Depends(operator)]):
-        return {"authenticated": True}
+        return {"authenticated": True, "mode": "public" if principal.browser_id else "operator"}
 
     @app.delete("/v1/operator/browser-session")
     def sign_out_browser(request: Request):
         require_browser_origin(request)
         response = JSONResponse({"authenticated": False})
-        response.delete_cookie(browser_session.COOKIE, httponly=True, secure=True,
-                               samesite="strict", path="/")
+        for cookie in (browser_session.COOKIE, public_access.COOKIE):
+            response.delete_cookie(cookie, httponly=True, secure=True, samesite="strict", path="/")
         return response
 
     @app.post('/v1/demo/session')
-    def retired_guest_session():
-        return JSONResponse({"message": "Sign in to Inspector. Demo and Control Room share one project."}, status_code=410)
+    def public_browser_session(request: Request):
+        require_browser_origin(request)
+        value = request.cookies.get(public_access.COOKIE)
+        if not public_access.visitor(settings, value):
+            value = browser_session.mint(settings.operator_token + ":public")
+        response = JSONResponse({"authenticated": True, "mode": "public"})
+        response.set_cookie(public_access.COOKIE, value, max_age=browser_session.MAX_AGE,
+                            httponly=True, secure=True, samesite="strict", path="/")
+        return response
 
     if settings.saved_demo_dir:
         from .saved_demo import configure
@@ -280,6 +300,11 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
         before: Annotated[int | None, Query(ge=1, le=9223372036854775807)] = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 30,
     ):
+        if principal.browser_id:
+            sessions = [service.get_session(principal, sid) for sid in public_access.owned_sessions(service, principal)]
+            return {"project_id": principal.project_id, "device_id": settings.device_id,
+                    "max_bim_bytes": settings.max_bim_bytes, "supabase_configured": settings.supabase_enabled,
+                    "sessions": sessions, "next_before": None, "inspections": []}
         # Include pending storage folders and terminal sessions, unlike device assignments.
         with service.database.connection() as connection:
             rows = connection.execute(
@@ -339,6 +364,8 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     @app.post("/v1/chats/{chat_id}/messages", status_code=201, tags=["agent chat"])
     def chat_message(chat_id: UUID, request: ChatMessageRequest, response: Response,
                      principal: Annotated[Principal, Depends(operator)]):
+        if principal.browser_id and request.inspection_request is not None:
+            raise APIError(403, "forbidden", "Use evidence attached to this conversation")
         result, response.status_code = service.agent.submit(principal, str(chat_id), request)
         return result
 
@@ -356,7 +383,10 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
     def list_chats(principal: Annotated[Principal, Depends(operator)]):
         with service.database.connection() as connection:
             rows = connection.execute("SELECT data FROM chats WHERE project_id=?", (principal.project_id,)).fetchall()
-        chats = sorted((json.loads(row['data']) for row in rows), key=lambda chat: chat['created_at'], reverse=True)[:100]
+        chats = [json.loads(row['data']) for row in rows]
+        if principal.browser_id:
+            chats = [chat for chat in chats if chat.get('public_owner') == principal.browser_id]
+        chats = sorted(chats, key=lambda chat: chat['created_at'], reverse=True)[:100]
         return {"chats": [{key: chat[key] for key in ('chat_id','room_id','created_at')} for chat in chats]}
 
     @app.get('/v1/chats/{chat_id}/geometry-view', tags=['workspace'])

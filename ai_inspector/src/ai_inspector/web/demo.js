@@ -62,11 +62,11 @@
     if(window.InspectorOperatorSession.get()===token)window.InspectorOperatorSession.set('').catch(error=>notify(error.message));
     epoch++; token=''; chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;workspaceBusy=false;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
-    $('workspace').hidden=true; $('login').hidden=false; $('sidebar-devices').hidden=true; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('workspace-scope').hidden=true; $('token').value='';
+    $('workspace').hidden=true; $('login').hidden=false; $('sidebar-devices').hidden=true; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('workspace-scope').hidden=true;
     $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
   }
   function unlock() {
-    voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=false; $('token').value='';
+    voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=window.InspectorOperatorSession.mode()==='public';
     $('sidebar-devices').hidden=false;
     if(!read(sessionStorage,'inspector-demo-intro-v1')&&!intro.open)intro.showModal();
   }
@@ -759,23 +759,10 @@
     $('selection').hidden=true;$('message').value='';historySignature='';resetDocument();remember();renderChatPicker();renderRails();renderConversation();notify();await refresh();
   }
   $('chat-picker').addEventListener('change',()=>switchConversation($('chat-picker').value));
-  $('login-form').addEventListener('submit',async event=>{
-    event.preventDefault();
-    const candidate=$('token').value.trim(),submit=event.submitter;
-    if(!candidate)return;
-    submit.disabled=true;notify();
-    try{
-      const response=await fetch('/v1/operator/overview',{headers:{Authorization:`Bearer ${candidate}`},signal:AbortSignal.timeout(10000)});
-      if(!response.ok)throw Error(response.status===401?'Operator access was not accepted.':'Inspector could not be reached. Try again.');
-      const project=await response.json();
-      if(!project.project_id||!project.device_id)throw Error('The project response is incomplete.');
-      await window.InspectorOperatorSession.set(candidate);
-      token=window.InspectorOperatorSession.get();epoch++;
-      await startWorkspace();
-    }catch(error){notify(error.message);}
-    finally{submit.disabled=false;}
+  $('demo-retry').addEventListener('click',()=>location.reload());
+  $('lock').addEventListener('click',async()=>{
+    try{await window.InspectorOperatorSession.set('');location.reload();}catch(error){notify(error.message);}
   });
-  $('lock').addEventListener('click',lock);
   $('chat-form').addEventListener('submit',event=>{event.preventDefault();send();});
   $('resume').addEventListener('click',send);
   $('new-chat').addEventListener('click',()=>switchConversation(''));
