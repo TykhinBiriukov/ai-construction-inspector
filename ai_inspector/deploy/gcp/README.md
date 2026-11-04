@@ -54,4 +54,6 @@ A failed preparation stops the build, leaving the current container running.
 
 The existing `/demo-assets` mount remains the recorded-result library. No local
 developer fixtures need to be copied to that mount. An operator-authored
-`scenario-inputs.json` there overrides the corresponding bundled examples.
+`scenario-inputs.json` there overrides the corresponding bundled input examples.
+When recorded results are configured, Geometry and Construction progress keep
+their saved-result paths instead of being replaced by input manifests.

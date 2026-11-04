@@ -85,6 +85,11 @@ shortcut or include evaluator answers. Without model configuration it keeps the
 files and draft ready, rather than substituting an answer. Model configuration
 does not itself establish a successful analysis or available downstream services.
 
+When the recorded library is configured, Model & site photos and Construction
+progress keep the recorded path even if an input manifest defines those scenarios.
+Construction progress opens the saved seven-week 4D result without uploading its
+example inputs or calling the live model. Follow-up questions still use the model.
+
 Recorded examples retain Show example result and the existing saved-result path;
 this label does not claim fresh reconstruction or inspection. Repeated clicks
 are disabled while uploads or requests are active, and pending requests retain

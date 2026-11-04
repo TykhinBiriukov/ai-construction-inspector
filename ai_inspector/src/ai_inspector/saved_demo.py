@@ -162,7 +162,7 @@ def _scenario_library(root, assets, recorded=True, input_root=None):
     if not recorded:
         paths.clear()
     # Image-bundled defaults work without copying private local fixtures to the VM.
-    # An operator's explicit manifest retains precedence over bundled examples.
+    # An operator's manifest takes precedence among input examples.
     libraries = [input_root, root] if input_root else [root]
     for library in libraries:
         entries = _input_scenarios(library)
@@ -170,9 +170,9 @@ def _scenario_library(root, assets, recorded=True, input_root=None):
                 not path.is_file() for entry in entries.values() for _, path, _, _ in entry['files'])):
             raise RuntimeError('Configured demo input library is incomplete')
         for scenario, entry in entries.items():
-            # The first example opens the retained comparison, including mesh and
-            # linked evidence. Bundled raw inputs must not replace that viewer.
-            if scenario == 'geometry' and recorded:
+            # Retained Geometry and 4D examples open their saved viewers directly.
+            # Input manifests must not turn those demos into new model requests.
+            if scenario in ('geometry', 'progress') and recorded:
                 continue
             definitions[scenario] = {key: entry[key] for key in ('title', 'description', 'prompt', 'notice')}
             definitions[scenario].update(mode='inputs', files=[])
