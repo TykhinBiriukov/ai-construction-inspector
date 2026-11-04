@@ -83,11 +83,13 @@ This distinguishes the team's original model computation from the later reuse of
 
 ### What the result means
 
-The comparison uses metres, `scan_minus_ifc` differences and a 0.1 m tolerance. The five sampled surfaces have P95 absolute deviations of approximately **27, 66, 31, 99 and 53 mm**. These are distances between observed reconstructed surfaces and the aligned IFC, not measurement error against an independently surveyed reference. The report labels the observed portions within tolerance; every surface retains `whole_element_verified: false`.
+The comparison uses metres, `scan_minus_ifc` differences and a 0.1 m tolerance. The five sampled surfaces have P95 absolute deviations of approximately **27, 66, 31, 99 and 53 mm**. These are distances between observed reconstructed surfaces and the aligned IFC, not measurement error against an independently surveyed reference. The report labels the observed portions within tolerance; every surface retains `whole_element_verified: false`. This flag describes verification of the entire IFC element, including unobserved faces; it is not a failed accuracy test on the observed surface. The surface-comparison code initializes it to false while reporting measured deviations separately.
 
-All six object candidates retain `absolute_accuracy_verified: false` and incomplete boundary support. A matched candidate is an association to an IFC element, not a compliance verdict. Unmatched candidates may include fragmented observations; their count is not a count of construction defects. The prepared viewer also retains its rigid alignment and boundary limitations.
+All six object candidates retain `absolute_accuracy_verified: false` and incomplete boundary support. The contour extractor initializes this flag to false; it does not perform an external-reference calibration test. The flag means that this artifact carries no attached absolute-accuracy verification, not that a measured accuracy test failed. Control dimensions should be linked to the matching object, capture and measurement definition in a separate verification record. A matched candidate is an association to an IFC element, not a compliance verdict. Unmatched candidates may include fragmented observations; their count is not a count of construction defects. The prepared viewer also retains its rigid alignment and boundary limitations.
 
-This is a completed **Geometry computation** on real captured data. The read-only [Inspector review-state check](inspector-review-status.json) found one retained review for this capture, with status `cancelled`; no completed review was returned by that session-scoped query. The source Geometry opening report also records `agent_review.executed: false`. The historical runtime Git SHA is not recorded in the source result manifest: its `implementation` value is an implementation fingerprint, not a Git commit. The repository revision used to assemble the package must not be substituted for the historical runtime revision. Device frame metadata also retains “Device reprojection validation pending.”
+This is a completed **Geometry computation** on real captured data. Its `agent_review.executed: false` is emitted by the Geometry opening-comparison stage before downstream review; it is not a live status field for Geometry Inspector or Geometry Verifier. Those agents store their review lifecycle separately. The [Inspector status receipt](inspector-review-status.json) records one review as `cancelled` when queried on **3 November 2026** (created and last updated on 2 November). It documents that historical attempt, not the present service state or every subsequent review. To establish a later completed review, attach its receipt and accepted report with the same capture/result identities; preserve the original computation artifact.
+
+The `implementation` value identifies Geometry code **and numerical/model dependency versions** through a SHA-256 fingerprint, as defined in [inspection.py](../../../geometry-engine/geometry_engine/inspection.py). This is useful runtime identity, distinct from a source Git commit. The historical export does not contain a mapping to a runtime Git SHA; the package-assembly commit is a separate identity. Device metadata's “Device reprojection validation pending” is a literal string emitted by [Observation.swift](../../../ios/AIInspector/Observation.swift), not the outcome of a per-capture reprojection test. A device validation record must identify hardware, calibration, coordinate convention and measured residuals.
 
 ### Inspect and reproduce
 
@@ -96,7 +98,7 @@ This is a completed **Geometry computation** on real captured data. The read-onl
 3. Inspect `outputs/point_cloud.ply`, `outputs/mesh.ply` and `outputs/segmented_mesh.ply` with a PLY-capable viewer. `demo/geometry-demo/comparison.json.gz` is the saved application-viewer projection; it is not a second independent reconstruction.
 4. To rerun analysis, follow the [Geometry setup](../../reproducible-setup.md#4-geometry-profile-rgb-d-reconstruction-and-ifc-comparison) and [capture upload contract](../../../geometry-engine/README.md). Put the preserved files in your own configured storage, keeping the manifest paths consistent. Use your own credentials and a new job; retain the new code revision, parameters, model/cache status and result manifest. A rerun may differ from the historical output and uses compute/model access.
 
-The archive is approximately 135 MB compressed. It includes primary inputs/outputs, selected intermediate numerical reports, all stage manifests and the demo evidence. Some original stage manifests refer to auxiliary caches/viewers not included in the archive; it is not a byte-for-byte copy of the entire service storage.
+The archive is approximately 135 MB compressed. It includes primary inputs/outputs, selected intermediate numerical reports, all stage manifests and the demo evidence. Original stage manifests describe the complete service outputs, while the archive packages selected evidence. The [artifact inclusion inventory](artifact-inclusion.json) maps each manifest entry to packaged bytes by SHA-256, including files stored under a different path. Omitted entries include segmentation masks, normalized metadata, numerical intermediates and generated viewers, not just caches. This evidence package supports inspection of the retained results; restoring every stage checkpoint requires the corresponding omitted artifacts.
 
 No credentials or expiring signed URLs are included. Reading the archived outputs requires no model key. The release is an evidence snapshot, not a new deployment or a clean-environment reproduction claim.
 
@@ -129,11 +131,15 @@ The gap image is a generative edit of the original development image. The intend
 
 Original drawing/photo source images are not included in this release. Their hashes and evidence coordinates are retained; external readers can inspect the judgments but cannot independently assess the image interpretation from the JSON alone. The separate window walkthrough uses curated visual observations and manually marked regions; its displayed findings are not these model runs.
 
-## 3. Progress4D: dated observations and coverage
+## 3. Progress4D: construction progress and evaluator coverage
+
+**Two different quantities must be kept separate.** Construction progress describes installed work relative to the planned task quantities. The table below instead describes **visible-element detection recall in a historical development evaluation**. It is not the percentage of work completed by builders, and it is not a general accuracy score for the whole product.
+
+For this evaluator, `visible_recall = correctly reported present elements / reference elements that exist and are visible in at least two photos`. Thus week 4 is **11 / 50 = 22.0%** and week 5 is **11 / 57 = 19.3%**. These percentages come from the archived evaluator outputs, not the construction-progress indicator. Undecided elements are not automatically reported as absent.
 
 The [six-week saved evaluation](progress4d-evaluation.json) records the later local version of the normal scenario. Its input surveys are rendered development scenes; they are separate from the real-room RGB-D capture above.
 
-| Week | Observed visible products | Visible products in evaluator | Visible recall |
+| Survey week | Correctly reported present elements | Existing elements visible in at least two reference views | Detection recall for this archived run |
 |---|---:|---:|---:|
 | 1 | 44 | 44 | 100.0% |
 | 2 | 64 | 66 | 97.0% |
@@ -148,4 +154,4 @@ The seventh displayed week is a prepared scene, not an additional successful rec
 
 ## Remaining acceptance work
 
-The recovered local package establishes the real capture/result chain; the public repository exposes its numerical reports and existing model-run evidence. The source archive is now public for independent inspection. It does not close independent physical accuracy, final Geometry agent review, held-out quality, measured engineer benefit or external clean-environment reproduction. No new benchmark judges were run for this documentation/data release.
+The recovered local package establishes the real capture/result chain; the public repository exposes its numerical reports and existing model-run evidence. The source archive is now public for independent inspection. Physical reference measurements, later agent reviews and other validation runs must be linked by capture/result identity before they can be used to extend this particular historical package. The package alone does not establish their presence or absence elsewhere in the project. No new benchmark judges were run for this documentation/data release.

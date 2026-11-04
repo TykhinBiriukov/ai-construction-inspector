@@ -29,10 +29,10 @@
     "new_model_calls": 0
   },
   "limitations": [
-    "Historical runtime Git SHA not recorded; implementation field is a fingerprint",
-    "No independent physical measurement reference",
-    "Source agent_review.executed is false; retained Inspector review is cancelled",
+    "Historical runtime Git SHA mapping is not attached; implementation fingerprint identifies code and dependency versions",
+    "Independent physical reference measurements are not attached to this package",
+    "Geometry agent_review.executed is a pre-review computation flag; separate Inspector receipt records a cancelled attempt as of 2026-11-03",
     "Not an independent clean-environment rerun",
-    "Original stage manifests include references to artifacts not all copied; retained numerical reports, primary outputs and demo evidence are packaged"
+    "Selected evidence export; artifact-inclusion.json lists packaged and omitted original stage artifacts by SHA-256"
   ]
 }
