@@ -1,6 +1,7 @@
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
+  const deviceName = id => id === 'iphone-1' ? 'Bob device' : id;
   const authKey = 'inspector-demo-session', pointerKey = 'inspector-demo-chat', pendingKey = 'inspector-demo-pending';
   const read = (store, key) => { try { return store.getItem(key); } catch { return null; } };
   const write = (store, key, value) => { try { if (value == null) store.removeItem(key); else store.setItem(key,value); } catch {} };
@@ -73,7 +74,7 @@
   function renderWorkspaceScope(){
     const guest=!!apiPrefix;
     $('workspace-scope').hidden=false;
-    $('workspace-scope-text').textContent=guest?'Sign in to use your connected phone. A Control Room sign-in is shared automatically.':`Project: ${overview.project_id} · ${overview.device_id}`;
+    $('workspace-scope-text').textContent=guest?'Sign in to use your connected phone. A Control Room sign-in is shared automatically.':`Project: ${overview.project_id} · ${deviceName(overview.device_id)}`;
     $('workspace-scope-link').hidden=!guest;
   }
   function controls() {
@@ -124,7 +125,7 @@
     }
     if(!scopedSessions.length) $('tasks').append(node('p','muted',apiPrefix?'Phone capture is available in the live project.':'No capture tasks yet. Ask AI Inspector to create one.'));
     $('device-state').textContent=apiPrefix?'Unavailable in demo':device.online?'Online':'Offline'; $('device-dot').classList.toggle('online',!apiPrefix&&device.online);
-    $('device-name').textContent=device.device_id;
+    $('device-name').textContent=deviceName(device.device_id);
     if(selected) { const session=scopedSessions.find(s=>s.session_id===selected); if(session) showTask(session); }
   }
   function showTask(session) {
@@ -206,7 +207,7 @@
       const online=(item.rows||[]).find(r=>String(r[0]).toLowerCase()==='online');
       if(online&&['true','false'].includes(String(online[1]).toLowerCase())){
         const card=node('section','artifact');const name=(item.rows||[]).find(r=>String(r[0]).toLowerCase()==='device_id');
-        card.append(node('h4','',name?.[1]||'Capture device'),node('div','device-status-result',String(online[1]).toLowerCase()==='true'?'Online':'Offline'));return card;
+        card.append(node('h4','',deviceName(name?.[1])||'Capture device'),node('div','device-status-result',String(online[1]).toLowerCase()==='true'?'Online':'Offline'));return card;
       }
     }
     const box=node('section',`artifact${item.type==='table'?' artifact-wide':''}`); box.append(node('h4','',item.title));
@@ -244,7 +245,7 @@
 
   function toolSummary(tool){const r=tool.result||{};if(r.error)return r.error.message||'This action could not be completed.';
     if(tool.name==='session_import')return r.new_geometry_computation===false?'Saved result connected. Evidence review continues automatically.':'Saved capture connected.';
-    if(tool.name==='device_status')return `${r.device_id||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
+    if(tool.name==='device_status')return `${deviceName(r.device_id)||'Capture device'} · ${r.online===true?'Online':r.online===false?'Offline':'Status unavailable'}`;
     const session=r.session===undefined?r:r.session;if(!session)return 'No capture task in this dialogue.';
     if(tool.name==='session_create'||tool.name==='session_get')return apiPrefix?'Demo-only task · no phone assignment':session.capture_state?`Capture task · ${String(session.capture_state).replaceAll('_',' ')}`:'Task information received.';
     return 'Completed';

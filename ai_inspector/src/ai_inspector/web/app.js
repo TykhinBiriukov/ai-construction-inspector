@@ -1,5 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
+const deviceName = id => id === 'iphone-1' ? 'Bob device' : id;
 function savedToken() { return window.InspectorOperatorSession.get(); }
 function saveToken(value) { window.InspectorOperatorSession.set(value); }
 function unlock() {
@@ -89,11 +90,11 @@ function renderOverview(data, caps, device) {
   overview = data; capabilities = caps;
   $('server-state').textContent = 'Operational'; $('project').textContent = data.project_id;
   $('device-state').textContent = device.online ? 'Online' : 'Offline';
-  $('device-info').textContent = `${device.device_id} · Last seen: ${date(device.last_seen_at)}`;
+  $('device-info').textContent = `${deviceName(device.device_id)} · Last seen: ${date(device.last_seen_at)}`;
   $('geometry-state').textContent = caps.geometry_mode === 'mock' ? 'Mock / synthetic' : caps.geometry_mode === 'external' ? 'External configured' : 'Not configured';
   $('geometry-info').textContent = caps.geometry_mode === 'mock' ? 'Test output · no measured reconstruction' : caps.geometry_configured ? 'Reachability is reported by individual jobs' : 'Verified work will remain queued';
   $('dispatch-hint').textContent = data.supabase_configured ? 'Supabase signed uploads configured.' : 'Supabase is not configured for phone ZIP uploads.';
-  $('device').value = data.device_id; $('bim').dataset.maxBytes = data.max_bim_bytes;
+  $('device').value = deviceName(data.device_id); $('bim').dataset.maxBytes = data.max_bim_bytes;
   const current = $('inspection').value; $('inspection').replaceChildren();
   for (const item of data.inspections) {
     const option = document.createElement('option'); option.value = item.inspection_id;
