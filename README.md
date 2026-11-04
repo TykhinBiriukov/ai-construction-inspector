@@ -24,6 +24,17 @@
 
 [Demo walkthrough](#demo-walkthrough) · [Problem](#problem) · [Value](#value) · [Measured results](#measured-results) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons)
 
+## Run the repository demo
+
+For a self-contained evaluation, start with the [prepared Geometry walkthrough](demo/README.md). Python 3.11+ is sufficient; the command downloads and verifies the complete prepared dataset automatically, then writes a readable report and interactive scan/IFC view. No API key is needed for the default mode.
+
+```sh
+python3 demo/run.py --mode prepared
+python3 demo/run.py --verify-output demo-output
+```
+
+[Add a live Meta summary](demo/README.md#add-a-live-meta-summary), or [recompute from RGB-D with live SAM](demo/README.md#full-recomputation-on-linux-python-312-recommended). Prepared mode identifies every retained stage explicitly. Full recomputation uses the production Geometry algorithms and a fresh output directory. See the guide for exact prerequisites, expected outputs and your own capture data.
+
 ## Demo walkthrough
 
 [Open AI Inspector](https://inspector.campuscompile.eu/demo) and choose an example in the left sidebar. Each example opens a details dialog where you can inspect and download its source files before choosing the next action. Files, Tasks and Capture Devices start collapsed and remain available for your own work.

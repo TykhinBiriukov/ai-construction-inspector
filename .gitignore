@@ -8,3 +8,7 @@ xcuserdata/
 data/local/
 outputs/
 .local/
+
+# Local repository walkthrough outputs and downloaded data
+.demo-cache/
+demo-output*/

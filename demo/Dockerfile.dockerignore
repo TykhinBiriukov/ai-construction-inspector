@@ -1,0 +1,13 @@
+**
+!demo/
+!demo/**
+!geometry-engine/
+!geometry-engine/**
+!docs/
+!docs/evidence/
+!docs/evidence/**
+**/.env*
+**/.local
+**/__pycache__
+**/data
+**/.venv

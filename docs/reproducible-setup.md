@@ -1,5 +1,7 @@
 # Reproducible setup
 
+**For a quick repository evaluation, start with the [self-contained Geometry demo](../demo/README.md).** It automatically supplies verified data and supports prepared and full recomputation modes. The service profiles below are for configuring the broader product, including persistent storage, phone capture and specialist A2A review.
+
 This guide separates a local chat/drawing demonstration from the optional services needed for RGB-D inspection, independent evidence review, construction monitoring and phone capture. Start only the profiles you need. A fresh clone contains application code, dependency manifests and the compact [evidence records](evidence/2026-11-03/README.md). The [evidence download guide](evidence/2026-11-03/data-access.md) links one real-room capture/IFC/output archive and a separate full experiment-record archive, with checksums and extraction instructions. Credentials, provisioned cloud resources and the other private development datasets are not included.
 
 These instructions were checked against source and component documentation. They are not a record of a fresh installation or a successful live Meta, phone or full-stack run. Keep the exact commit, dependency versions, input hashes and service configuration with your own run record.
