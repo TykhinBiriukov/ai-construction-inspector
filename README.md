@@ -147,6 +147,16 @@ The implementation is accompanied by **real-room processing records, numerical c
 
 **A laser-measured physical reference.** The real-room IFC was constructed from laser measurements of the room, as confirmed by the team. The saved comparison reports reconstructed-surface deviations from this reference after rigid alignment: P95 values of approximately **27, 66, 31, 99 and 53 mm** across five observed surfaces. [Reference provenance and measurement definitions](docs/evidence/2026-11-03/README.md#what-the-result-means).
 
+**Laser reference dimensions used in the opening checks.** The project owner confirms that the laser measurements match the reference IFC dimensions exactly. The values below are transcribed from that IFC reference, with object identities retained in the [numerical verification record](docs/evidence/2026-11-04/reference-verification.json).
+
+| Reference object | IFC GlobalId | Laser reference width | Laser reference height |
+|---|---|---:|---:|
+| Door matched to `mesh_door_002` | `0oE0T2Q6P6px_guRMq_GEr` | **919 mm** | **2173 mm** |
+| Window matched to `mesh_window_004` | `1q37$RPED5g9Qi8ZTYNzyK` | **3331 mm** | **1513 mm** |
+
+Reference identity: `reference.ifc`, SHA256 `4a618081be81cad4b7bba0eec22486038bc96d37e4778276d2f20a7d8143c51d`. These physical reference dimensions are the comparison baseline; the reconstructed scan dimensions and signed differences are recorded separately in the linked verification record.
+
+
 The real-room Geometry run integrates **99/99 RGB-D frames** and produces **469,270 surface points and 896,924 mesh triangles**, with source identities preserved through reconstruction, segmentation and comparison. The public result includes six object candidates and five observed surfaces. The [evidence guide](docs/evidence/2026-11-03/README.md) connects the capture, model provenance, processing history and findings; the [download guide](docs/evidence/2026-11-03/data-access.md) provides versioned records and integrity checks.
 
 **Completed Inspector/Verifier review.** All **11 review batches** for the real-room result completed on 2 November 2026. A separate numerical check recomputed four matched door/window dimensions against the laser-derived IFC, including source hashes and signed differences. [Review outcomes and reference verification](docs/evidence/2026-11-04/README.md).
@@ -289,7 +299,7 @@ Progress4D combines overlapping photo surveys, an IFC work schedule and Meta vis
 
 The progress viewer brings these dated results into the Inspector workspace through a scoped bridge. Versioned evidence cards, source dates and separate material/installation fields make the reasoning behind each status inspectable.
 
-**Reading the percentages:** each stage card shows **confirmed work / all planned IFC elements in that stage**, including retained earlier observations. It describes construction progress, not model accuracy or workflow quality. For example, week 4 framing is **44/44 = 100%**, even though the current survey no longer directly sees the covered frame. “Unknown” means no current or retained confirmation for that planned element; it does not mean a model error or proven absence. The separate archived `visible_recall` field uses a different denominator and is not displayed as stage progress. [Formulas and worked examples](progress4d_service/README.md#reading-progress-and-evaluation-metrics).
+**Reading the percentages:** each stage card shows **confirmed work / all planned IFC elements in that stage**, including retained earlier observations. It describes construction progress, not model accuracy or workflow quality. For example, week 4 framing is **44/44 = 100%**, even though the current survey no longer directly sees the covered frame. “Unknown” means no current or retained confirmation for that planned element; it does not mean a model error or proven absence. The archived **current-survey present confirmation rate** (`current_survey_present_confirmation_rate`) measures current-survey confirmations against evaluator-labelled existing elements visible in at least two photos. It is separate from stage progress and does not include retained confirmations from earlier surveys. [Formulas and worked examples](progress4d_service/README.md#reading-progress-and-evaluation-metrics).
 
 [Service, supported inputs and setup](progress4d_service/README.md) · [Pipeline](progress4d_service/pipeline.py) · [Surface adapter](progress4d_service/surface.py) · [Visual assessment](progress4d_service/perception.py) · [Temporal logic](progress4d_service/temporal.py) · [Inspector integration](ai_inspector/docs/progress4d.md)
 

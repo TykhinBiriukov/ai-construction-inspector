@@ -59,7 +59,8 @@ is used for quantity/forecast eligibility; it is not construction completion.
 See the [temporal aggregation](temporal.py) and [stage-card calculation](web/viewer.js).
 
 The [historical evaluator](../docs/evidence/2026-11-03/README.md#3-progress4d-construction-progress-and-evaluator-coverage)
-has a separate field, `visible_recall`: correctly reported present elements divided
+has a separate **current-survey present confirmation rate** field,
+`current_survey_present_confirmation_rate`: correctly reported present elements divided
 by evaluator-labelled existing elements visible in at least two photos. It is a
 per-survey diagnostic, not the stage-card percentage, not cumulative confirmed work,
 and not an overall workflow accuracy score. For example, its week 4 value of 22%

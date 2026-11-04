@@ -17,7 +17,7 @@
         "geometries": 1
       },
       "visible_products": 44,
-      "visible_recall": 1.0,
+      "current_survey_present_confirmation_rate": 1.0,
       "present_count": 44,
       "false_present": [],
       "hidden_present": [],
@@ -39,7 +39,7 @@
         "geometries": 1
       },
       "visible_products": 66,
-      "visible_recall": 0.9696969696969697,
+      "current_survey_present_confirmation_rate": 0.9696969696969697,
       "present_count": 64,
       "false_present": [],
       "hidden_present": [],
@@ -61,7 +61,7 @@
         "geometries": 1
       },
       "visible_products": 48,
-      "visible_recall": 0.8333333333333334,
+      "current_survey_present_confirmation_rate": 0.8333333333333334,
       "present_count": 40,
       "false_present": [],
       "hidden_present": [],
@@ -83,7 +83,7 @@
         "geometries": 1
       },
       "visible_products": 50,
-      "visible_recall": 0.22,
+      "current_survey_present_confirmation_rate": 0.22,
       "present_count": 11,
       "false_present": [],
       "hidden_present": [],
@@ -105,7 +105,7 @@
         "geometries": 1
       },
       "visible_products": 57,
-      "visible_recall": 0.19298245614035087,
+      "current_survey_present_confirmation_rate": 0.19298245614035087,
       "present_count": 11,
       "false_present": [],
       "hidden_present": [],
@@ -127,7 +127,7 @@
         "geometries": 1
       },
       "visible_products": 155,
-      "visible_recall": 0.8193548387096774,
+      "current_survey_present_confirmation_rate": 0.8193548387096774,
       "present_count": 127,
       "false_present": [],
       "hidden_present": [],
@@ -138,8 +138,8 @@
   ],
   "scope": "Six processed survey dates; not an independent field or held-out evaluation. Week 7 prepared scene excluded.",
   "metric_definitions": {
-    "visible_recall": {
-      "quantity": "historical_per_survey_detection_recall",
+    "current_survey_present_confirmation_rate": {
+      "quantity": "current_survey_present_confirmation_rate",
       "numerator": "correctly reported present elements",
       "denominator": "evaluator-labelled existing elements visible in at least two photos",
       "is_construction_progress": false,
