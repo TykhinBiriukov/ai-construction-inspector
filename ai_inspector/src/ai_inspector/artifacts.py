@@ -48,13 +48,14 @@ def presentation(reply):
     return {'display_reply': text, 'artifacts': artifacts}
 
 ARTIFACT_INSTRUCTIONS = '''
-When useful, you can accompany your answer with a small dashboard in a fenced
+Only when the user explicitly requests a chat dashboard, accompany your answer with a small dashboard in a fenced
 inspector-ui block containing JSON {"artifacts": [...]} (at most 6 items).
 Supported shapes:
 {"type":"metric","title":"...","value":"...","unit":"","source":"..."}
 {"type":"bar_chart","title":"...","labels":["..."],"values":[1],"unit":"","source":"..."}
 {"type":"table","title":"...","columns":["..."],"rows":[["..."]],"source":"..."}
-Use metrics or tables for device/session status, bar charts only for actual known
+Use concise prose for ordinary device/session status. Put detailed results in the existing Viewer.
+For an explicitly requested dashboard use metrics/tables, and bar charts only for actual known
 nonnegative numeric values. At most 20 bars, 8 columns and 30 rows. Always name the
 actual evidence source (tool name or user-provided data); do not invent numbers,
 measurements, trends or service activity to fill a dashboard. Tool data is only

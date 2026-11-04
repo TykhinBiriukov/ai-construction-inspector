@@ -11,7 +11,7 @@ from ai_inspector.observability import telemetry
 from pydantic import Field, ValidationError, field_validator
 
 from .workspace import FileIDs
-from . import drawing_photo, progress4d
+from . import drawing_photo, progress4d, orchestrator_policy
 from .document_selection import DocumentSelection, selection_context
 from .workspace_images import attachment_images
 from .artifacts import ARTIFACT_INSTRUCTIONS, presentation
@@ -95,7 +95,7 @@ delegations or handoffs in user replies. Describe the inspection work, progress,
 limitations and missing evidence as the work of AI Inspector, without inventing verification.
 """
 
-SYSTEM_PROMPT = ORCHESTRATOR_IDENTITY + """
+LEGACY_SYSTEM_PROMPT = ORCHESTRATOR_IDENTITY + """
 Own the conversation with the user: understand the request, clarify ambiguity,
 choose a supplied tool or a registered specialist inspector, and explain the result.
 Use direct tools for capture/session/device operations. For inspection analysis,
@@ -180,6 +180,9 @@ comes from recorded operator observations, not independent AI verification. No d
 is not the same as unfinished work. You cannot update plan statuses or observations;
 ask the operator to record them. Never infer construction completion from capture counts.
 """
+
+
+SYSTEM_PROMPT = ORCHESTRATOR_IDENTITY + orchestrator_policy.INSTRUCTIONS + ARTIFACT_INSTRUCTIONS
 
 
 def session_summary(session):
@@ -364,11 +367,14 @@ class OrchestratorAgent:
                        "messages": [{"role": "user", "content": content}],
                        "steps": 0, "pending_tool": None, "tool_results": [],
                        "agent_role": "orchestrator", "delegations": [], "prompt_management_version": 1}
+                run["orchestration_policy_version"] = orchestrator_policy.VERSION
                 if inspection_request is not None:
                     run.update(inspection_request=inspection_request.model_dump(mode="json"),
                                inspection_asset_snapshot=inspection_snapshot)
                 if geometry_continuation:
                     run['geometry_continuation'] = geometry_continuation
+                    run['scope_decision'] = {"status": "in_scope", "intent": "geometry",
+                        "product_request": request.text, "language": "en", "origin": "backend_continuation"}
                     if geometry_continuation.get('internal_batch'):
                         run['internal_geometry_batch'] = True
                         call = {'id': 'geometry-delegation', 'type': 'function', 'function': {
@@ -417,6 +423,7 @@ class OrchestratorAgent:
         return chat, session
 
     def _plan(self, principal, run, call):
+        orchestrator_policy.require_scope(run, call['function']['name'])
         if run.get('geometry_continuation', {}).get('summary'):
             raise APIError(502, 'invalid_tool_arguments', 'This completed review continuation can only explain its accepted report')
         name = call["function"]["name"]
@@ -898,13 +905,17 @@ class OrchestratorAgent:
                 run["remote_next_attempt_at"] = time.time() + 5 * run["model_retry_count"]
                 run["error"] = {**error, "message": "The AI service is taking longer than expected. Retrying this saved request automatically."}
             self._save(run, lease, release=run["status"] in ("completed", "failed", "retryable"), link_session=link_session)
-        def prepare_model():
+        def prepare_domain():
             chat, session = self._context(principal, run)
             run["project_id"] = chat["project_id"]
-            prompt = self.telemetry.resolve_prompt(run, "inspector/orchestrator", SYSTEM_PROMPT,
+            prompt = self.telemetry.resolve_prompt(run, "inspector/orchestrator",
+                                                  SYSTEM_PROMPT if run.get('orchestration_policy_version') else LEGACY_SYSTEM_PROMPT,
                                                   fetch=bool(run.get("prompt_management_version")))
             if not prompt.startswith(ORCHESTRATOR_IDENTITY):
                 prompt = ORCHESTRATOR_IDENTITY + "\n" + prompt
+            if run.get('orchestration_policy_version') and prompt == SYSTEM_PROMPT:
+                # The mandatory policy is composed once and frozen below.
+                prompt = ORCHESTRATOR_IDENTITY + ARTIFACT_INSTRUCTIONS
             if not self.settings.phone_handoff_enabled:
                 prompt += ("\nThis is an isolated public demo with no phone connection or capture handoff. "
                            "Do not claim a session was assigned to a real phone, even if earlier demo history says so. "
@@ -917,7 +928,9 @@ class OrchestratorAgent:
             monitoring = not image_inputs and (progress4d.has_saved_result(self.settings) or bool(self.settings.progress4d_base_url and json.loads(self.settings.progress4d_chat_projects_json).get(run['chat_id'])))
             if image_inputs:
                 prompt += "\nThis request contains new source-bound photographs in image_inputs and actual image parts. Compare their visible contents for the requested task, retaining dates and source file identities. A stored monitoring timeline is not a result for these inputs. Qualitative changes are not reconstructed measurements or a quantified completion percentage; do not invent those. Use an appropriate configured inspection tool for drawing/photo or Geometry review."
-            prompt += "\nYou choose the workflow from the user's request, not from a UI mode. If construction progress monitoring is connected and requested, call progress4d_result; its accepted result creates a 4D output card. Describe only returned evidence. It is saved data, not processing of new attachments or URLs. Do not claim arbitrary folder links were downloaded. For a subsequent detailed installation question in the same chat, use selected drawing/photo inputs via existing comparison tools, or ask for the missing close-up photo and reference/detail. Never reuse a progress percentage as installation compliance. For monitoring, use latest_progress counts including retained_past_present; a no_data forecast is not absence of historical evidence. Keep the reply short in the user's language (2-4 sentences); translate phase names, avoid internal tool names/status codes and duplicate tables because the viewer already contains the full analysis."
+            monitoring_guidance = "\nYou choose the workflow from the user's request, not from a UI mode. If construction progress monitoring is connected and requested, call progress4d_result; its accepted result creates a 4D output card. Describe only returned evidence. It is saved data, not processing of new attachments or URLs. Do not claim arbitrary folder links were downloaded. For a subsequent detailed installation question in the same chat, use selected drawing/photo inputs via existing comparison tools, or ask for the missing close-up photo and reference/detail. Never reuse a progress percentage as installation compliance. For monitoring, use latest_progress counts including retained_past_present; a no_data forecast is not absence of historical evidence. Keep the reply short in the user's language (2-4 sentences); translate phase names, avoid internal tool names/status codes and duplicate tables because the viewer already contains the full analysis."
+            if not run.get('orchestration_policy_version'):
+                prompt += monitoring_guidance
             context = {"progress_monitoring_connected": monitoring, "project_id": chat["project_id"],
                        "device_id": chat["device_id"] if self.settings.phone_handoff_enabled else None,
                        "room_id": chat["room_id"], "session": session_summary(session) if self.settings.phone_handoff_enabled else None,
@@ -935,7 +948,13 @@ class OrchestratorAgent:
             tools = [tool for tool in tools if tool['function']['name'] != 'progress4d_result' or monitoring]
             return ([{"role": "developer", "content": prompt + "\nServer context: " + canonical_json(context)}]
                     + run["history"] + run["messages"], tools + self.inspectors.tools())
+        def prepare_model():
+            messages, tools = prepare_domain()
+            if run.get('orchestration_policy_version'):
+                return orchestrator_policy.model_request(run, messages, tools, ORCHESTRATOR_IDENTITY, self.settings.agent_max_steps)
+            return messages, tools
         def execute_tool(plan):
+            orchestrator_policy.require_scope(run, plan['name'])
             if plan["name"] == "delegate_inspection":
                 return self._delegate(principal, run, plan, lease)
             return self._execute(principal, run, plan)
@@ -944,10 +963,11 @@ class OrchestratorAgent:
                 raise APIError(502, 'geometry_review_failed', 'Inspector did not produce an accepted report')
             return 'Accepted Geometry candidate review.'
         try:
-            AgentHarness(run, model=self.model, max_steps=self.settings.agent_max_steps, checkpoint=checkpoint,
+            AgentHarness(run, model=self.model, max_steps=self.settings.agent_max_steps + (2 if run.get('orchestration_policy_version') else 0), checkpoint=checkpoint,
                          prepare_model=prepare_model, plan_tool=lambda call: self._plan(principal, run, call),
                          execute_tool=execute_tool, telemetry=self.telemetry,
-                         complete_after_tool=complete_geometry_batch if run.get('internal_geometry_batch') else None).advance()
+                         complete_after_tool=complete_geometry_batch if run.get('internal_geometry_batch') else None,
+                         accept_model=(lambda message: orchestrator_policy.accept_model(run, message)) if run.get('orchestration_policy_version') else None).advance()
         except APIError as error:
             if error.body["code"] == "agent_lease_lost":
                 raise

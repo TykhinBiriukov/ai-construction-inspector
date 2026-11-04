@@ -12,7 +12,7 @@ from .storage import canonical_json
 
 
 class AgentHarness:
-    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool, telemetry=None, finalize_reply=None, fatal_tool_errors=(), complete_after_tool=None):
+    def __init__(self, state, *, model, max_steps, checkpoint, prepare_model, plan_tool, execute_tool, telemetry=None, finalize_reply=None, fatal_tool_errors=(), complete_after_tool=None, accept_model=None):
         self.state = state
         self.model = model
         if getattr(model, "analysis_origin", None) in ("synthetic", "mock", "recorded"):
@@ -26,6 +26,7 @@ class AgentHarness:
         self.finalize_reply = finalize_reply
         self.fatal_tool_errors = frozenset(fatal_tool_errors)
         self.complete_after_tool = complete_after_tool
+        self.accept_model = accept_model
 
     def _start_activity(self, kind, name, operation_id):
         events = self.state.setdefault("activity_events", [])
@@ -110,6 +111,11 @@ class AgentHarness:
                 self._finish_activity(activity, started, "completed", "Tool call selected" if message.get("tool_calls") else "Response prepared")
                 state["pending_model"] = None
                 state["steps"] += 1
+                if self.accept_model is not None:
+                    message = self.accept_model(message)
+                    if message is None:
+                        self.checkpoint()
+                        continue
                 if message.get("tool_calls"):
                     call = message["tool_calls"][0]
                     try:

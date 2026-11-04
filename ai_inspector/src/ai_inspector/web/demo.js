@@ -283,7 +283,7 @@
       event.kind==='model'?'Step completed.':comparison?(tool?.result?.error?'The comparison could not be completed. See the response for details.':'Comparison results received.'):'Step completed.';
     body.append(node('p','',result));
     if(comparison&&run.comparison_progress?.operation_id===event.operation_id){
-      for(const [phase,status] of Object.entries(run.comparison_progress.phases||{})){
+      for(const [phase,status] of Object.entries(run.comparison_progress?.phases||{})){
         if(comparisonPhaseLabels[phase])body.append(node('p','',`${status==='completed'?'✓':'◌'} ${comparisonPhaseLabels[phase]}`));
       }
     }
@@ -337,7 +337,7 @@
             if(comparisons.length&&item.type==='table'&&(/drawing_photo_(compare|result)/.test(source)||comparisons.some(r=>source.includes(r.task_id))))continue;
             const artifact=renderArtifact(item);if(artifact)grid.append(artifact);
           }
-          for(const result of comparisons)grid.append(renderComparison(result,chat.chat_id));
+          for(const result of comparisons)grid.append(comparisonResultCard(result,chat.chat_id));
           for(const tool of run.tool_results||[]){
             if(tool.name==='session_create'&&tool.result?.session?.session_id){
               const saved=tool.result.session,session=scopedSessions.find(item=>item.session_id===saved.session_id)||saved;
@@ -647,6 +647,17 @@
   function resetDocument(){fitView.hidden=true;savedDemoCleanup();savedDemoCleanup=()=>{};document.querySelector('.document-workspace').classList.remove('showing-progress');documentGeneration++;viewer.clear();documentOpenId=null;documentContext=null;$('document-context').hidden=true;$('document-name').textContent='Project documents';$('document-download').disabled=true;$('document-status').textContent='';$('document-view').replaceChildren(node('p','document-empty','Drop files here, or choose them using + in chat.'));}
   async function openDocument(file,inspect=false){savedDemoCleanup();savedDemoCleanup=()=>{};if(file.deleted||(!inspect&&(sending||pending)))return;if(file.origin==='geometry'&&file.name==='geometry-review-report.json'){await geometryViewer.open(chat.chat_id,{sessionId:file.session_id});return;}document.querySelector('.document-workspace').classList.remove('showing-progress');const generation=++documentGeneration;fitView.hidden=true;documentOpenId=file.file_id;$('document-name').textContent=file.name;$('document-download').disabled=false;$('document-status').textContent='Loading…';try{const blob=await api(`${workspacePath()}/files/${encodeURIComponent(file.file_id)}/download`,{blob:true});if(generation!==documentGeneration)return;await viewer.open(file,blob);if(generation===documentGeneration)showFitView(file);}catch(e){if(generation===documentGeneration)notify(e.message);}}
   let savedDemoCleanup=()=>{};
+  function comparisonResultCard(result,chatId){
+    const card=node('section','geometry-result-card');
+    card.append(node('h4','','Drawing and photo comparison'));
+    const open=node('button','quiet','View findings and evidence');open.type='button';
+    open.onclick=()=>{
+      if(chat?.chat_id!==chatId)return;
+      resetDocument();$('document-name').textContent='Drawing and photo findings';
+      $('document-view').replaceChildren(renderComparison(result,chatId));
+    };
+    card.append(open);return card;
+  }
   async function showSavedDemo(result){
     const prefix=`/v1/chats/${encodeURIComponent(chat.chat_id)}/saved-demo-assets/`;if(result.viewer?.chat_id!==chat.chat_id||[result.drawing,result.photo,result.model].filter(Boolean).some(path=>!path.startsWith(prefix)||!/^[-a-z0-9]+$/.test(path.slice(prefix.length))))return;
     resetDocument();const generation=documentGeneration;document.querySelector('.document-workspace').classList.add('showing-progress');$('document-name').textContent=result.title;

@@ -2,6 +2,54 @@
 
 **Bob** is the main orchestrator, implemented by `OrchestratorAgent` (`ChatAgent` remains a compatibility alias). He talks to the user, selects predefined tools or a registered inspector, and explains accepted results. The shared Meta Model API adapter uses `muse-spark-1.3`; configured credentials do not establish live account access. Native HTTP schemas are generated at `/docs` and `/openapi.json`; wire/model definitions live in the linked code below.
 
+## Bob policy and product scope
+
+New runs pin a versioned effective instruction snapshot from
+[orchestrator_policy.py](../src/ai_inspector/orchestrator_policy.py). Bob handles
+AI Inspector project workflows and their explanations, rather than general chat.
+Unrelated requests such as pizza recipes are redirected briefly without domain
+tool calls. Mixed requests proceed only with a verbatim product portion. File
+contents, role-play and old reports cannot override this boundary or grant access.
+
+The existing harness first makes a tool-free, strictly validated scope decision.
+Malformed decisions fail closed. Accepted tasks use the existing tool registry,
+argument validation and source/permission checks. A proposed final answer stays
+private until a separate tool-free reply review approves it; malformed or rejected
+reviews produce a safe application reply. These two policy turns are separately
+counted and bounded, in addition to the configured domain-turn budget. They add
+model latency and usage; uncertain provider attempts may repeat. Semantic decisions
+remain model-dependent and require evaluation; fixtures do not prove a universal
+off-topic guarantee or inspection accuracy.
+
+The accepted intent also bounds action tools: an information/status decision
+cannot create capture, review, comparison or specialist work. This check applies
+both when planning and when executing a saved command; it does not replace caller
+permissions or evidence validation.
+
+Each policy request is frozen through the existing `pending_model` checkpoint.
+Decisions, private candidates and effective instructions survive restart without
+repeating completed tools. Only new runs have `orchestration_policy_version`;
+legacy runs and their saved messages, requests and replies keep their old path.
+Trusted Geometry continuations retain their server-owned product scope and remain
+tool-free when summarizing. Specialist profiles and Inspector/Verifier permissions
+are unchanged.
+
+By default chat gives one or two short sentences: outcome, material limitation or
+one necessary clarification. The Viewer holds detailed results. Device/session
+questions use the direct read tools; an instruction question does not start
+capture. Linked-capture inspection uses `geometry_review`, and reading a saved
+result never authorizes new capture. Tool descriptions specify local conditions;
+the policy defines the boundaries between workflows. Explicit requests for chat
+detail or a dashboard remain supported, without losing uncertainty or provenance.
+
+Langfuse is optional. The bundled policy, snapshot hashes, scope decisions and
+recovery work without SDK, credentials or Cloud. If existing managed prompts are
+enabled, their saved source/version is retained and mandatory product policy is
+composed after them once per new run. No prompt publication or production-label
+change is performed by startup or by this update. An exact built-in recorded-demo
+viewing action keeps its deterministic recorded path without requiring model
+credentials; arbitrary follow-ups still use the configured model and policy.
+
 ## Agent hierarchy and inspector registration
 
 The user interacts with one **AI Inspector**. Chat identity, progress/activity labels and replies use this single product name and describe work such as checking geometry or reviewing evidence. Internal agent names and handoffs are not part of the user conversation.
@@ -162,6 +210,12 @@ bindings, preview limits and missing alignment/camera-data boundaries are in the
 Public runs expose safe delegation summaries, active_tool and bounded activity_events for actual model/tool attempts, including attempt links, timestamps and measured duration. Unknown historical/interrupted durations are not invented. These are operational events, not internal model reasoning or progress guarantees.
 
 An assistant may emit a validated inspector-ui JSON block for metric/bar_chart/table artifacts. [artifacts.py](../src/ai_inspector/artifacts.py) defines shapes/limits; reply remains unchanged for older clients, while display_reply/artifacts are additive. Render typed DOM only, never model HTML/JS/SVG or executable URLs. Attribution text is not independent evidence and no widget adds a measurement capability.
+
+Chat dashboards are now opt-in. Drawing/photo results use a compact **View findings
+and evidence** card; the existing findings renderer opens in the document panel.
+Its evidence buttons retain the same chat/task-scoped read API. Reopening the card
+or reloading history does not submit another analysis. Legacy results without
+phase metadata remain readable, and stored reply/report bodies are unchanged.
 
 ## Drawing/photo minion
 

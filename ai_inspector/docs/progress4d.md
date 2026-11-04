@@ -5,6 +5,10 @@ Inspector document panel, with a full-screen dialog option. It retains surfaces,
 project overlays, stage filters and the sticky week selector. The standalone viewer also remains
 available. No service credential or short-lived project URL reaches the browser.
 
+The weekly Viewer remains the main result surface. Bob gives a short product-scoped
+chat reply by default; explicit requests for detail remain supported. Scope/reply
+checks do not reconstruct a survey or convert saved evidence into new analysis.
+
 ## Configure an existing result
 
 Run [Progress4D](../../progress4d_service/README.md) separately with durable storage,
