@@ -26,6 +26,20 @@
     if(key&&key===selectionScope)write(sessionStorage,key,JSON.stringify([...chosenFiles]));
   }
   let sending = false, refreshing = false, selected = null, historySignature = '';
+  let conversationScrollPending = false;
+  function scrollConversationToEnd() {
+    conversationScrollPending = true;
+    requestAnimationFrame(() => {
+      const messages = $('messages');
+      // Working states hide the history; wait until it has a visible layout.
+      if (!conversationScrollPending || !messages.clientHeight) return;
+      messages.scrollTop = messages.scrollHeight;
+      conversationScrollPending = false;
+    });
+  }
+  new ResizeObserver(() => {
+    if (conversationScrollPending) scrollConversationToEnd();
+  }).observe($('messages'));
   const uid = () => crypto.randomUUID();
   const timestamp = value => value ? new Date(value).toLocaleString() : 'Not reported';
   const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className=className; if (text != null) el.textContent=String(text); return el; };
@@ -63,7 +77,7 @@
     epoch++; token=''; chat=null; pending=null; create=null; overview=null; caps=null; device=null; selected=null; scopedSessions=[]; scopedInspections=[];
     chatChoices=null;workState=null;workspaceBusy=false;chosenFiles.clear();selectionScope=null;uploadQueue=[];for(const dialog of document.querySelectorAll('dialog'))dialog.close();
     $('workspace').hidden=true; $('login').hidden=false; $('sidebar-devices').hidden=true; $('lock').hidden=true; $('new-chat').disabled=true; $('connection').hidden=true; $('workspace-scope').hidden=true;
-    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; resetDocument();
+    $('files').replaceChildren(); $('tasks').replaceChildren(); $('messages').replaceChildren(); $('activity').replaceChildren(); activitySignature='';activitySync=0;activityExpanded.clear(); $('selection').hidden=true; historySignature=''; conversationScrollPending=false; resetDocument();
   }
   function unlock() {
     voice.refresh(); $('login').hidden=true; $('workspace').hidden=false; $('lock').hidden=window.InspectorOperatorSession.mode()==='public';
@@ -323,7 +337,7 @@
     const runs=chat?.runs||[], signature=JSON.stringify([runs,chat?.geometry_reviews,scopedSessions.map(s=>[s.session_id,s.capture_state,s.device_acknowledged_at,s.geometry_result?.job_id,s.processing_state])]);
     $('suggestions').hidden=false;
     if(historySignature!==signature) {
-      const follow = $('messages').scrollHeight - $('messages').scrollTop - $('messages').clientHeight < 100;
+      const follow = !historySignature || $('messages').scrollHeight - $('messages').scrollTop - $('messages').clientHeight < 100;
       historySignature=signature;
       if(runs.length) {
         $('messages').replaceChildren();
@@ -365,7 +379,7 @@
         const welcome=node('div','welcome'); welcome.append(node('div','hero-icon','✳'),node('p','','Attach files or send a message.')); $('messages').replaceChildren(welcome);
       }
       for(const session of scopedSessions.filter(s=>s.geometry_result&&!runs.some(r=>r.continuation&&r.session_id===s.session_id)))$('messages').append(geometryResultCard(session.session_id));
-      if(follow) $('messages').scrollTop=$('messages').scrollHeight;
+      if(follow) scrollConversationToEnd();
     }
     renderActivity(runs);
     const last=runs.at(-1);
@@ -1054,7 +1068,7 @@
       const last=chat?.runs?.at(-1);
       if(last?.text!==item[2]||last.status!=='completed'||!last.tool_results?.some(t=>t.result?.viewer))throw new Error(last?.error?.message||'Result not ready. Resume the request or try again.');
       lastExample=item;lastExampleMode='recorded';ask.textContent='Ask about this result';paintExampleStatus('Saved example ready. Explore the result in the viewer.');$('demo-example-actions').hidden=false;
-      $('messages').scrollTop=$('messages').scrollHeight;
+      scrollConversationToEnd();
     }catch(error){if(current===epoch){paintExampleStatus('The example could not finish. Your request is preserved.');notify(error.message);}}
     finally{demoBusy=false;if(current===epoch){
       if(!pending&&!keepInputDraft){
