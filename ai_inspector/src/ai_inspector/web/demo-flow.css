@@ -28,3 +28,16 @@
 #login form{display:grid;gap:12px;max-width:420px;margin:20px auto 0;text-align:left}
 #login input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #dce4d2;border-radius:8px;background:white;font:inherit}
 #login p{max-width:480px;margin:12px auto;line-height:1.6}
+
+.demo-image-slot{position:relative;min-width:0}
+.demo-image-slot.is-loading,.demo-image-slot:has(.asset-load-error){min-height:220px;aspect-ratio:4/3;border-radius:10px;background:#eef0e9;overflow:hidden}
+.demo-image-slot img[hidden]{display:none!important}
+.asset-loading,.asset-load-error{min-height:220px;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;color:#66745f;font-size:13px;line-height:1.5}
+.asset-loading[hidden]{display:none}
+.asset-loading:before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 25%,#ffffff80 50%,transparent 75%);transform:translateX(-100%);animation:asset-shimmer 1.8s ease-in-out infinite}
+.asset-loading>span,.asset-load-error>span,.asset-load-error>button{position:relative}
+.asset-spinner{width:18px;height:18px;flex:none;border:2px solid #cdd5c4;border-top-color:#667e56;border-radius:50%;animation:asset-spin .85s linear infinite}
+.asset-load-error{flex-direction:column}
+@keyframes asset-spin{to{transform:rotate(360deg)}}
+@keyframes asset-shimmer{to{transform:translateX(100%)}}
+@media(prefers-reduced-motion:reduce){.asset-spinner,.asset-loading:before{animation:none}.asset-loading:before{display:none}}

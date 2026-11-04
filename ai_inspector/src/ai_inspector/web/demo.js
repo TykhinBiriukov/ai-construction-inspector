@@ -653,10 +653,33 @@
     const host=node('div','saved-demo-output'),images=node('div','saved-demo-images');host.append(node('p','muted',result.summary),images);$('document-view').replaceChildren(host);
     const urls=[];let model=null;savedDemoCleanup=()=>{for(const url of urls)URL.revokeObjectURL(url);model?.clear?.();};
     try{
-      for(const [key,label] of [['drawing','Drawing'],['photo','Photo']])if(result[key]){const figure=node('figure'),img=node('img');img.alt=label;figure.append(node('figcaption','',label),img);images.append(figure);const blob=await api(result[key],{blob:true});if(generation!==documentGeneration)return;const url=URL.createObjectURL(blob);urls.push(url);img.src=url;}
+      await Promise.all([['drawing','Drawing'],['photo','Photo']].filter(([key])=>result[key]).map(async([key,label])=>{
+        const figure=node('figure'),slot=node('div','demo-image-slot'),img=node('img'),status=node('div','asset-loading');
+        img.alt=label;img.hidden=true;status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+        slot.append(img,status);figure.append(node('figcaption','',label),slot);images.append(figure);
+        async function load(){
+          slot.classList.add('is-loading');slot.setAttribute('aria-busy','true');img.hidden=true;
+          status.className='asset-loading';status.replaceChildren(node('span','asset-spinner'),node('span','',`Loading ${label.toLowerCase()}…`));
+          try{
+            const blob=await api(result[key],{blob:true});if(generation!==documentGeneration)return;
+            const url=URL.createObjectURL(blob);urls.push(url);img.src=url;
+            await img.decode();if(generation!==documentGeneration)return;
+            img.hidden=false;status.hidden=true;slot.classList.remove('is-loading');slot.setAttribute('aria-busy','false');
+          }catch(error){
+            if(generation!==documentGeneration)return;
+            slot.classList.remove('is-loading');slot.setAttribute('aria-busy','false');status.hidden=false;status.className='asset-load-error';
+            const retry=node('button','quiet','Retry');retry.type='button';retry.onclick=()=>{status.hidden=false;load();};
+            status.replaceChildren(node('span','',`Could not load ${label.toLowerCase()}.`),retry);
+          }
+        }
+        await load();
+      }));
+      if(generation!==documentGeneration)return;
+
       if(result.model){const section=node('section','saved-demo-model'),tools=node('div','saved-demo-tools'),canvas=node('div','saved-model-canvas'),caption=node('p','muted');tools.append(node('strong','','Project model'));section.append(tools,canvas,caption);images.prepend(section);model=new ProjectDocuments.GeometryModel(canvas,()=>{},text=>caption.textContent=text);const fit=node('button','quiet','Fit model');fit.onclick=()=>model.zoom(1);tools.append(fit);const blob=await api(result.model,{blob:true});if(generation!==documentGeneration)return;await model.openArtifact('ifc',blob);}
       if(result.report?.findings){const table=node('table'),head=node('tr');for(const title of ['Detail','Result','Observation'])head.append(node('th','',title));table.append(head);for(const finding of result.report.findings){const row=node('tr');for(const text of [finding.criterion,({match:'Match',mismatch:'Mismatch',inconclusive:'Unclear'})[finding.verdict]||'Unclear',finding.justification||finding.reasoning||finding.explanation||finding.photo_claim?.text||''])row.append(node('td','',typeof text==='string'?text:JSON.stringify(text)));table.append(row);}host.append(table);}
     }catch(error){if(generation===documentGeneration)$('document-status').textContent=error.message;}
+    return generation;
   }
   async function showProgressInline(){
     savedDemoCleanup();savedDemoCleanup=()=>{};
@@ -838,7 +861,8 @@
       if(objects.length)selectObject(objects[0],selector.firstChild);else host.append(node('p','','No matched objects in this result.'));
       return;
     }
-    await openSavedDemo(result);
+    const loadedGeneration=await openSavedDemo(result);
+    if(loadedGeneration!==documentGeneration)return;
     if(!result.variants?.length||$('document-name').textContent!==result.title)return;
     const host=$('document-view').querySelector('.saved-demo-output');if(!host)return;
     const choices=node('div','demo-actions');choices.setAttribute('aria-label','Comparison photo');
