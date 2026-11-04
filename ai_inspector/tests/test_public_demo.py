@@ -1,5 +1,6 @@
 """Public browser cookies, conversation ownership and own-image submission."""
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -84,6 +85,13 @@ class PublicDemoTests(unittest.TestCase):
         class Model:
             def complete(self, messages, tools):
                 calls.append(messages)
+                if messages[0]['content'].startswith('AI_INSPECTOR_SCOPE_V1'):
+                    request = json.loads(messages[-1]['content'])['new_request']
+                    return {'role': 'assistant', 'content': json.dumps({
+                        'status': 'in_scope', 'intent': 'information',
+                        'product_request': request, 'language': 'en'})}
+                if messages[0]['content'].startswith('AI_INSPECTOR_REPLY_REVIEW_V1'):
+                    return {'role': 'assistant', 'content': '{"verdict":"approved"}'}
                 return {'role': 'assistant', 'content': 'Offline fixture: image received.'}
         self.app.state.service.agent.model = Model()
         body = {'schema_version': '0.1', 'request_id': str(uuid4()),
@@ -91,10 +99,11 @@ class PublicDemoTests(unittest.TestCase):
         response = self.c.post(f'/v1/chats/{chat}/messages', headers=self.headers, json=body)
         self.assertEqual(response.status_code, 201, response.text)
         self.assertEqual(response.json()['status'], 'completed', response.text)
-        parts = next(m['content'] for m in reversed(calls[0]) if m['role'] == 'user')
+        self.assertEqual(len(calls), 3)  # Scope, image assessment, reply review.
+        parts = next(m['content'] for m in reversed(calls[1]) if m['role'] == 'user')
         self.assertEqual(sum(p['type'] == 'image_url' for p in parts), 1)
         self.assertEqual(self.c.post(f'/v1/chats/{chat}/messages', headers=self.headers, json=body).status_code, 200)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 3)
         reopened = self.client(create_app(self.settings, background_worker=False))
         reopened.cookies.set(self.cookie, token)
         response = reopened.get('/v1/chats/' + chat)
