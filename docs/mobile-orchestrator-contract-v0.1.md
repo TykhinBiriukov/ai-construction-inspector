@@ -1,94 +1,94 @@
 > **Superseded for the current first case:** use [Inspector server integration](inspector-server-integration.md) and [mobile implementation status](mobile-integration-status.md). The following document is an older architecture proposal.
 
-# iPhone ↔ Geometry Service + AI Inspector API — v0.1, на согласование
+# iPhone ↔ Geometry Service + AI Inspector API — v0.1, for agreement
 
-Дата: 2026-10-27. **PROPOSED / НЕ СОГЛАСОВАНО.** Это предложение интерфейса, не описание уже работающего сервера. После согласования обе стороны реализуют один и тот же контракт.
+Date: 2026-10-27. **PROPOSED / NOT AGREED.** This is an interface proposal, not a description of an operational server. Once agreed, both sides implement the same contract.
 
-## Дополнение: мобильная схема кадра 0.2 (27.10.2026)
+## Addendum: mobile frame schema 0.2 (27 October 2026)
 
-По запросу Олега приложение теперь поддерживает телефоны без LiDAR. Это локальная реализация; приём новых кадров сервером **ещё требует согласования**. Ниже разделы v0.1 и их примеры остаются исходным предложением RGB-D; для новых кадров действует следующее изменение:
+At Oleg's request, the app now supports phones without LiDAR. This is a local implementation; server acceptance of new frames **still requires agreement**. The v0.1 sections/examples below retain the original RGB-D proposal; new frames use these changes:
 
-- `frame.json.schema_version` = `"0.2"` для новых RGB и RGB-D наблюдений. Старые кадры `0.1` читаются приложением. Версия manifest сессии остаётся `0.1`.
-- Без LiDAR: `depth_source: "none"`; `depth`, `depth_size`, `depth_unit`, `depth_to_rgb_mapping`, `confidence` равны JSON `null`. В multipart такого наблюдения должны отсутствовать части depth/confidence. Нельзя подставлять нулевую или синтетическую глубину.
-- JPEG, размеры RGB, `K_rgb`, `T_world_camera`, timestamp, session/segment/frame IDs сохраняются. Положение — оценка ARKit, а не привязка к BIM. Съёмка требует normal tracking.
-- При наличии LiDAR формат глубины не меняется; кадр не сохраняется, пока sceneDepth не готова.
-- Geometry Service должен явно различать RGB и RGB-D: отсутствие измеренной глубины не является измерением или подтверждением геометрического соответствия. Возможность обработки RGB-only и ответ на неподдерживаемый тип требуется согласовать.
-- Описания depth/confidence encoding в manifest применимы только к кадрам, где соответствующий файл присутствует.
+- `frame.json.schema_version` = `"0.2"` for new RGB and RGB-D observations. The app reads legacy `0.1` frames. Session manifest version remains `0.1`.
+- Without LiDAR: `depth_source: "none"`; `depth`, `depth_size`, `depth_unit`, `depth_to_rgb_mapping`, `confidence` are JSON `null`. Such observations must omit depth/confidence multipart parts. Do not substitute zero or synthetic depth.
+- JPEG, RGB dimensions, `K_rgb`, `T_world_camera`, timestamp and session/segment/frame IDs are retained. Position is an ARKit estimate, not BIM alignment. Capture requires normal tracking.
+- With LiDAR, depth format is unchanged; frames are not saved until sceneDepth is ready.
+- Geometry Service must explicitly distinguish RGB and RGB-D: missing measured depth is neither a measurement nor proof of geometric compliance. RGB-only processing support and unsupported-input responses require agreement.
+- Manifest depth/confidence encoding descriptions apply only to frames containing the corresponding file.
 
-## 1. Кто что реализует
+## 1. Implementation responsibilities
 
 ```text
                      iPhone app
                       ↙     ↘
              HTTPS /         \ HTTPS /
-             RGB-D, модели    задания, ответы
+             RGB-D, models    instructions, responses
                   ↕               ↕
           Geometry Service ↔ AI Inspector
-                  прямое межсервисное API
+                  direct inter-service API
 ```
 
-**Подтверждённая схема:** телефон напрямую общается с обоими сервисами; сервисы также общаются друг с другом. AI Inspector не является обязательным прокси для загрузки RGB-D или доступа к Geometry Service. Ниже конкретные маршруты и порядок синхронизации предложены для согласования.
+**Confirmed architecture:** the phone communicates directly with both services; the services also communicate with each other. AI Inspector is not a mandatory proxy for RGB-D upload or Geometry Service access. The specific routes and synchronization sequence below are proposed for agreement.
 
-- **Geometry Service (G)**: приём и хранение RGB-D, проверка файлов, геометрическая обработка, модель/привязка/покрытие. Предлагаем также выдавать через него подготовленный BIM-пакет; владелец конвертера ещё согласуется.
-- **AI Inspector (I)**: задания, текстовые ответы, AI-анализ и итог инспекции. Если внутри него используется оркестратор, это деталь реализации, не единая точка входа телефона.
-- **Приложение iPhone**: два HTTP-клиента/адаптера, локальное сохранение, очередь загрузок G и отдельная очередь ответов I. Входящий HTTP-сервер на телефоне не нужен.
-- **G ↔ I**: Inspector получает метаданные, файлы и геометрию напрямую у G; G уведомляет Inspector о принятии и готовности данных. Телефон не пересылает результаты между микросервисами.
-- Ключи моделей остаются на backend. Телефон не вызывает поставщиков AI-моделей напрямую.
-- **Одно наблюдение = одно фото с соответствующими depth и метаданными**, не батч.
-- Наличие PLY во входе Geometry Service не делает его обязательным выходом телефона: предлагаем преобразование RGB-D в PLY на стороне G либо его backend-адаптера. Это всё ещё отдельный пункт согласования с владельцем Geometry Service.
+- **Geometry Service (G)**: RGB-D intake/storage, file validation, geometry processing, model/alignment/coverage. Also proposed: serving a prepared BIM package; converter ownership still requires agreement.
+- **AI Inspector (I)**: instructions, text responses, AI analysis and inspection outcome. Any internal orchestrator is an implementation detail, not the phone's single entry point.
+- **iPhone app**: two HTTP clients/adapters, local persistence, a G upload queue and a separate I response queue. No inbound HTTP server is needed on the phone.
+- **G ↔ I**: Inspector obtains metadata, files and geometry directly from G; G notifies Inspector of accepted/ready data. The phone does not relay results between microservices.
+- Model keys remain on the backend. The phone does not call AI-model providers directly.
+- **One observation = one photograph with corresponding depth and metadata**, not a batch.
+- PLY as Geometry Service input does not make it mandatory phone output: RGB-D → PLY conversion is proposed in G or its backend adapter. This still requires separate agreement with the Geometry Service owner.
 
-## 2. Реализованное и предлагаемое
+## 2. Implemented and proposed behavior
 
-Уже в iOS-коде: локальная сессия и файлы наблюдения, UUID, SHA-256, синтетический источник, код захвата ARKit. Формат записывается в [`Observation.swift`](../ios/AIInspector/Observation.swift).
+Already in iOS code: local sessions and observation files, UUIDs, SHA-256, synthetic source and ARKit capture code. The format is written in [`Observation.swift`](../ios/AIInspector/Observation.swift).
 
-**Не реализовано:** сетевой клиент, загрузка на сервер, авторизация, получение событий, BIM import, backend alignment/coverage, голос. Локальная демоинструкция не является ответом AI. Получение реальных RGB-D и их геометрическая корректность ещё не проверены на iPhone.
+**Not implemented:** network client, server uploads, authorization, event reception, BIM import, backend alignment/coverage and voice. Local demo instructions are not AI responses. Real RGB-D acquisition and geometric correctness have not yet been tested on iPhone.
 
-Документ ниже сохраняет существующий формат `frame.json`. Новые сетевые оболочки (project_id, app_version, ревизии, квитанции, состояние загрузки) требуют реализации. Существующий `SessionManifest` не нужно автоматически считать полным HTTP-запросом.
+The document below retains the existing `frame.json` format. New network envelopes (project_id, app_version, revisions, receipts, upload state) require implementation. Do not automatically treat the existing `SessionManifest` as a complete HTTP request.
 
-## 3. Общие правила
+## 3. General rules
 
-- Два конфигурируемых адреса: `geometry_base_url` (G) и `inspector_base_url` (I). Даже одинаковый путь на них — разные API. Для удалённых сервисов — HTTPS. Реальные адреса предоставляют владельцы сервисов.
-- `Authorization: Bearer <token>`. Способ выдачи/обновления согласовать; права ограничены проектом и сервисом (audience). Конфигурация клиента допускает разные токены G/I; хранить их в Keychain, не пересылать автоматически между хостами. Межсервисные вызовы используют отдельную service identity, недоступную приложению.
-- JSON UTF-8; даты UTC RFC 3339. `timestamp_s` кадра — монотонное время ARKit, **не UTC**.
-- UUID генерирует клиент для session, segment, observation, response и completion. Передавать один и тот же строковый UUID во всех ссылках и повторах. ID проекта/комнаты/модели выдаёт backend; ID инструкций — I, ID событий — сервис-источник. Курсоры и revisions имеют область действия сервиса/ресурса, а не глобальную нумерацию.
-- `schema_version: "0.1"`. Неизвестную версию отклонять с 422. Добавление необязательных полей допустимо; изменение единиц/осей/значения существующих полей требует новой версии.
-- Ошибки и квитанции — JSON. HTTP 2xx не означает успешную инспекцию.
-- Для MVP один телефон пишет в одну сессию. Несколько телефонов — отдельные сессии.
-- Лимиты размера наблюдения, числа наблюдений и частоты запросов согласовать перед интеграцией. Не обрезать изображения или depth молча.
+- Two configurable addresses: `geometry_base_url` (G) and `inspector_base_url` (I). Even identical paths are different APIs. Remote services use HTTPS; service owners supply actual addresses.
+- `Authorization: Bearer <token>`. Issuance/refresh requires agreement; rights are limited by project and service audience. Client configuration supports separate G/I tokens stored in Keychain, never automatically forwarded across hosts. Inter-service calls use a separate service identity unavailable to the app.
+- JSON UTF-8; dates UTC RFC 3339. Frame `timestamp_s` is monotonic ARKit time, **not UTC**.
+- The client generates session, segment, observation, response and completion UUIDs. Use the same string UUID in all references/retries. Backend assigns project/room/model IDs; I assigns instruction IDs; the source service assigns event IDs. Cursors/revisions are service/resource-scoped rather than globally numbered.
+- `schema_version: "0.1"`. Reject unknown versions with 422. Optional fields may be added; changing existing units/axes/field meanings requires a new version.
+- Errors and receipts are JSON. HTTP 2xx does not mean successful inspection.
+- For the MVP, one phone writes one session. Multiple phones use separate sessions.
+- Agree observation-size, observation-count and request-rate limits before integration. Do not silently crop images or depth.
 
-## 4. Сценарий MVP
+## 4. MVP workflow
 
-1. Телефон получает подготовленную модель у **G**, создаёт один session_id и регистрирует неизменяемую конфигурацию сессии сначала у G, затем у **I** с тем же ID.
-2. У G регистрируется segment_id. Захват можно сохранять локально без сети; отправка в G возможна после регистрации там. AI-задания начинаются после успешной регистрации I.
-3. Телефон сохраняет наблюдение и напрямую загружает RGB-D в **G**. Только durable receipt G увеличивает счётчик «Отправлено».
-4. **G напрямую уведомляет I** о принятии и затем готовности данных. I сам получает у G необходимые изображения/метаданные/геометрию.
-5. Телефон опрашивает **I** для инструкций, **G** — для состояния геометрии. Эти два статуса независимы.
-6. На запрос досъёмки телефон загружает дополнительный кадр в G с instruction_id, затем отправляет в I ответ с observation_id. I проверяет факт приёма у G; доставка уведомления может запаздывать.
-7. **I** определяет достаточность evidence и управляет заданиями; кнопка/загрузка сами по себе не закрывают задание.
-8. Телефон отправляет запрос завершения в **I**. I замораживает выдачу заданий и напрямую согласует закрытие набора с G. Это одна координирующая операция, а не проксирование загрузок через Inspector.
+1. The phone obtains a prepared model from **G**, creates one session_id and registers immutable session configuration first with G, then with **I** under the same ID.
+2. Register segment_id with G. Capture can be saved locally offline; G upload requires registration there. AI instructions begin after successful I registration.
+3. The phone saves an observation and uploads RGB-D directly to **G**. Only G's durable receipt increments the “Sent” counter.
+4. **G directly notifies I** of accepted and then ready data. I obtains required images/metadata/geometry from G itself.
+5. The phone polls **I** for instructions and **G** for geometry status. These states are independent.
+6. When additional capture is requested, the phone uploads a frame to G with instruction_id, then sends I a response with observation_id. I verifies acceptance with G; notifications may arrive late.
+7. **I** determines evidence sufficiency and controls instructions; a button/upload alone does not complete a task.
+8. The phone requests completion from **I**. I freezes new instructions and coordinates capture sealing directly with G. This is one coordinating operation, not upload proxying through Inspector.
 
-## 5. Маршруты телефона
+## 5. Phone routes
 
-| Сервис | Метод и путь | Назначение | Успех |
+| Service | Method and path | Purpose | Success |
 |---|---|---|---|
-| G | `GET /v1/projects/{project_id}/models/{model_version}` | Подготовленная модель и BIM ID | 200 |
-| G | `PUT /v1/sessions/{s}` | Зарегистрировать сессию данных | 201 / 200 повтор |
-| I | `PUT /v1/sessions/{s}` | Зарегистрировать инспекцию той же сессии | 201 / 200 повтор |
-| G | `PUT /v1/sessions/{s}/segments/{g}` | Сегмент координат | 201 / 200 повтор |
-| G | `PUT /v1/sessions/{s}/observations/{o}` | Одно наблюдение, multipart | 201 / 200 повтор |
-| G | `GET /v1/sessions/{s}/uploads?after={cursor}&limit=100` | Сверка принятых наблюдений | 200 |
-| G | `GET /v1/sessions/{s}` | Статус геометрии и ссылки на результаты | 200 |
-| I | `GET /v1/sessions/{s}/events?after={cursor}&limit=100` | Задания и обновления инспекции | 200 |
-| I | `GET /v1/sessions/{s}/instructions` | Снимок заданий и курсор I | 200 |
-| I | `POST /v1/sessions/{s}/instructions/{i}/responses` | Ответ пользователя | 201 / 200 повтор |
-| I | `POST /v1/sessions/{s}/complete` | Согласованное завершение съёмки | 202 / 200 повтор |
-| I | `GET /v1/sessions/{s}` | Статус AI-инспекции и итог | 200 |
+| G | `GET /v1/projects/{project_id}/models/{model_version}` | Prepared model and BIM IDs | 200 |
+| G | `PUT /v1/sessions/{s}` | Register data session | 201 / 200 on replay |
+| I | `PUT /v1/sessions/{s}` | Register inspection for the same session | 201 / 200 on replay |
+| G | `PUT /v1/sessions/{s}/segments/{g}` | Coordinate segment | 201 / 200 on retry |
+| G | `PUT /v1/sessions/{s}/observations/{o}` | One observation, multipart | 201 / 200 on retry |
+| G | `GET /v1/sessions/{s}/uploads?after={cursor}&limit=100` | Reconcile accepted observations | 200 |
+| G | `GET /v1/sessions/{s}` | Geometry status and result links | 200 |
+| I | `GET /v1/sessions/{s}/events?after={cursor}&limit=100` | Inspection instructions and updates | 200 |
+| I | `GET /v1/sessions/{s}/instructions` | Instruction snapshot and I cursor | 200 |
+| I | `POST /v1/sessions/{s}/instructions/{i}/responses` | User response | 201 / 200 on retry |
+| I | `POST /v1/sessions/{s}/complete` | Coordinated capture completion | 202 / 200 on retry |
+| I | `GET /v1/sessions/{s}` | AI inspection status and result | 200 |
 
-`s` = session_id, `g` = segment_id, `o` = observation_id, `i` = instruction_id. Курсоры непрозрачные строки. Примеры схематические: `SESSION_UUID` и подобные значения заменяются реальными ID; нулевые хеши — placeholders, не тестовые файлы для приёма сервером.
+`s` = session_id, `g` = segment_id, `o` = observation_id, `i` = instruction_id. Cursors are opaque strings. Examples are schematic: replace `SESSION_UUID` and similar values with actual IDs; zero hashes are placeholders, not test files a server should accept.
 
-### 5.1 Модель для отображения
+### 5.1 Model for display
 
-Ответ **G** GET model:
+**G** GET model response:
 
 ```json
 {
@@ -112,13 +112,13 @@
 }
 ```
 
-Предлагаем USDZ, подготовленный backend/отдельным конвертером. Импорт произвольного RVT/IFC на телефоне не входит в MVP. `T_model_asset` переводит точки ассета в систему BIM-модели; метры и оси должны быть явно нормализованы. `node_name` должен реально существовать в ассете; если элемент состоит из частей, группировать их под этим узлом. Текущая генерируемая сцена приложения — отдельный демопример, ещё не этот пакет.
+We propose USDZ prepared by the backend or a separate converter. Importing arbitrary RVT/IFC files on the phone is outside the MVP. `T_model_asset` transforms asset points into the BIM model coordinate system; meters and axes must be explicitly normalized. `node_name` must exist in the asset; if an element has multiple parts, group them under that node. The application's current generated scene is a separate demo, not this package yet.
 
-URL ассета — относительный путь на API Geometry Service или подписанный HTTPS URL. Bearer token приложения не пересылать стороннему хосту. Backend определяет срок действия подписанного URL; при истечении клиент повторяет GET model. `model_version` неизменяема; новые геометрия/ID требуют новой версии.
+The asset URL is a relative path on the Geometry Service API or a signed HTTPS URL. Do not forward the application's bearer token to a third-party host. The backend determines signed URL expiry; when it expires, the client repeats GET model. `model_version` is immutable; new geometry or IDs require a new version.
 
-### 5.2 Сессия
+### 5.2 Session
 
-Одинаковый JSON в **G** PUT session и **I** PUT session:
+The same JSON is sent to **G** PUT session and **I** PUT session:
 
 ```json
 {
@@ -138,17 +138,17 @@ URL ассета — относительный путь на API Geometry Servi
 }
 ```
 
-`capture_origin`: `device | synthetic`; `input_mode`: `live_capture | recorded_capture | synthetic_fixture`. Replay не меняет происхождение реальных данных на synthetic; оригинальные frame timestamps сохраняются. Одна сессия не смешивает источники. `model_is_synthetic` независимо от источника захвата: сейчас можно снимать телефоном при отображении синтетической комнаты, но это не подтверждённое сопоставление.
+`capture_origin`: `device | synthetic`; `input_mode`: `live_capture | recorded_capture | synthetic_fixture`. Replay does not change the provenance of real data to synthetic; original frame timestamps are preserved. A session does not mix sources. `model_is_synthetic` is independent of the capture source: the phone can currently capture while displaying a synthetic room, but this is not a verified alignment.
 
-Квитанции регистрации: G — `{"session_id":"SESSION_UUID","capture_state":"open","revision":1}`; I — `{"session_id":"SESSION_UUID","state":"capturing","revision":1}`. Это сокращённые receipts, полные состояния см. §5.7.
+Registration receipts: G — `{"session_id":"SESSION_UUID","capture_state":"open","revision":1}`; I — `{"session_id":"SESSION_UUID","state":"capturing","revision":1}`. These are abbreviated receipts; see §5.7 for complete states.
 
-**G — источник истины для конфигурации сессии и evidence; I — для заданий и итогов инспекции.** I при регистрации читает конфигурацию у G через межсервисный GET (§5.8) и проверяет совпадение всех полей. Неизвестная у G сессия → 409 `geometry_session_missing`, разные параметры → 409 `session_config_mismatch`, G недоступен → 503. I не создаёт отдельный session_id.
+**G is the source of truth for session configuration and evidence; I is the source of truth for instructions and inspection results.** During registration, I reads the configuration from G using the interservice GET (§5.8) and checks every field for equality. Session unknown to G → 409 `geometry_session_missing`; different parameters → 409 `session_config_mismatch`; G unavailable → 503. I does not create a separate session_id.
 
-ID пути и тела совпадают. Повтор с теми же полями — 200; другое содержимое того же ID — 409 `idempotency_conflict`. PUT не используется для произвольного обновления. Клиент сохраняет исходное тело и два независимых признака регистрации. Если G принял регистрацию, а I недоступен, данные в G не откатываются: клиент повторяет регистрацию I с тем же ID; UI показывает «Инспектор не подключён». G не требует успешной регистрации I для приёма RGB-D.
+Path and body IDs must match. Repeating the same fields returns 200; different content for the same ID returns 409 `idempotency_conflict`. PUT is not used for arbitrary updates. The client preserves the original body and two independent registration flags. If G accepts registration but I is unavailable, data in G is not rolled back: the client retries registration with I using the same ID; the UI shows "Inspector not connected". G does not require successful registration with I to accept RGB-D.
 
-Поле parent_session_id связывает досъёмку с предыдущей сессией того же проекта и модели. Оба сервиса проверяют доступ к родителю. Авторизованные сервисы получают конфигурацию по фиксированным backend-адресам, не по произвольному URL из клиентского запроса.
+The parent_session_id field links follow-up capture to a previous session in the same project and model. Both services check access to the parent. Authorized services retrieve configuration through fixed backend addresses, not an arbitrary URL in a client request.
 
-### 5.3 Сегменты координат
+### 5.3 Coordinate segments
 
 **G** PUT segment, JSON:
 
@@ -164,28 +164,28 @@ ID пути и тела совпадают. Повтор с теми же пол
 }
 ```
 
-Ответ: `{"session_id":"SESSION_UUID","segment_id":"SEGMENT_UUID"}`. Регистрировать сегмент **до** первой загрузки его кадра. После перезапуска/сброса ARKit или непроверенной релокализации — новый segment_id. В текущем клиенте новый сегмент создаётся на каждом запуске камеры. Между сегментами нельзя предполагать общую систему координат. Геометрический backend связывает их отдельно, если сможет. Повтор с теми же значениями — 200, другой контент того же ID — 409.
+Response: `{"session_id":"SESSION_UUID","segment_id":"SEGMENT_UUID"}`. Register a segment **before** uploading its first frame. After an ARKit restart/reset or unverified relocalization, create a new segment_id. The current client creates a new segment each time the camera starts. Do not assume a shared coordinate system across segments. The geometry backend aligns them separately if possible. Repeating the same values returns 200; different content for the same ID returns 409.
 
-### 5.4 Наблюдение и бинарные форматы
+### 5.4 Observation and binary formats
 
 **G** PUT observation: `Content-Type: multipart/form-data; boundary=...`.
 
-| Имя части | filename | Content-Type | Обязательность |
+| Part name | filename | Content-Type | Required |
 |---|---|---|---|
-| `metadata` | `frame.json` | `application/json` | Да |
-| `rgb` | `rgb.jpg` | `image/jpeg` | Да |
-| `depth` | `depth.f32` | `application/octet-stream` | Да |
-| `confidence` | `confidence.u8` | `application/octet-stream` | Только если metadata.confidence != null |
+| `metadata` | `frame.json` | `application/json` | Yes |
+| `rgb` | `rgb.jpg` | `image/jpeg` | Yes |
+| `depth` | `depth.f32` | `application/octet-stream` | Yes |
+| `confidence` | `confidence.u8` | `application/octet-stream` | Only when metadata.confidence != null |
 
-Один набор получается из **одного ARFrame**. Независимо снятое фото нельзя соединять с произвольным кадром depth.
+Each set comes from **one ARFrame**. An independently captured photograph must not be paired with an arbitrary depth frame.
 
-- RGB: JPEG исходного `capturedImage`, без поворота, crop, изменения размера и EXIF-поворота. Поворот экранного превью не меняет файлы и intrinsics.
-- Depth: несглаженный `sceneDepth`, float32 little-endian, метры, row-major, без padding строк; ровно `width × height × 4` байт. Значения NaN/Infinity/≤0 сохраняются как есть, но исключаются из геометрии.
-- Confidence: uint8 row-major, то же разрешение, ровно `width × height` байт; 0/1/2 = low/medium/high. Если нет карты — `confidence: null`, multipart-часть отсутствует.
-- Нет depth/нормального tracking — клиент не формирует реальное геометрическое наблюдение. У синтетического кадра `tracking_state: synthetic`, `depth_source: synthetic_plane`.
-- SHA-256 — lowercase hex от точных байтов файла. `byte_length` не включает multipart-заголовки. Имена файлов фиксированы, без произвольных путей.
+- RGB: JPEG from the original `capturedImage`, without rotation, crop, resizing or EXIF rotation. Rotating the screen preview does not change files or intrinsics.
+- Depth: unsmoothed `sceneDepth`, float32 little-endian, metres, row-major, no row padding; exactly `width × height × 4` bytes. NaN/Infinity/≤0 values are preserved but excluded from geometry.
+- Confidence: uint8 row-major, same resolution, exactly `width × height` bytes; 0/1/2 = low/medium/high. If no map is available, use `confidence: null` and omit the multipart part.
+- Without depth or normal tracking, the client does not create a real geometry observation. A synthetic frame uses `tracking_state: synthetic`, `depth_source: synthetic_plane`.
+- SHA-256 is lowercase hex over the exact file bytes. `byte_length` excludes multipart headers. Filenames are fixed, with no arbitrary paths.
 
-Пример metadata, соответствует именам полей текущего Swift-кода:
+Example metadata using the current Swift field names:
 
 ```json
 {
@@ -214,9 +214,9 @@ ID пути и тела совпадают. Повтор с теми же пол
 }
 ```
 
-Размеры, intrinsics и поза в примере условные, не результаты измерения. Geometry Service проверяет JPEG dimensions, бинарные размеры, хеши, форму/конечность матриц, положительные focal lengths, валидность rigid transform и принадлежность segment/session. Для v0.1 `frame_id == observation_id`. `instruction_id` — контекст съёмки, а не доказательство принадлежности пикселей конкретному BIM-объекту. G сохраняет instruction_id как ссылку, не блокируя upload на доступности I и не определяя актуальность задания. Поздний кадр со старой инструкцией остаётся evidence; принадлежность инструкции сессии и переход её состояния проверяет I при обработке ответа.
+Dimensions, intrinsics, and pose in the example are illustrative, not measurement results. Geometry Service validates JPEG dimensions, binary sizes, hashes, matrix shape/finiteness, positive focal lengths, rigid transform validity, and segment/session membership. In v0.1, `frame_id == observation_id`. `instruction_id` provides capture context, not proof that pixels belong to a specific BIM object. G stores instruction_id as a reference without making uploads depend on I's availability or determining whether the instruction is current. A late frame with an old instruction remains evidence; I checks instruction/session membership and state transitions when processing the response.
 
-Квитанция **G** возвращается **после долговременного сохранения и проверки всего набора**:
+**G** returns a receipt **after durably storing and validating the entire set**:
 
 ```json
 {
@@ -228,19 +228,19 @@ ID пути и тела совпадают. Повтор с теми же пол
 }
 ```
 
-`metadata_sha256` считается по точным байтам multipart-части `metadata`. Клиент повторно отправляет сохранённый frame.json, не генерирует новые даты/форматирование. Multipart boundary может меняться. Одинаковые ID и metadata/file hashes → 200; изменённый набор с тем же ID → 409. Частично полученный набор не виден в uploads и не порождает межсервисное observation.accepted. Приём кадра G не означает завершение геометрической обработки или инспекции.
+`metadata_sha256` is computed over the exact bytes of the `metadata` multipart part. The client resends the stored frame.json without generating new dates or formatting. The multipart boundary may change. Matching IDs and metadata/file hashes → 200; a changed set with the same ID → 409. A partially received set is not visible in uploads and does not emit an interservice observation.accepted event. G accepting a frame does not mean geometry processing or inspection is complete.
 
-### 5.5 Сверка загрузок
+### 5.5 Upload reconciliation
 
 **G** GET uploads: `{"items":[{"observation_id":"OBSERVATION_UUID","metadata_sha256":"HASH"}],"next_cursor":null}`.
 
-Страницы отсортированы по серверному порядку приёма. `next_cursor: null` означает конец текущего списка. Клиент сверяет ID **и** metadata hash; совпадение одного ID недостаточно. Сетевой timeout после PUT не доказывает потерю записи: повторить тот же PUT или свериться с uploads. Изменять ID для повтора нельзя.
+Pages are sorted by server acceptance order. `next_cursor: null` means the end of the current list. The client compares IDs **and** metadata hashes; a matching ID alone is insufficient. A network timeout after PUT does not prove the record was lost: repeat the same PUT or reconcile against uploads. Do not change the ID for a retry.
 
-### 5.6 События и инструкции
+### 5.6 Events and instructions
 
-События и инструкции обслуживает **I**. Для MVP — foreground polling; предлагаем интервал 2 секунды при активном экране. При ошибках backoff, без параллельных polling-запросов. Фоновый push/WebSocket не требуется в первой интеграции.
+**I** serves events and instructions. For the MVP, use foreground polling; we propose a 2-second interval while the screen is active. Back off on errors, without parallel polling requests. Background push/WebSocket is not required for the first integration.
 
-Первый GET events без `after` возвращает события с начала доступной истории. Ответ:
+The first GET events without `after` returns events from the start of available history. Response:
 
 ```json
 {
@@ -255,7 +255,7 @@ ID пути и тела совпадают. Повтор с теми же пол
       "session_id": "SESSION_UUID",
       "model_version": "demo-room-v1",
       "target_element_ids": ["door-01"],
-      "text": "Снимите правый край проёма с другого ракурса.",
+      "text": "Capture the right edge of the opening from another angle.",
       "language": "ru",
       "state": "pending",
       "target_region": null,
@@ -267,11 +267,11 @@ ID пути и тела совпадают. Повтор с теми же пол
 }
 ```
 
-- Доставка at-least-once; клиент дедуплицирует по event_id, сохраняет курсор **после** применения событий. При has_more продолжает немедленно, иначе ждёт следующий polling.
-- Типы MVP: `instruction.created`, `instruction.updated`, `instruction.cancelled` — каждый содержит полный объект instruction; `session.updated` содержит объект состояния из **I** GET session. Неизвестный тип можно пропустить с логированием, не ломая polling.
-- `revision` инструкции монотонно растёт. Клиент не применяет старую/равную ревизию поверх новой. Состояния: `pending`, `collecting`, `satisfied`, `cannot_complete`, `cancelled`.
-- При истечении курсора — 410 `cursor_expired`. GET instructions возвращает `{"instructions":[...],"resume_cursor":"..."}`: полный текущий снимок заданий, включая закрытые, и курсор одной атомарной серверной точки. Клиент заменяет локальный список, запрашивает **I** GET session, продолжает events с resume_cursor.
-- Для v0.1 `target_region` и `audio` всегда null. Их непустые схемы согласовать отдельно; текст остаётся основным представлением. Не получать пространственные координаты разбором текста.
+- Delivery is at-least-once; the client deduplicates by event_id and saves the cursor **after** applying events. If has_more is true, continue immediately; otherwise wait until the next poll.
+- MVP types: `instruction.created`, `instruction.updated`, `instruction.cancelled` — each contains the full instruction object; `session.updated` contains the state object from **I** GET session. Unknown types may be logged and skipped without breaking polling.
+- Instruction `revision` increases monotonically. The client does not apply an older or equal revision over a newer one. States: `pending`, `collecting`, `satisfied`, `cannot_complete`, `cancelled`.
+- An expired cursor returns 410 `cursor_expired`. GET instructions returns `{"instructions":[...],"resume_cursor":"..."}`: a complete current instruction snapshot, including closed instructions, and a cursor from the same atomic server point. The client replaces its local list, requests **I** GET session, and resumes events from resume_cursor.
+- In v0.1, `target_region` and `audio` are always null. Agree their non-null schemas separately; text remains the primary representation. Do not derive spatial coordinates by parsing text.
 
 **I** POST response, JSON:
 
@@ -288,13 +288,13 @@ ID пути и тела совпадают. Повтор с теми же пол
 }
 ```
 
-I проверяет принятые наблюдения непосредственно в G, если их ещё нет в локальной проекции событий. Не полагается только на утверждение телефона. Неизвестный ID → 409 `evidence_not_accepted`, G недоступен → 503; клиент сохраняет ответ в отдельной очереди и повторяет без повторной загрузки файлов. Геометрия ещё обрабатывается — допустимо принять ответ и оставить задание collecting.
+I checks accepted observations directly with G if they are not yet present in its local event projection. It does not rely solely on the phone's claim. Unknown ID → 409 `evidence_not_accepted`; G unavailable → 503. The client retains the response in a separate queue and retries without uploading files again. If geometry is still processing, the response may be accepted while the instruction remains collecting.
 
-Действия: `acknowledged`, `observations_submitted`, `cannot_complete`, `message`. Для observations_submitted нужен непустой список **принятых** наблюдений этой сессии, связанных с instruction_id; для остальных — пустой список. Для message нужен непустой text; для cannot_complete text может содержать причину. MVP input_mode: `button | typed`; `voice` — будущее расширение.
+Actions: `acknowledged`, `observations_submitted`, `cannot_complete`, `message`. observations_submitted requires a nonempty list of **accepted** observations from this session linked to instruction_id; the other actions require an empty list. message requires nonempty text; for cannot_complete, text may contain a reason. MVP input_mode: `button | typed`; `voice` is a future extension.
 
-Ответ: `{"response_id":"RESPONSE_UUID","status":"accepted"}`. Это приём ответа, не подтверждение достаточности evidence. При изменившейся instruction revision — 409 `stale_instruction` с актуальной инструкцией в details. При новой осознанной отправке после конфликта — новый response_id. Успешный повтор того же response_id/body возвращает исходную квитанцию **до** проверки текущей revision; другой body того же ID — 409.
+Response: `{"response_id":"RESPONSE_UUID","status":"accepted"}`. This acknowledges the response, not the sufficiency of evidence. If the instruction revision has changed, return 409 `stale_instruction` with the current instruction in details. A new intentional submission after a conflict uses a new response_id. A successful retry with the same response_id/body returns the original receipt **before** checking the current revision; a different body for the same ID returns 409.
 
-### 5.7 Завершение и два независимых состояния
+### 5.7 Completion and two independent states
 
 **I** POST complete, JSON:
 
@@ -308,19 +308,19 @@ I проверяет принятые наблюдения непосредст�
 }
 ```
 
-Перед запросом клиент останавливает захват, фиксирует непустой inventory без дубликатов и ждёт всех квитанций G. Активные pending/collecting задания у I → 409 `instructions_pending`. Повтор успешно принятого completion_id/body возвращает квитанцию той же операции; изменённый body того же ID → 409. Другой completion_id при незавершённой операции закрытия → 409 `completion_in_progress`.
+Before requesting completion, the client stops capture, freezes a nonempty inventory without duplicates, and waits for all G receipts. Active pending/collecting instructions in I → 409 `instructions_pending`. Repeating an accepted completion_id/body returns the receipt for the same operation; a changed body for the same ID → 409. A different completion_id while a closing operation is unfinished → 409 `completion_in_progress`.
 
-**Предложенный протокол закрытия между сервисами:**
+**Proposed interservice closing protocol:**
 
-1. I атомарно сохраняет completion-запрос, ставит state=closing, completion.status=pending и прекращает создавать/менять задания съёмки. Отвечает 202 после сохранения операции: `{"session_id":"SESSION_UUID","completion":{"completion_id":"COMPLETION_UUID","status":"pending","error":null}}`. Повторы — 200 с текущим состоянием той же операции, не новые задания обработки.
-2. I вызывает служебный seal у G (§5.8) с тем же completion_id и inventory. G атомарно сверяет точное множество ID/hash и закрывает приём новых ID. Это исключает гонку между сверкой и upload.
-3. При inventory mismatch G отвечает 409, оставляя набор открытым. I отмечает completion.status=rejected с деталями, возвращается в capturing и публикует session.updated. Клиент исправляет inventory/дозагружает данные и создаёт **новый** completion_id. Повтор старого запроса возвращает ту же отклонённую операцию, не запускает её заново.
-4. При timeout/недоступности G I остаётся closing и повторяет seal с тем же ID. Нельзя считать набор открытым или возвращаться в capturing, пока результат неизвестен: G мог уже успешно закрыть его. Состояние операции хранится долговременно, переживает рестарт I.
-5. После подтверждения seal I ставит completion.status=sealed, state=waiting_geometry. G строит окончательную геометрию по зафиксированному набору. Затем I переходит в analyzing и completed (либо failed), привязав анализ к конкретной geometry_revision.
+1. I atomically stores the completion request, sets state=closing and completion.status=pending, and stops creating or changing capture instructions. It returns 202 after persisting the operation: `{"session_id":"SESSION_UUID","completion":{"completion_id":"COMPLETION_UUID","status":"pending","error":null}}`. Retries return 200 with the current state of the same operation, not new processing jobs.
+2. I calls G's internal seal endpoint (§5.8) with the same completion_id and inventory. G atomically checks the exact set of IDs/hashes and stops accepting new IDs. This prevents a race between reconciliation and upload.
+3. On an inventory mismatch, G returns 409 and leaves the set open. I sets completion.status=rejected with details, returns to capturing, and publishes session.updated. The client corrects the inventory/uploads missing data and creates a **new** completion_id. Repeating the old request returns the same rejected operation without restarting it.
+4. If G times out or is unavailable, I remains closing and retries seal with the same ID. It must not assume the set is open or return to capturing while the outcome is unknown: G may already have sealed it successfully. The operation state is durable and survives an I restart.
+5. Once seal is confirmed, I sets completion.status=sealed and state=waiting_geometry. G builds final geometry from the frozen set. I then transitions to analyzing and completed (or failed), binding the analysis to a specific geometry_revision.
 
-У G после seal новые наблюдения/сегменты → 409 `session_closed`; точный повтор уже принятого наблюдения допустим. При ошибке геометрии закрытый набор не открывается автоматически. Детали повторного запуска backend-обработки согласовать отдельно; новые данные после закрытия отправляются в follow-up session.
+After seal, new observations/segments in G → 409 `session_closed`; an exact retry of an already accepted observation is allowed. A geometry error does not automatically reopen the sealed set. Agree backend processing retry details separately; new data after closure is submitted in a follow-up session.
 
-**G GET session** — геометрия:
+**G GET session** — geometry:
 
 ```json
 {
@@ -339,11 +339,11 @@ I проверяет принятые наблюдения непосредст�
 }
 ```
 
-`capture_state`: open | sealed; `processing_state`: idle | processing | ready | failed. `revision` — версия состояния G; `geometry_revision` — nullable номер последнего **готового** неизменяемого результата. Пока строится следующий результат, предыдущий может быть доступен; его evidence_observation_ids явно указывают использованные кадры. При geometry_revision=null список evidence/artifacts пуст. Готовность геометрии по подмножеству не означает готовность всех 12 принятых кадров. Финальная геометрия после seal должна явно покрывать весь inventory либо иметь error; не скрывать исключённые/необработанные кадры.
+`capture_state`: open | sealed; `processing_state`: idle | processing | ready | failed. `revision` is G's state version; `geometry_revision` is the nullable number of the latest **ready**, immutable result. While the next result is being built, the previous one may remain available; its evidence_observation_ids explicitly identify the frames used. When geometry_revision=null, evidence/artifacts lists are empty. Geometry ready for a subset does not mean all 12 accepted frames are ready. Final geometry after seal must explicitly cover the entire inventory or contain an error; do not hide excluded/unprocessed frames.
 
-`artifacts`: список `{artifact_id, kind, url, media_type, byte_length, sha256}`, где kind = point_cloud | reconstructed_model; тип файла задаёт media_type (формат согласовать, например PLY для point_cloud). Все элементы относятся к указанной geometry_revision. URL — путь G либо подписанный HTTPS URL. Отсутствие артефактов явно представляется пустым списком. Alignment и coverage пока null (§7).
+`artifacts`: a list of `{artifact_id, kind, url, media_type, byte_length, sha256}`, where kind = point_cloud | reconstructed_model; media_type specifies the file type (agree a format, such as PLY for point_cloud). All entries belong to the specified geometry_revision. A URL is a G path or a signed HTTPS URL. No artifacts is explicitly represented by an empty list. Alignment and coverage are null for now (§7).
 
-**I GET session / session.updated payload** — инспекция:
+**I GET session / session.updated payload** — inspection:
 
 ```json
 {
@@ -357,41 +357,41 @@ I проверяет принятые наблюдения непосредст�
 }
 ```
 
-`state`: capturing | closing | waiting_geometry | analyzing | completed | failed. `completion` = null до первой операции; затем последняя операция со status pending | rejected | sealed. Отклонение закрытия относится к completion.error, сбой анализа — к верхнеуровневому error. Операции дедуплицируются и сохраняют собственное состояние; повтор старого completion_id возвращает состояние именно этой операции: `{"session_id":"...","completion":{...}}`, а актуальное состояние всегда берётся через GET session. `geometry_revision` I — версия геометрии, используемая текущим/завершённым анализом; не обязана равняться самой новой версии G. Клиент хранит revisions обоих сервисов отдельно.
+`state`: capturing | closing | waiting_geometry | analyzing | completed | failed. `completion` is null before the first operation; afterward it represents the latest operation with status pending | rejected | sealed. Closing rejection belongs in completion.error; analysis failure belongs in the top-level error. Operations are deduplicated and retain their own state; retrying an old completion_id returns that specific operation's state: `{"session_id":"...","completion":{...}}`. Always retrieve the current session state through GET session. I's `geometry_revision` is the geometry version used by the current/completed analysis; it need not equal G's newest version. The client stores each service's revisions separately.
 
-До closing I может анализировать evidence и выдавать задания, оставаясь в capturing. После закрытия новые задания съёмки не создаются в этой сессии. Если финальный анализ требует досъёмки, result.outcome=needs_more_data; пользователь создаёт новую сессию у G и I с parent_session_id, и I создаёт задания уже для неё.
+Before closing, I may analyze evidence and issue instructions while remaining in capturing. After closure, no new capture instructions are created in this session. If final analysis requires more capture, result.outcome=needs_more_data; the user creates a new session in G and I with parent_session_id, and I creates instructions for the new session.
 
-Для I completed поле result:
+For I completed, the result field is:
 
 ```json
 {
   "outcome": "needs_more_data",
   "analysis_origin": "mock",
-  "summary": "Недостаточно данных о правой стороне проёма.",
+  "summary": "Insufficient evidence for the right side of the opening.",
   "evidence_observation_ids": ["OBSERVATION_UUID"],
   "report_url": null
 }
 ```
 
-`outcome`: issues_found | no_issues_detected | needs_more_data; `analysis_origin`: live_model | recorded_model | mock. Evidence IDs принадлежат этой сессии. `no_issues_detected` — результат текущего анализа, не сертифицированная приёмка. report_url — nullable HTTPS URL существующего отчёта. Ошибки используют формат §8. Загрузка, готовность геометрии и итог инспекции — три отдельных состояния UI.
+`outcome`: issues_found | no_issues_detected | needs_more_data; `analysis_origin`: live_model | recorded_model | mock. Evidence IDs belong to this session. `no_issues_detected` is the result of the current analysis, not certified acceptance. report_url is a nullable HTTPS URL for an existing report. Errors use the format in §8. Upload, geometry readiness, and inspection outcome are three separate UI states.
 
-### 5.8 Прямое взаимодействие микросервисов (предложение MVP)
+### 5.8 Direct microservice communication (MVP proposal)
 
-Эти маршруты вызывают **сервисы**, не телефон. Для MVP предлагаем HTTP + долговременную очередь уведомлений; брокер событий не обязателен. Конкретный транспорт согласуется владельцами backend. Межсервисная авторизация проверяет identity отправителя и доступ к проекту.
+These routes are called by **services**, not the phone. For the MVP, we propose HTTP plus a durable notification queue; an event broker is optional. Backend owners agree the specific transport. Interservice authorization checks sender identity and project access.
 
-| Принимающий сервис | Служебный маршрут | Кто вызывает / зачем |
+| Receiving service | Internal route | Caller / purpose |
 |---|---|---|
-| G | `GET /internal/v1/sessions/{s}/registration` | I: исходная конфигурация из PUT session, без изменений |
-| G | `GET /internal/v1/sessions/{s}/observations/{o}` | I: точный frame.json и доступ к исходным файлам |
-| G | `GET /internal/v1/sessions/{s}/observations/{o}/files/{name}` | I: rgb.jpg, depth.f32, confidence.u8 или frame.json; другие имена запрещены |
-| G | `POST /internal/v1/sessions/{s}/seal` | I: completion_id + inventory из POST complete; закрыть набор атомарно |
-| I | `POST /internal/v1/geometry-events` | G: уведомить о приёме/геометрии/ошибках |
+| G | `GET /internal/v1/sessions/{s}/registration` | I: original PUT session configuration, unchanged |
+| G | `GET /internal/v1/sessions/{s}/observations/{o}` | I: exact frame.json and access to source files |
+| G | `GET /internal/v1/sessions/{s}/observations/{o}/files/{name}` | I: rgb.jpg, depth.f32, confidence.u8, or frame.json; other names are forbidden |
+| G | `POST /internal/v1/sessions/{s}/seal` | I: completion_id + inventory from POST complete; atomically seal the set |
+| I | `POST /internal/v1/geometry-events` | G: notify about acceptance/geometry/errors |
 
-I также вызывает G GET uploads и GET session из §5 со служебной авторизацией для сверки и получения результатов. Регистрационные данные возвращаются в точности в формате §5.2. GET observation возвращает `{"metadata":{...frame.json...},"metadata_sha256":"...","files":[{"name":"rgb.jpg","url":"/internal/v1/.../files/rgb.jpg"}]}`; список files включает все сохранённые файлы, включая frame.json. Для проверки metadata_sha256 использовать **исходные байты frame.json** из file endpoint, не пересериализованный metadata. G проверяет scope на каждом запросе, данные не становятся публичными по знанию UUID. Файлы геометрии I получает по artifact URLs из G GET session.
+I also calls G GET uploads and GET session from §5 with service authorization to reconcile data and obtain results. Registration data is returned in exactly the §5.2 format. GET observation returns `{"metadata":{...frame.json...},"metadata_sha256":"...","files":[{"name":"rgb.jpg","url":"/internal/v1/.../files/rgb.jpg"}]}`; files includes all stored files, including frame.json. To verify metadata_sha256, use the **original frame.json bytes** from the file endpoint, not reserialized metadata. G checks scope on every request; knowing a UUID does not make data public. I obtains geometry files through artifact URLs from G GET session.
 
-Seal: 200 `{"session_id":"SESSION_UUID","completion_id":"COMPLETION_UUID","capture_state":"sealed"}` только после durable commit. Точный повтор возвращает тот же результат даже при последующих сбоях обработки; inventory mismatch → 409 `inventory_mismatch`, набор остаётся open. Если уже закрыт другим completion_id → 409 `session_closed`; I должен сверить состояние и показать конфликт, а не бесконечно повторять. Для успешного seal G гарантирует постановку финальной обработки в восстанавливаемую очередь.
+Seal returns 200 `{"session_id":"SESSION_UUID","completion_id":"COMPLETION_UUID","capture_state":"sealed"}` only after a durable commit. An exact retry returns the same result even after subsequent processing failures; an inventory mismatch → 409 `inventory_mismatch`, and the set remains open. If already sealed by another completion_id → 409 `session_closed`; I must reconcile the state and show a conflict instead of retrying indefinitely. A successful seal guarantees that G queues final processing durably so it can be recovered.
 
-Пример G → I:
+G → I example:
 
 ```json
 {
@@ -411,32 +411,32 @@ Seal: 200 `{"session_id":"SESSION_UUID","completion_id":"COMPLETION_UUID","captu
 }
 ```
 
-Типы: observation.accepted (обязательны observation_id/hash), geometry.ready (geometry_revision обязателен; observation_id/hash=null), geometry.failed (error обязателен; observation_id/hash=null). geometry_revision при failure = null; событие не обозначает готовый результат. Для финальной обработки после seal completion_id обязателен; для промежуточной — null. source_revision — версия состояния G на момент события, **не** revision I. Список evidence и ссылки на артефакты I читает в G; историческая geometry_revision из события может уже быть заменена в текущем состоянии — I использует явно выбранную актуальную версию, а не выдаёт её за старую.
+Types: observation.accepted (observation_id/hash required), geometry.ready (geometry_revision required; observation_id/hash=null), geometry.failed (error required; observation_id/hash=null). On failure, geometry_revision = null; the event does not denote a ready result. For final processing after seal, completion_id is required; for intermediate processing, it is null. source_revision is G's state version at event time, **not** I's revision. I reads evidence lists and artifact links from G; the historical geometry_revision in an event may already have been superseded in current state — I uses an explicitly selected current version without presenting it as the old one.
 
-I отвечает 202 `{"event_id":"geometry-evt-17","status":"queued"}` после durable записи в inbox; точный повтор — 200, другое содержимое того же event_id — 409. G фиксирует обязательство отправить событие вместе с принятием кадра/результата (outbox либо эквивалент), повторяет до подтверждения. Если сессия ещё не зарегистрирована в I, I сохраняет уведомление до регистрации и не запускает анализ без проверки конфигурации/прав.
+I returns 202 `{"event_id":"geometry-evt-17","status":"queued"}` after a durable inbox write; an exact retry returns 200, and different content for the same event_id returns 409. G records the obligation to send the event together with acceptance of the frame/result (outbox or equivalent), and retries until acknowledged. If the session is not yet registered with I, I retains the notification until registration and does not start analysis before verifying configuration and permissions.
 
-События могут дублироваться и приходить не по порядку. Не отбрасывать observation.accepted только потому, что уже видели большую source_revision: это другой кадр. I дедуплицирует event_id и observation_id/hash, а состояние геометрии сверяет с G. После своей регистрации/перезапуска I сверяет GET uploads и GET session, восстанавливая пропущенные уведомления. Телефон в этом восстановлении не участвует и файлы между сервисами не переносит.
+Events may be duplicated and arrive out of order. Do not discard observation.accepted merely because a higher source_revision has already been seen: it represents another frame. I deduplicates event_id and observation_id/hash, and reconciles geometry state with G. After registration/restart, I reconciles GET uploads and GET session to recover missed notifications. The phone does not participate in recovery or transfer files between services.
 
-## 6. Координаты — обязательный пункт согласования
+## 6. Coordinates — mandatory agreement point
 
-- Все JSON-матрицы — **массивы строк**; умножаются на векторы-столбцы. Swift SIMD хранит столбцы: сериализация в приложении явно переставляет индексы.
-- `T_world_camera` — 4×4, **camera → world текущего segment**, не world → camera. Метры, правая система; world Y вверх, камера смотрит вдоль −Z, её X вправо, Y вверх.
-- `K_rgb` — 3×3 intrinsics сохранённого исходного RGB; не экранного превью.
-- Proposed pixel convention: начало сверху слева, u вправо, v вниз. `K_depth = diag(depthWidth/rgbWidth, depthHeight/rgbHeight, 1) × K_rgb`.
-- Для пикселя (u,v) с depth d: `p_optical = d × inverse(K_depth) × [u,v,1]`; затем `p_camera = diag(1,-1,-1) × p_optical`; затем `p_world = T_world_camera × [p_camera,1]`.
-- Это предлагаемое соглашение. Pixel-center convention, соответствие RGB/depth и знак осей **обязательно проверить на реальном наборе** до фиксации v1. Не считать синтетические тесты доказательством качества LiDAR.
-- В backend точка переводится в BIM через отдельно вычисленное `T_bim_world`. Исходные poses и measurements не переписывать под BIM и не притягивать измеренные дефекты к проектным поверхностям.
-- Поля `depth_to_rgb_mapping`/`coordinates` текущих локальных файлов пояснительные; сервер использует согласованную схему v0.1, а не парсит произвольный текст как алгоритм.
+- All JSON matrices are **arrays of rows**, multiplied by column vectors. Swift SIMD stores columns: app serialization explicitly reorders indices.
+- `T_world_camera` is 4×4, **camera → current segment world**, not world → camera. Metres, right-handed; world Y is up, the camera looks along −Z, with X right and Y up.
+- `K_rgb` is the 3×3 intrinsics matrix for the saved original RGB, not the screen preview.
+- Proposed pixel convention: origin at top left, u right, v down. `K_depth = diag(depthWidth/rgbWidth, depthHeight/rgbHeight, 1) × K_rgb`.
+- For pixel (u,v) at depth d: `p_optical = d × inverse(K_depth) × [u,v,1]`; then `p_camera = diag(1,-1,-1) × p_optical`; then `p_world = T_world_camera × [p_camera,1]`.
+- This is a proposed convention. Pixel-center convention, RGB/depth correspondence and axis signs **must be checked on real capture data** before freezing v1. Synthetic tests do not establish LiDAR quality.
+- The backend transforms a point into BIM through a separately computed `T_bim_world`. Do not rewrite source poses/measurements into BIM or force measured defects onto designed surfaces.
+- Current local-file `depth_to_rgb_mapping`/`coordinates` fields are explanatory; the server uses the agreed v0.1 schema rather than interpreting arbitrary prose as an algorithm.
 
-## 7. Alignment, покрытие и голос: следующий этап
+## 7. Alignment, coverage, and voice: next stage
 
-Не блокируют первую передачу RGB-D и текстовый цикл. Непустые payloads для этих возможностей **пока не согласованы**.
+These do not block the first RGB-D transfer and text interaction loop. Non-null payloads for these capabilities **have not yet been agreed**.
 
-Для будущего alignment нужны минимум model_version, segment_id, alignment_id, revision, status и T_bim_world. Для покрытия — model_version, revision, ссылки на evidence и явное отличие unknown от измеренного. До согласования/получения валидных данных телефон показывает модель отдельно, без позиции камеры, процента покрытия и пространственных подсказок. Geometry Service — владелец расчётов; телефон получает их непосредственно у G. AI Inspector получает те же результаты межсервисным запросом.
+Future alignment requires at least model_version, segment_id, alignment_id, revision, status, and T_bim_world. Coverage requires model_version, revision, evidence references, and an explicit distinction between unknown and measured. Until valid data is agreed and received, the phone displays the model separately, without camera position, coverage percentage, or spatial guidance. Geometry Service owns the calculations; the phone retrieves them directly from G. AI Inspector retrieves the same results through interservice requests.
 
-Для голоса сначала можно озвучивать существующий text на телефоне без изменения API. Передача/распознавание аудио и input_mode=voice — отдельное расширение. Ошибка голоса не должна блокировать текст.
+Voice can initially use on-device speech synthesis of existing text without API changes. Audio transfer/recognition and input_mode=voice are a separate extension. Voice failure must not block text.
 
-## 8. Ошибки, повторы и сохранность
+## 8. Errors, retries and preservation
 
 ```json
 {
@@ -447,43 +447,43 @@ I отвечает 202 `{"event_id":"geometry-evt-17","status":"queued"}` пос
 }
 ```
 
-| HTTP | Поведение клиента |
+| HTTP | Client behavior |
 |---|---|
-| 400 / 422 | Исправить запрос/данные; не повторять неизменённое автоматически |
-| 401 / 403 | Остановить отправку, сохранить очередь; восстановить доступ |
-| 404 | Проверить project/session/model/instruction, показать ошибку |
-| 409 | Разобрать code/details; сверить состояние, не менять ID вслепую |
-| 410 | Восстановить снимок instructions и курсор |
-| 413 | Набор слишком велик; не менять RGB/depth без изменения метаданных и явного решения |
-| 429 | Повтор после Retry-After |
-| 5xx / сеть / timeout | Повтор той же операции с теми же ID и байтами, backoff с jitter |
+| 400 / 422 | Correct the request/data; do not automatically retry unchanged |
+| 401 / 403 | Stop sending, retain the queue; restore access |
+| 404 | Check project/session/model/instruction; display the error |
+| 409 | Inspect code/details; reconcile state, do not blindly change IDs |
+| 410 | Restore the instruction snapshot and cursor |
+| 413 | Set too large; do not change RGB/depth without updating metadata and an explicit decision |
+| 429 | Retry after Retry-After |
+| 5xx / network / timeout | Retry the same operation with the same IDs and bytes, using backoff with jitter |
 
-Предлагаемый backoff: 1, 2, 4, 8… до 30 секунд; соблюдать Retry-After, если он больше. Конкретные таймауты/лимиты — согласовать с backend. Очередь сохранять до сети, восстанавливать после перезапуска, различать saved/accepted/processed. Локальные файлы не удалять после одного сетевого запроса; retention согласовать отдельно. Payloads кадров не писать в серверные/клиентские debug-логи.
+Proposed backoff: 1, 2, 4, 8… up to 30 seconds; honor Retry-After if longer. Agree specific timeouts/limits with the backend. Persist the queue before network operations, restore it after restart, and distinguish saved/accepted/processed. Do not delete local files after a single network request; agree retention separately. Do not write frame payloads to server/client debug logs.
 
-## 9. Что нужно подтвердить коллеге
+## 9. Items for teammate confirmation
 
-- [ ] Прямые API телефона к G и I; G ↔ I без участия телефона. Утверждены владельцы маршрутов и межсервисная авторизация.
-- [ ] Одно наблюдение = один RGB-D кадр; PLY формирует backend, либо отдельно согласовываем требование простого экспорта.
-- [ ] Принимаем JPEG + float32 LE depth + uint8 confidence + JSON; nullable confidence.
-- [ ] Принимаем направления матриц, единицы и сегменты; вместе проверяем реальный пример.
-- [ ] Принимаем multipart, idempotency, durable acknowledgements G; регистрацию общей сессии и координированное закрытие через I → G seal.
-- [ ] Принимаем polling, revisions и формат текстовых инструкций/ответов.
-- [ ] Назначен владелец подготовки USDZ и таблицы element IDs.
-- [ ] Предоставлены два base URL, способы выдачи клиентских токенов, лимиты и тестовые серверы.
-- [ ] Утверждён механизм G → I уведомлений, inbox/outbox и восстановление состояния без телефона.
-- [ ] Согласованы необходимость/формат alignment и coverage для следующего этапа.
+- [ ] Direct phone APIs to G and I; G ↔ I without the phone. Route owners and interservice authorization are agreed.
+- [ ] One observation = one RGB-D frame; the backend generates PLY, or a simple export requirement is agreed separately.
+- [ ] Accept JPEG + float32 LE depth + uint8 confidence + JSON; nullable confidence.
+- [ ] Accept matrix directions, units, and segments; jointly validate a real example.
+- [ ] Accept multipart, idempotency, and G durable acknowledgements; shared session registration and coordinated closure through I → G seal.
+- [ ] Accept polling, revisions, and the text instruction/response format.
+- [ ] Assign an owner for USDZ preparation and the element ID table.
+- [ ] Provide two base URLs, client token issuance methods, limits, and test servers.
+- [ ] Agree G → I notifications, inbox/outbox, and recovery without the phone.
+- [ ] Agree whether alignment and coverage are needed and their formats for the next stage.
 
-## 10. Приёмка первой интеграции
+## 10. Acceptance checks for the first integration
 
-1. Backend читает реальный JPEG/depth/confidence, проверяет хеши, размеры и intrinsics; восстанавливает точки без неявного изменения осей.
-2. Перекрывающиеся реальные кадры проверены геометрически; зафиксирована измеренная ошибка, не обещание точности.
-3. Прервать соединение во время upload и после приёма сервером: повтор не дублирует наблюдение; неполный набор не accepted.
-4. Перезапуск приложения сохраняет ID/очередь; новый ARKit segment не смешивается со старым.
-5. Текстовая инструкция приводит к дополнительному observation_id и ответу; дубликаты/старые revisions не портят UI.
-6. Неверный inventory приводит к rejected completion без закрытия G; правильный seal закрывает набор один раз. Timeout после seal и рестарт I не открывают его повторно.
-7. При недоступном I телефон всё ещё загружает в G; после восстановления I получает данные напрямую и выдаёт задания. События до регистрации I, дубликаты и обратный порядок доставки не теряют evidence.
-8. Mock/synthetic/recorded режимы видны явно; успешная загрузка не отображается как успешная инспекция.
+1. The backend reads real JPEG/depth/confidence, validates hashes, sizes, and intrinsics, and reconstructs points without implicit axis changes.
+2. Overlapping real frames are checked geometrically; measured error is recorded, not a promise of accuracy.
+3. Interrupt the connection during upload and after server acceptance: retries do not duplicate observations; an incomplete set is not accepted.
+4. Application restart preserves IDs/the queue; a new ARKit segment is not mixed with the old one.
+5. A text instruction leads to an additional observation_id and response; duplicates/old revisions do not corrupt the UI.
+6. An incorrect inventory produces a rejected completion without sealing G; a correct seal closes the set once. A timeout after seal and an I restart do not reopen it.
+7. When I is unavailable, the phone still uploads to G; after recovery, I obtains data directly and issues instructions. Events before I registration, duplicates, and reverse delivery order do not lose evidence.
+8. Mock/synthetic/recorded modes are clearly visible; successful upload is not displayed as a successful inspection.
 
-## 11. Изменение схемы, 2026-10-27
+## 11. Schema change, 2026-10-27
 
-Эта редакция заменяет первоначальную схему единого входа через Orchestrator API. Имя файла сохранено, чтобы ранее отправленная ссылка продолжала работать. Формат frame.json и schema_version 0.1 не меняются; транспорт ещё не был реализован/согласован. Подтверждена топология с двумя прямыми подключениями телефона; детали регистрации, внутренних уведомлений и seal — предложение для коллег, а не утверждённая реализация.
+This revision replaces the original single-entry-point design through the Orchestrator API. The filename is retained so previously shared links continue to work. The frame.json format and schema_version 0.1 are unchanged; transport had not yet been implemented/agreed. The topology with two direct phone connections is confirmed; registration details, internal notifications, and seal are proposals for teammates, not an approved implementation.

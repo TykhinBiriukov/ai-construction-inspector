@@ -1,30 +1,30 @@
-> **Редакция 8 — 28.10.2026: Geometry ZIP parts, приоритет над прежним транспортом ниже.** Олег согласовал формат файлов из MOBILE_CAPTURE_PROMPT и деление большого набора на самостоятельные ZIP. Телефон не вызывает `/sessions/extract`; после Storage он уведомляет только Inspector. Старые завершения/сессии сохраняют прежний транспорт.
+> **Revision 8 — 28 October 2026: Geometry ZIP parts take precedence over the earlier transport below.** Oleg approved the MOBILE_CAPTURE_PROMPT file format and splitting large captures into independent ZIP archives. The phone does not call `/sessions/extract`; after Storage upload it notifies only Inspector. Existing completions/sessions retain their previous transport.
 >
-> Каждый ZIP: `capture.json`, `mesh.ply` (для LiDAR), `frames/{original_frame_id}/{rgb.jpg,metadata.json,depth.bin?,confidence.bin?}`. В metadata schema_version=1.0, intrinsics.K/width/height, pose.T_world_from_camera; depth копируется без изменения float32 значений. В capture.json project_id, session_id, frame_count именно этой части. RGB-only: depth/confidence=null; mesh=null, если mesh отсутствует. Новые ID кадров не создаются.
+> Each ZIP contains `capture.json`, `mesh.ply` (for LiDAR), and `frames/{original_frame_id}/{rgb.jpg,metadata.json,depth.bin?,confidence.bin?}`. Metadata uses schema_version=1.0, intrinsics.K/width/height and pose.T_world_from_camera; depth is copied without changing float32 values. capture.json contains project_id, session_id and the frame_count for that part. RGB-only: depth/confidence=null; mesh=null when no mesh is available. No new frame IDs are created.
 >
-> Части содержат только один segment_id; mesh этого сегмента повторяется в каждой его части. Это самостоятельные ZIP, не бинарные куски одного ZIP. Максимум части: min(server max_archive_bytes − 64 KiB, 15 MiB). Если mesh + один кадр превышают лимит, экспорт явно блокируется с сохранением оригиналов; автоматическое дробление одной сетки/кадра пока не поддержано.
+> Each part contains only one segment_id; that segment's mesh is repeated in each of its parts. These are independent ZIP archives, not binary chunks of one ZIP. Maximum part size: min(server max_archive_bytes − 64 KiB, 15 MiB). If the mesh plus one frame exceeds this limit, export is explicitly blocked while originals are retained; automatic splitting of a single mesh/frame is not yet supported.
 >
-> Upload plan: `kind=geometry_archive`, общий completion_id, объект `capture-0001.zip` (далее 0002...), media_type=application/zip, фактические byte_length/sha256. Ключ выдаёт сервер: `{session.storage.key_prefix}geometry/{completion_id}/{name}`. Корень bucket не используется.
+> Upload plan: `kind=geometry_archive`, a shared completion_id, object `capture-0001.zip` (then 0002...), media_type=application/zip and actual byte_length/sha256. The server assigns the key: `{session.storage.key_prefix}geometry/{completion_id}/{name}`. The bucket root is not used.
 >
-> После всех частей `kind=capture_manifest` загружает capture-manifest.json: schema_version=1.0, format=geometry_capture_parts_v1, session_id, project_id, completion_id, frame_count всего набора и parts[]. Для каждой части: name, segment_id, frame_ids, depth_frame_ids (кадры с depth И confidence), byte_length, sha256, object_key. RGB-only/кадры без confidence помещаются в отдельные части с пустым depth_frame_ids; коллега может не скачивать эти ZIP.
+> After all parts, `kind=capture_manifest` uploads capture-manifest.json: schema_version=1.0, format=geometry_capture_parts_v1, session_id, project_id, completion_id, the full capture's frame_count and parts[]. Each part includes name, segment_id, frame_ids, depth_frame_ids (frames with BOTH depth AND confidence), byte_length, sha256 and object_key. RGB-only/frames without confidence go into separate parts with empty depth_frame_ids; consumers can avoid downloading these ZIPs.
 >
-> `/complete`: schema_version=0.1, completion_id, capture_ref={format:supabase_geometry_parts_v1, storage_id:capture-supabase, manifest_key, manifest_byte_length, manifest_sha256}. Inspector проверяет части последовательно и сохраняет принятые копии; возвращает обычную квитанцию. Возможность определяется через capture_formats `/v1/capabilities`; без поддержки новый клиент не начинает этот транспорт. Новый формат не означает автоматически настроенный Geometry — запуск вне текущего мобильного теста.
+> `/complete`: schema_version=0.1, completion_id, capture_ref={format:supabase_geometry_parts_v1, storage_id:capture-supabase, manifest_key, manifest_byte_length, manifest_sha256}. Inspector validates parts sequentially, retains accepted copies and returns the ordinary receipt. Support is negotiated through capture_formats in `/v1/capabilities`; the new client does not use this transport without it. The new format does not imply configured Geometry integration; that launch is outside the current mobile test.
 
-> **Редакция 7 — 28.10.2026, приоритет над упоминаниями обязательного финального ZIP ниже:** по согласованию с Олегом новые iPhone-сессии завершаются загрузкой отдельных `observations/<id>/{rgb.jpg,frame.json,depth.f32?,confidence.u8?}` через `kind=observation_files`, затем общего манифеста через `kind=capture_manifest`. Completion использует существующий `supabase_capture_v1` и выданный сервером ключ манифеста, фактические размер/SHA256. ID сессии, наблюдений, сегментов и исходные байты сохраняются. Набор 150 МБ не становится одним объектом Storage; облачный лимит отдельного файла остаётся 16 МиБ, манифеста — 4 МиБ. Inspector уже поддерживает этот формат; Geometry получает согласованный source reference от Inspector, не прямой вызов с телефона. Подготовленные, но ещё не отправленные ZIP без completion request мигрируют на файлы; запросы completion в полёте неизменны. Ранние наблюдения и финальный манифест ссылаются на одинаковые ID/байты. ZIP поддерживается для старых клиентов, но не обязателен для новых. Автоматическое подключение Geometry — отдельная настройка сервера.
+> **Revision 7 — 28 October 2026, superseding references below to a mandatory final ZIP:** as agreed with Oleg, new iPhone sessions complete by uploading individual `observations/<id>/{rgb.jpg,frame.json,depth.f32?,confidence.u8?}` through `kind=observation_files`, followed by the shared manifest through `kind=capture_manifest`. Completion uses the existing `supabase_capture_v1`, the server-issued manifest key and actual size/SHA256. Session, observation and segment IDs and source bytes are preserved. A 150 MB capture does not become one Storage object; cloud limits remain 16 MiB per file and 4 MiB per manifest. Inspector already supports this format; Geometry receives the agreed source reference from Inspector, not a direct phone call. Prepared but unsent ZIPs without a completion request migrate to files; in-flight completion requests remain unchanged. Early observations and the final manifest reference the same IDs/bytes. ZIP remains supported for older clients but is not mandatory for new ones. Automatic Geometry integration is separate server configuration.
 
-> **Редакция 6 — 28.10.2026:** в этот общий контракт включён согласованный с Олегом сценарий отдельного Localization Service: Inspector назначает задание → Localization напрямую руководит начальной привязкой через приложение → Inspector продолжает инспекцию, Localization параллельно отслеживает положение и покрытие. При потере привязки задание Inspector приостанавливается до восстановления. Без BIM локализация пропускается. API расширения в §13 — предложение для согласования владельцами, не реализованные endpoints. Финальный Inspector ZIP и существующий интерфейс Geometry не меняются. Ранние наблюдения передаются дополнительно через существующие signed upload plans. Старые S3/PNG-примеры ниже сохраняют исторический контекст; текущий транспорт описан в связанных руководствах, а онлайн-локализация — в §13.
+> **Revision 6 — 28 October 2026:** this shared contract includes the separate Localization Service workflow agreed with Oleg: Inspector assigns a task → Localization directly guides initial alignment through the app → Inspector continues inspection while Localization tracks position and coverage in parallel. Loss of alignment suspends the Inspector task until recovery. Localization is skipped without BIM. The API extensions in §13 are proposals for owner agreement, not implemented endpoints. The final Inspector ZIP and existing Geometry interface remain unchanged. Early observations are additionally transferred through existing signed upload plans. Earlier S3/PNG examples below retain historical context; linked guides describe current capture transport, and §13 describes online localization.
 
 > **Update 2026-10-27 — first-case implementation:** the current iPhone/Inspector transport is specified in [the server-owner integration guide](../../docs/inspector-server-integration.md) and [mobile integration status](../../docs/mobile-integration-status.md). Oleg approved Supabase **signed upload plans**, using a separate scoped Inspector device token. The S3 versioning, S3 completion examples and earlier direct Supabase-user proposal below are superseded for this first case. Geometry ZIP is a separate pending API extension; dispatch stays with Inspector. The remainder preserves the broader earlier proposal for reference.
 
-# iPhone → AI Inspector → Geometry Service + BIM / Display API — v0.1, редакция 6, на согласование
+# iPhone → AI Inspector → Geometry Service + BIM / Display API — v0.1, revision 6, for agreement
 
-Дата: 2026-10-28. **PROPOSED / НЕ СОГЛАСОВАНО МЕЖДУ ВСЕМИ УЧАСТНИКАМИ.** Документ задаёт предлагаемый интерфейс; наличие работающей реализации не подтверждено. Редакция 4 отражает уточнение владельца Inspector: session_id создаёт Inspector; iPhone сохраняет весь набор RGB-D в S3 и возвращает Inspector ссылку после завершения capture; Inspector запускает Geometry Service по этой ссылке. Прямой связи телефона с Geometry Service нет.
+Date: 2026-10-28. **PROPOSED / NOT AGREED BY ALL PARTICIPANTS.** This document defines a proposed interface; a working implementation is not established. Revision 4 reflects the Inspector owner's clarification: Inspector creates session_id; the iPhone stores the complete RGB-D capture in S3 and returns its reference to Inspector after capture completes; Inspector starts Geometry Service using that reference. The phone does not communicate directly with Geometry Service.
 
-Архитектурный контекст runtime взят из обсуждений «Design agent orchestrator» и «Open design orchestrator chat»; актуальный транспорт capture уточнён владельцем Inspector в этом чате. Детали Geometry Builder, iOS и BIM-провайдера согласуются с их владельцами.
+The runtime architecture context comes from the “Design agent orchestrator” and “Open design orchestrator chat” discussions; the Inspector owner clarified current capture transport in this chat. Geometry Builder, iOS and BIM-provider details require agreement with their owners.
 
-Мобильные уточнения редакции 5: новые кадры используют frame.json 0.2, поддерживается RGB-only без LiDAR, добавлены точные ответы upload-plans. Это предложение со стороны iOS; принятие серверными реализациями ещё требуется подтвердить. Лимиты остаются конфигурацией будущей интеграции. PNG остаётся текущим display API; интерактивная 3D-модель обсуждается отдельно и этой редакцией не объявляется согласованной.
+Revision 5 mobile clarifications: new frames use frame.json 0.2, RGB-only without LiDAR is supported, and exact upload-plans responses are added. This is an iOS-side proposal; acceptance by server implementations still needs confirmation. Limits remain configuration for future integration. PNG remains the current display API; an interactive 3D model is discussed separately and is not declared agreed in this revision.
 
-## 1. Границы и ответственность
+## 1. Scope and responsibilities
 
 ```mermaid
 flowchart LR
@@ -43,77 +43,77 @@ flowchart LR
     G -->|Geometry result| I
 ```
 
-- **Inspector I** создаёт capture session, назначает её разрешённому телефону, закрепляет project/room/model/policy и управляет состоянием. Принимает от телефона capture completion и ссылку на manifest, проверяет полный набор, фиксирует его неизменяемую версию и запускает G. Принимает результаты G, использует результаты L и вызывает Compare, сохраняет выводы и управляет отображением B. Во время начальной привязки агент ждёт: инструкции пользователю формирует L, API передаёт их без переписывания LLM.
-- **iPhone** получает session_id от I, сохраняет все captures под ним, загружает файлы в S3 и сообщает I о завершении после загрузки финального manifest. Не создаёт capture session_id и не вызывает G. Создаёт локальные UUID segment/observation/response/completion. Поддерживает локальное сохранение/повторы, текстовые задания и скачивание готовых BIM-картинок.
-- **S3** хранит исходные файлы и manifest в выделенном session prefix. Это файловое хранилище; оно не выполняет геометрическую обработку и не принимает решений об инспекции. Inspector управляет выдачей доступа; телефон не получает AWS secret keys или service credentials.
-- **Geometry Service G** принимает задания только от Inspector, читает разрешённый зафиксированный набор в S3 и возвращает фактическую геометрию с версиями и evidence refs. Не принимает uploads, session registration или команды от iPhone; не отправляет телефону события.
-- **BIM / Display Service B** входит в систему Inspector и предоставляет отдельный API. Хранит эталонный BIM и готовит PNG по команде I: выбранная комната, виртуальный ракурс, цель и проверенные результаты. Телефон имеет доступ на чтение. Подсветка/ракурс не меняют исходную BIM-геометрию.
-- **Localization Service L** — отдельный сервис. При наличии пригодной BIM-модели ведёт пользователя через приложение (дверь, пол, угол), вычисляет и проверяет привязку. После успеха возвращает управление заданиями I, продолжая отслеживание камеры и покрытия для обоих интерфейсов. При потере привязки временно забирает управление для восстановления. Инструкции L не требуют вызова LLM Inspector; транспорт через API I не меняет авторство. Подробный контракт и состояние управления — §13.
-- **Агент Inspector** выбирает полезную цель и объясняет результат. Runtime проверяет предложения и версии, сохраняет состояние и вызывает tools. Инспекционный pipeline принадлежит I; онлайн-привязка и покрытие принадлежат отдельному L, который автономно ведёт свой этап. Вызов LLM для каждого файла/кадра/render не требуется.
+- **Inspector I** creates a capture session, assigns it to an authorized phone, pins project/room/model/policy and owns state. It accepts capture completion and a manifest reference from the phone, validates the complete capture, pins its immutable version and starts G. It accepts G results, uses L results, invokes Compare, saves findings and controls B displays. During initial alignment the agent waits: L authors user instructions, and the API forwards them without LLM rewriting.
+- **iPhone** receives session_id from I, saves all captures under it, uploads files to S3 and notifies I of completion after the final manifest upload. It does not create the capture session_id or invoke G. It creates local segment/observation/response/completion UUIDs. It supports local persistence/retries, text instructions and downloads of prepared BIM images.
+- **S3** stores source files and the manifest under a dedicated session prefix. It is file storage; it neither processes geometry nor makes inspection decisions. Inspector grants access; the phone receives no AWS secret keys or service credentials.
+- **Geometry Service G** accepts tasks only from Inspector, reads the authorized pinned S3 capture and returns observed geometry with versions and evidence references. It accepts no uploads, session registrations or commands from the iPhone and sends no events to the phone.
+- **BIM / Display Service B** belongs to the Inspector system and exposes a separate API. It stores reference BIM and prepares PNGs on I's command: selected room, virtual viewpoint, target and verified results. The phone has read access. Highlighting/viewpoints do not change the source BIM geometry.
+- **Localization Service L** is a separate service. Given a suitable BIM model, it guides the user through the app (door, floor, corner), calculates and validates alignment. After success it returns task control to I while continuing camera and coverage tracking for both interfaces. If alignment is lost, it temporarily takes control for recovery. L's instructions do not require an Inspector LLM call; transport through I's API does not change authorship. §13 specifies the detailed contract and control state.
+- **Inspector agent** selects a useful target and explains results. The runtime validates proposals and versions, saves state and invokes tools. I owns the inspection pipeline; the separate L owns online alignment and coverage and runs its stage autonomously. No LLM call is required for every file/frame/render.
 
-Во время съёмки отображается инструкция текущего владельца управления: L при привязке/восстановлении, I при инспекции. Онлайн-положение и предварительное покрытие поступают от L; подтверждённое покрытие требует обработки evidence и проверки качества (§13). Inspector управляет ракурсом отдельной серверной BIM-картинки; пользователь может масштабировать её локально. Для хакатона — один проект и телефон. Эти решения подтверждены владельцем Inspector; конкретные service payloads остаются предложением команде.
+During capture, the current control owner supplies the displayed instruction: L during alignment/recovery, I during inspection. Online position and provisional coverage come from L; confirmed coverage requires evidence processing and quality checks (§13). Inspector controls the viewpoint of a separate server-generated BIM image; the user may zoom it locally. The hackathon scope is one project and phone. The Inspector owner confirmed these decisions; specific service payloads remain a team proposal.
 
-## 2. Реализованное и предлагаемое
+## 2. Implemented and proposed behavior
 
-По исходному документу у iOS есть локальная сессия/файлы, UUID, SHA-256, синтетические данные и код ARKit; сеть, auth и реальная геометрическая корректность ещё не подтверждены. Приложение находится в ios/, исходная схема — ios/AIInspector/Observation.swift. Локальная мобильная реализация уже поддерживает RGB-only и новые кадры 0.2; это не подтверждение серверной интеграции. Session ID теперь нужно принимать от I: это изменение локальной/сетевой интеграции приложения.
+According to the original document, iOS has local sessions/files, UUIDs, SHA-256, synthetic data and ARKit code; networking, auth and real geometric correctness are not yet verified. The app is in ios/ and the original schema is ios/AIInspector/Observation.swift. The local mobile implementation already supports RGB-only and new 0.2 frames; this does not establish server integration. The app must now accept the session ID from I, requiring a change to its local/network integration.
 
-Новые кадры используют **frame.json 0.2**; старые RGB-D кадры 0.1 остаются допустимыми. Бинарные соглашения RGB-D не меняются. Новый capture manifest, S3 upload plan, handoff I → G, WebSocket и серверные renders требуют реализации. Локальная демоинструкция не считается ответом живого AI.
+New frames use **frame.json 0.2**; legacy RGB-D 0.1 frames remain valid. RGB-D binary conventions do not change. The new capture manifest, S3 upload plan, I → G handoff, WebSocket and server renders require implementation. A local demo instruction is not a live AI response.
 
-## 3. Идентификаторы, доступ и версии
+## 3. Identifiers, access and versions
 
-- I создаёт session_id один раз и сохраняет его до доставки телефону. chat_id, inspection_id и capture session_id различаются. Одна инспекция может иметь несколько последовательных capture sessions; parent_session_id связывает досъёмку. Новая съёмка после sealed получает новый ID от I.
-- I закрепляет project_id, room_id, model_version, policy_version, capture_origin и input_mode. Повторная доставка assignment не создаёт новую сессию. Телефон хранит полученный ID после перезапуска и не подменяет его локальным UUID.
-- Клиент создаёт UUID segment_id, observation_id, response_id, completion_id и upload request_id. Runtime создаёт geometry_job_id, operation_key и view_id. ID комнаты/элементов относятся к закреплённой версии BIM.
-- Настройки телефона: inspector_base_url и bim_base_url. Доступ S3 приходит через ограниченные presigned HTTPS операции. **geometry_base_url и токен G телефону не выдаются.** Backend I имеет собственный geometry_base_url и service identity.
-- API I/B — HTTPS, события I — WSS; Authorization: Bearer с audience/project/device scopes. Service credentials I/G/B не попадают на телефон. Presigned S3 URLs — краткоживущие разрешения на конкретные операции/объекты, отдельно от API bearer token.
-- JSON UTF-8, даты UTC RFC 3339. timestamp_s ARKit — монотонное время, не UTC. API envelopes и capture_manifest_v1: schema_version="0.1". frame.json: новые кадры schema_version="0.2"; legacy RGB-D 0.1 также принимается. Неизвестная версия соответствующего документа → 422. Изменение единиц/осей/смысла существующих полей требует согласования версии. Контракт пока не выпущен; номер редакции документа не равен версии frame.json.
-- Frame hashes — lowercase SHA-256 от точных байтов. Manifest и его S3 object version также фиксируются. Истёкший URL можно перевыпустить; логическая ссылка и исходные байты не меняются. S3 ETag не используется вместо SHA-256.
-- Capture state, состояние обработки, task revision, display manifest revision, view revision и geometry/tool revisions раздельны. Успешный upload, completion receipt или render не означает успешную инспекцию.
-- Один пишущий телефон на capture session. Project/session/device scopes проверяются на каждом API и при выдаче S3 доступа. Prefix сам по себе не является авторизацией.
+- I creates session_id once and persists it before delivering it to the phone. chat_id, inspection_id and capture session_id are distinct. One inspection may have multiple sequential capture sessions; parent_session_id links additional captures. A new capture after sealed receives a new ID from I.
+- I pins project_id, room_id, model_version, policy_version, capture_origin and input_mode. Redelivering an assignment does not create a new session. The phone retains the received ID after restart and does not substitute a local UUID.
+- The client creates segment_id, observation_id, response_id, completion_id and upload request_id UUIDs. The runtime creates geometry_job_id, operation_key and view_id. Room/element IDs refer to the pinned BIM version.
+- Phone settings: inspector_base_url and bim_base_url. S3 access arrives through restricted presigned HTTPS operations. **The phone receives neither geometry_base_url nor G's token.** Backend I has its own geometry_base_url and service identity.
+- I/B APIs use HTTPS and I events use WSS; Authorization: Bearer carries audience/project/device scopes. I/G/B service credentials never reach the phone. Presigned S3 URLs are short-lived permissions for specific operations/objects, separate from the API bearer token.
+- JSON uses UTF-8; dates use UTC RFC 3339. ARKit timestamp_s is monotonic time, not UTC. API envelopes and capture_manifest_v1 use schema_version="0.1". frame.json uses schema_version="0.2" for new frames; legacy RGB-D 0.1 remains accepted. An unknown version for the relevant document returns 422. Changes to units/axes/field meanings require version agreement. The contract is not yet released; document revision numbers are not frame.json versions.
+- Frame hashes are lowercase SHA-256 of exact bytes. The manifest and its S3 object version are also pinned. Expired URLs may be renewed; the logical reference and original bytes remain unchanged. S3 ETags do not replace SHA-256.
+- Capture state, processing state, task revision, display manifest revision, view revision and geometry/tool revisions are separate. Successful upload, completion receipt or rendering does not mean successful inspection.
+- One phone writes each capture session. Every API and S3 access grant checks project/session/device scopes. A prefix alone is not authorization.
 
-## 4. Жизненный цикл
+## 4. Lifecycle
 
-1. Inspector создаёт и назначает session_id с закреплёнными project/room/model. Телефон получает задание и уведомляет пользователя доступным способом; это не обещание системного APNs в текущей сборке.
-2. Пользователь открывает камеру; телефон подтверждает получение и capture-start. Новый запуск/сброс ARKit создаёт отдельный segment_id.
-3. Если BIM доступна и пригодна, управление инструкциями получает L. Он напрямую через приложение просит показать известную дверь, пол, стену/угол. I ждёт результата. Без BIM начинается обычная съёмка под управлением I; непригодная переданная BIM — явная ошибка/blocked, а не скрытый пропуск.
-4. Телефон сохраняет наблюдения и отправляет необходимые исходные файлы раньше финала через signed upload plans. API проверяет/фиксирует bytes и направляет evidence в L без вызова агента. L запрашивает дополнительные ракурсы до пригодной привязки.
-5. L сообщает успех приложению и I. Инструкции снова задаёт I, L параллельно обновляет положение камеры и покрытие в обоих интерфейсах. При потере привязки инструкция I приостанавливается; L ведёт восстановление, затем возобновляется актуальная инструкция I. Одновременно активен один источник инструкций (§13).
-6. Пользователь заканчивает съёмку. Телефон фиксирует inventory и загружает прежний финальный Inspector ZIP через signed upload plan Supabase, затем отправляет прежний completion. Ранние наблюдения входят с теми же ID/байтами; потеря сети допускает устойчивый повтор.
-7. I проверяет и фиксирует окончательный источник, закрывает набор и запускает существующий G job. Geometry читает финальный источник и строит модель; его контракт не меняется, раннюю локализацию он не выполняет.
-8. I проверяет результат G, результаты L и необходимые сравнения, сохраняет выводы и обновляет отображение. Онлайн-покрытие не означает соответствия стройки проекту.
-9. Досъёмка после sealed получает новую связанную session; поздние результаты и callbacks не открывают старую. Без успешной локализации исходную съёмку можно сохранить, но нельзя объявить BIM-покрытие/инспекцию выполненной.
+1. Inspector creates and assigns session_id with pinned project/room/model. The phone receives the assignment and notifies the user by an available method; this does not promise system APNs in the current build.
+2. The user opens the camera; the phone acknowledges receipt and capture-start. Each ARKit start/reset creates a separate segment_id.
+3. If BIM is available and usable, L takes instruction control. Through the app it asks the user to show a known door, floor and wall/corner. I waits for the result. Without BIM, ordinary I-controlled capture begins; an unusable supplied BIM is an explicit error/blocked state, not a silent skip.
+4. The phone saves observations and uploads the required source files before final completion through signed upload plans. The API validates/pins bytes and forwards evidence to L without invoking the agent. L requests additional views until alignment is usable.
+5. L reports success to the app and I. I resumes instruction control while L updates camera position and coverage in both interfaces. Loss of alignment suspends I's instruction; L guides recovery, then I's current instruction resumes. Only one instruction source is active at a time (§13).
+6. The user finishes capture. The phone freezes its inventory, uploads the existing final Inspector ZIP through a Supabase signed upload plan and sends the existing completion. Early observations retain the same IDs/bytes; network loss permits durable retry.
+7. I validates and pins the final source, seals the capture and launches the existing G job. Geometry reads the final source and reconstructs the model; its contract is unchanged and it does not perform early localization.
+8. I validates G results, L results and required comparisons, saves findings and updates displays. Online coverage does not establish construction compliance.
+9. Additional capture after sealed receives a new linked session; late results/callbacks do not reopen the old one. Source capture may be retained without successful localization, but BIM coverage/inspection cannot be declared complete.
 
-## 5. Внешние и межсервисные API
+## 5. External and inter-service APIs
 
-### Маршруты приложения
+### App routes
 
-Исторические маршруты ниже читать вместе с актуальным транспортным руководством. Новые предлагаемые маршруты ранних наблюдений и spatial-state, а также camera.pose и spatial.updated определены в §13; до capability negotiation они не вызываются.
+Read the historical routes below alongside the current transport guide. §13 defines proposed early-observation and spatial-state routes plus camera.pose and spatial.updated; they must not be called before capability negotiation.
 
-| Сервис | Метод и путь | Назначение | Успех |
+| Service | Method and path | Purpose | Success |
 |---|---|---|---|
-| I | GET /v1/devices/{device_id}/capture-assignments?after={cursor}&limit=100 | Получить назначенные устройству сессии с session_id | 200 |
-| I | GET /v1/sessions/{s} | Конфигурация, capture/processing state и итог | 200 |
-| I | POST /v1/sessions/{s}/capture-start | Идемпотентно подтвердить начало назначенной съёмки | 201 / 200 |
-| I | POST /v1/sessions/{s}/upload-plans | Разрешённые S3 PUT для файлов либо manifest | 201 / 200 |
-| I | POST /v1/sessions/{s}/complete | Передать ссылку на завершённый набор | 202 / 200 |
-| I | GET /v1/sessions/{s}/events?after={cursor}&limit=100 | Replay / резервный polling | 200 |
-| I | WSS /v1/sessions/{s}/events/ws?after={cursor} | События текущей инспекции/capture/display | 101 |
-| I | GET /v1/sessions/{s}/snapshot | Атомарный session/instructions/displays/resume_cursor | 200 |
-| I | GET /v1/sessions/{s}/instructions | Текущий список заданий | 200 |
-| I | POST /v1/sessions/{s}/instructions/{i}/responses | Ответ/локальный прогресс пользователя | 201 / 200 |
-| I | GET /v1/sessions/{s}/displays/{v} | Текущий display-манифест I | 200 |
-| B | GET /v1/projects/{project_id}/models/{model_version} | Метаданные эталонного BIM | 200 |
-| B | GET /v1/sessions/{s}/views/{v}/revisions/{r} | Точный render и ссылка на PNG | 200 / 202 |
-| B | GET /v1/assets/{artifact_id} | Готовая PNG либо подписанный HTTPS URL из metadata | 200 / 304 |
-| S3 | PUT по выданному I presigned URL | Загрузка конкретного файла/manifest | 200 |
+| I | GET /v1/devices/{device_id}/capture-assignments?after={cursor}&limit=100 | Retrieve device assignments with session_id | 200 |
+| I | GET /v1/sessions/{s} | Configuration, capture/processing state and result | 200 |
+| I | POST /v1/sessions/{s}/capture-start | Idempotently acknowledge the start of assigned capture | 201 / 200 |
+| I | POST /v1/sessions/{s}/upload-plans | Authorized S3 PUTs for files or manifest | 201 / 200 |
+| I | POST /v1/sessions/{s}/complete | Submit the completed capture reference | 202 / 200 |
+| I | GET /v1/sessions/{s}/events?after={cursor}&limit=100 | Replay / fallback polling | 200 |
+| I | WSS /v1/sessions/{s}/events/ws?after={cursor} | Current inspection/capture/display events | 101 |
+| I | GET /v1/sessions/{s}/snapshot | Atomic session/instructions/displays/resume_cursor | 200 |
+| I | GET /v1/sessions/{s}/instructions | Current instruction list | 200 |
+| I | POST /v1/sessions/{s}/instructions/{i}/responses | User response/local progress | 201 / 200 |
+| I | GET /v1/sessions/{s}/displays/{v} | I's current display manifest | 200 |
+| B | GET /v1/projects/{project_id}/models/{model_version} | Reference BIM metadata | 200 |
+| B | GET /v1/sessions/{s}/views/{v}/revisions/{r} | Exact render and PNG reference | 200 / 202 |
+| B | GET /v1/assets/{artifact_id} | Prepared PNG or signed HTTPS URL from metadata | 200 / 304 |
+| S3 | PUT to the presigned URL issued by I | Upload a specific file/manifest | 200 |
 
-Приложение не вызывает API G. s=session_id, i=instruction_id, v=view_id, r=view_revision. Cursors непрозрачны; пределы списков задаются конфигурацией. Значения SESSION_UUID, VERSION_ID, примерные размеры и нулевые hashes ниже — placeholders, не тестовые данные для реального приёма.
+The app does not call G's API. s=session_id, i=instruction_id, v=view_id, r=view_revision. Cursors are opaque; list limits are configured. SESSION_UUID, VERSION_ID, illustrative sizes and zero hashes below are placeholders, not valid intake test data.
 
-### 5.1 BIM и готовые серверные изображения
+### 5.1 BIM and prepared server images
 
-#### 5.1.1 Эталонная модель и доступ к её геометрии
+#### 5.1.1 Reference model and geometry access
 
-B владеет неизменяемой model_version, комнатами, element IDs, нормализованными единицами и осями. I получает метаданные и геометрию комнаты через BIMPort; B предоставляет их инструментам со служебной авторизацией. Публичный GET model возвращает метаданные, например:
+B owns the immutable model_version, rooms, element IDs, normalized units and axes. I obtains room metadata and geometry through BIMPort; B exposes them to tools with service authorization. Public GET model returns metadata, for example:
 
 ```json
 {
@@ -130,13 +130,13 @@ B владеет неизменяемой model_version, комнатами, ele
 }
 ```
 
-3D-ассет USDZ не является обязательным ответом или зависимостью iPhone в этой редакции. B может использовать внутреннюю подготовленную сцену для рендерера. Форматы импорта BIM и вычислительной геометрии не задаются этим display API; импорт произвольного RVT/IFC на телефоне не требуется. Реконструкция G — отдельный производный результат и не заменяет эталонный BIM.
+A USDZ 3D asset is not a mandatory response or iPhone dependency in this revision. B may use an internally prepared renderer scene. This display API does not prescribe BIM/computational geometry import formats; arbitrary RVT/IFC import on the phone is not required. G's reconstruction is a separate derived result and does not replace reference BIM.
 
-#### 5.1.2 Неизменяемый render у B
+#### 5.1.2 Immutable render at B
 
-`render.format = raster_image_v1`: B возвращает **готовое серверное изображение**, обязательный формат первой интеграции — PNG. Это отдельная картинка комнаты/инструкции, а не совмещённое с живой камерой AR-наложение. Inspector задаёт виртуальную камеру; локальный zoom/pan картинки не изменяет её ракурс и не вызывает запись в B.
+`render.format = raster_image_v1`: B returns a **prepared server image**; PNG is mandatory for the first integration. This is a separate room/instruction image, not an AR overlay aligned with the live camera. Inspector selects the virtual camera; local image zoom/pan neither changes its viewpoint nor writes to B.
 
-I назначает стабильный view_id для обзора комнаты либо отдельного задания. Каждая новая команда получает положительный view_revision. Телефон читает выбранную **готовую** ревизию по B GET view. Пример 200:
+I assigns a stable view_id for the room overview or a specific instruction. Each new command receives a positive view_revision. The phone reads the selected **ready** revision through B GET view. Example 200:
 
 ```json
 {
@@ -170,15 +170,15 @@ I назначает стабильный view_id для обзора комна
 }
 ```
 
-- `status`: pending | ready | failed | superseded. Pending — 202 с render/error=null и Retry-After. Терминальные состояния — 200; ready содержит render, failed — error, superseded — render=null и superseded_by_revision. Последнее означает, что ожидавшая команда объединена с более новой; её не запускать повторно под старым ID. Готовый результат и его байты неизменяемы.
-- Метаданные содержат project/inspection/session/room/model и контекст инструкции. У общего обзора instruction_id/instruction_revision=null. I и телефон сверяют контекст с выбранной задачей, а не доверяют только номеру картинки.
-- URL — путь B либо выданный B подписанный HTTPS URL. Authorization B не отправляется на другой хост. Для подписанного URL url_expires_at обязателен; после истечения телефон повторяет GET той же render-ревизии. URL может обновиться, artifact_id/hash и байты остаются прежними. Хеши и размеры примера условные.
-- I выбирает размер изображения в пределах лимитов B; пример 1280×960 не задаёт обязательный размер. Превышение лимитов отклоняется с 422, без скрытого изменения геометрии/ракурса. Клиент проверяет media_type, размер файла, hash и декодируемость PNG до показа.
-- Чтение каждой ревизии/asset проверяет проектный доступ. Метаданные с временными URL возвращаются с Cache-Control: private, no-store. Защищённые байты картинки могут использовать private cache и ETag по содержимому; правила клиентского retention задаются отдельно. Кэш разделён по пользователю/проекту и очищается при выходе/отзыве доступа. Общедоступный bucket с картинками не подразумевается.
+- `status`: pending | ready | failed | superseded. Pending returns 202 with render/error=null and Retry-After. Terminal states return 200; ready contains render, failed contains error, and superseded contains render=null and superseded_by_revision. The last means a queued command was coalesced with a newer one; do not execute it again under the old ID. A ready result and its bytes are immutable.
+- Metadata contains project/inspection/session/room/model and instruction context. A general overview has instruction_id/instruction_revision=null. I and the phone validate context against the selected task rather than trusting only an image number.
+- The URL is a B path or a signed HTTPS URL issued by B. B's Authorization is not forwarded to another host. Signed URLs require url_expires_at; after expiry, the phone repeats GET for the same render revision. The URL may change while artifact_id/hash and bytes remain unchanged. Example hashes and sizes are illustrative.
+- I chooses image dimensions within B's limits; 1280×960 is an example, not a mandatory size. Exceeding limits returns 422 without silently changing geometry/viewpoint. Before display, the client validates media_type, file size, hash and PNG decodability.
+- Reading each revision/asset checks project access. Metadata containing temporary URLs uses Cache-Control: private, no-store. Protected image bytes may use a private cache and content-based ETag; client retention rules are separate. Cache is partitioned by user/project and cleared on logout/access revocation. A public image bucket is not implied.
 
-#### 5.1.3 Display-манифест Inspector: прогресс картинки отдельно от задания
+#### 5.1.3 Inspector display manifest: image progress separate from task state
 
-Инструкция содержит `display_view_id`, общий экран — session.display_view_id. Ссылка обозначает **стабильное представление**, а не номер очередного render. Текущий выбор I читается через GET display и приходит полным объектом в display.updated:
+An instruction contains `display_view_id`; the general screen uses session.display_view_id. The reference identifies a **stable view**, not an individual render number. I's current selection is read through GET display and delivered as a full object in display.updated:
 
 ```json
 {
@@ -198,15 +198,15 @@ I назначает стабильный view_id для обзора комна
 }
 ```
 
-- `revision` манифеста монотонно растёт в I. `desired_ref` — последняя запрошенная команда; `ready_ref` — последний выбранный готовый результат в **том же актуальном контексте**. Оба nullable. `status`: idle | pending | ready | failed; pending допускает готовую предыдущую картинку и подпись «Обновляется». Render failure сохраняется в display.error и не меняет итог инспекции.
-- Только ready_ref разрешает показ новой картинки. Телефон получает метаданные и байты, затем повторно сверяет актуальный манифест и контекст. Более старая картинка не заменяет уже показанную новую. Если ready_ref изменился за время скачивания, скачанный старый файл не применяется поверх актуального выбора; при частых обновлениях уже отображённая пригодная картинка остаётся до завершения загрузки следующей.
-- Изменение цели, текста/критериев задания или его отмена меняет instruction revision. I очищает ready_ref старого контекста и публикует актуальный манифест/инструкцию. Поздний render отменённой или предыдущей версии задания остаётся в истории. При отсутствии подходящей картинки показываются текст и нейтральный статус подготовки.
-- Новое покрытие, постановка render и его завершение **не увеличивают instruction revision**, пока смысл задания тот же. Это предотвращает stale_instruction при обычном фоновом обновлении картинки. Событие display.updated меняет только display-манифест.
-- Общий обзор комнаты имеет собственный view_id и instruction_id=null. На экране конкретного задания используется его display_view_id; общий обзор не подменяет контекст задания. При сбое B текстовые задания и загрузки в S3 продолжают работу. После offline/разрыва разрешено показать последнюю картинку подходящего контекста с пометкой времени и «Нет актуального обновления».
+- The manifest's `revision` increases monotonically in I. `desired_ref` is the latest requested command; `ready_ref` is the latest selected ready result in **the same current context**. Both are nullable. `status`: idle | pending | ready | failed; pending permits an earlier ready image with an “Updating” label. Render failure is retained in display.error and does not change the inspection outcome.
+- Only ready_ref authorizes displaying a new image. The phone downloads metadata and bytes, then rechecks the current manifest and context. An older image cannot replace a newer displayed one. If ready_ref changes during download, the old downloaded file must not override the current selection; with frequent updates, a suitable displayed image remains until the next finishes loading.
+- A changed target, instruction text/criteria or cancellation changes instruction revision. I clears ready_ref for the old context and publishes the current manifest/instruction. Late renders from cancelled or previous instruction versions remain in history. Without a suitable image, show text and a neutral preparation status.
+- New coverage, queuing a render and render completion **do not increase instruction revision** while the task's meaning is unchanged. This prevents stale_instruction during ordinary background image refresh. display.updated changes only the display manifest.
+- The general room overview has its own view_id and instruction_id=null. A specific task screen uses that task's display_view_id; the overview does not replace task context. If B fails, text instructions and S3 uploads continue. After offline/disconnection, the last suitable image may be shown with its timestamp and “No current update.”
 
-#### 5.1.4 Команда Inspector → B и уведомление B → Inspector
+#### 5.1.4 Inspector → B command and B → Inspector notification
 
-Только service identity I вызывает `PUT /internal/v1/sessions/{s}/views/{v}/revisions/{r}`. Пример команды:
+Only I's service identity calls `PUT /internal/v1/sessions/{s}/views/{v}/revisions/{r}`. Example command:
 
 ```json
 {
@@ -224,7 +224,7 @@ I назначает стабильный view_id для обзора комна
   "display_state": {
     "visible_element_ids": null,
     "focus_element_ids": ["door-01"],
-    "highlights": [{"element_ids":["door-01"],"style":"capture_target","label":"Снимите правый край проёма"}],
+    "highlights": [{"element_ids":["door-01"],"style":"capture_target","label":"Capture the right edge of the opening"}],
     "camera": {"position":[0,1.6,3],"target":[0,1,0],"up":[0,1,0]},
     "viewport": {"width":1280,"height":960},
     "image_media_type": "image/png"
@@ -232,13 +232,13 @@ I назначает стабильный view_id для обзора комна
 }
 ```
 
-`visible_element_ids:null` — вся выбранная комната. Иначе focus/highlights — подмножества видимых разрешённых element IDs. Стили ручного display state: capture_target | selected | issue. Issue допускается только со ссылкой на сохранённую finding/comparison; measured coverage формирует B по проверенному input_refs.coverage, а не по произвольному цвету, выбранному LLM. Capture target не утверждает, что участок уже измерен. Camera задаётся в BIM-координатах, метры; position/target различаются, up ненулевой и не параллелен направлению взгляда. Допустим camera=null для сохранённого серверного preset комнаты. Это виртуальная камера, не измеренная поза iPhone.
+`visible_element_ids:null` means the entire selected room. Otherwise, focus/highlights must be subsets of visible authorized element IDs. Manual display-state styles: capture_target | selected | issue. Issue requires a reference to a saved finding/comparison; B derives measured coverage from validated input_refs.coverage, not an arbitrary LLM-selected color. Capture target does not claim the area is already measured. Camera uses BIM coordinates in metres; position and target differ, and up is nonzero and not parallel to the viewing direction. camera=null is allowed for a saved server-side room preset. This is a virtual camera, not a measured iPhone pose.
 
-Input refs указывают на неизменяемые результаты инструментов I (§7): `{result_id, revision}` или null. Они обязаны принадлежать той же inspection/session/model; если применима привязка — тому же segment и её версии. B читает результаты по настроенному внутреннему API I. Произвольные внешние URLs и callback URLs от клиента не принимаются. Отдельная регистрация сессии телефоном в B не требуется: B получает авторизованный контекст от I.
+Input refs identify immutable I tool results (§7): `{result_id, revision}` or null. They must belong to the same inspection/session/model and, where alignment applies, the same segment and alignment version. B reads results through I's configured internal API. Arbitrary external URLs and client-provided callback URLs are rejected. The phone need not register a separate session with B: B obtains authorized context from I.
 
-B проверяет IDs, BIM-контекст, лимиты, схему и права; после durable записи команды и задания отвечает 201 с view_id/view_revision/status. Точный повтор — 200 с состоянием той же операции; другое содержимое того же ID/revision — 409 idempotency_conflict. I сохраняет исходное тело и SHA-256 его точных байтов как command_sha256. Повтор после timeout использует то же тело и IDs.
+B validates IDs, BIM context, limits, schema and permissions; after durably saving the command and job it returns 201 with view_id/view_revision/status. An exact retry returns 200 with the same operation's state; different content under the same ID/revision returns 409 idempotency_conflict. I retains the original body and SHA-256 of its exact bytes as command_sha256. A retry after timeout uses the same body and IDs.
 
-B отправляет `POST /internal/v1/display-events` на фиксированный адрес I, например:
+B sends `POST /internal/v1/display-events` to I's fixed address, for example:
 
 ```json
 {
@@ -255,21 +255,21 @@ B отправляет `POST /internal/v1/display-events` на фиксиров�
 }
 ```
 
-Типы: render.ready | render.failed | render.superseded; у failed error обязателен, у superseded — superseded_by_revision. I подтверждает 202 только после durable inbox, точный повтор — 200, другое содержимое event_id — 409. Дедупликация идёт по паре source service + event_id. B использует outbox/эквивалент и повторяет до подтверждения; I сверяет зависшие операции через B GET view, поэтому потерянный webhook не останавливает отображение.
+Types: render.ready | render.failed | render.superseded; failed requires error, superseded requires superseded_by_revision. I acknowledges with 202 only after durable inbox storage; an exact repeat returns 200, changed event_id content returns 409. Deduplication uses source service + event_id. B uses an outbox/equivalent and retries until acknowledged; I reconciles stuck operations through B GET view, so a lost webhook does not stop display updates.
 
-Порядок исполнения:
+Execution order:
 
-1. Runtime I проверяет актуальность цели/результатов. В одной локальной транзакции сохраняет инструкцию при её изменении, display-манифест с desired_ref и исходящую render-команду. Текст доступен сразу.
-2. Worker доставляет команду в B; B использует восстанавливаемую очередь. При недоступном B задания I и сохранённые объекты S3 не откатываются.
-3. I получает webhook, сверяет его с сохранённой командой/hash и читает точное состояние B. Для готового результата проверяет контекст, refs и метаданные артефакта. B публикует ready только после проверки PNG и долговременной записи байтов; I не скачивает каждую картинку повторно, телефон проверяет полученные байты. Готовая ревизия того же актуального контекста может стать ready_ref, если она новее уже выбранной, даже когда более новая desired_ref ещё готовится. Это позволяет показывать прогресс при постоянном поступлении кадров.
-4. I атомарно сохраняет выбранный ready_ref, новую revision манифеста и display.updated. Устаревший контекст/результат не меняет текущий экран. При подтверждённом superseded старая команда не переотправляется как новый render.
-5. WebSocket доставляет небольшое сохранённое событие. Телефон читает выбранную картинку у B по HTTPS. После рестарта I восстанавливает outbox/inbox и незавершённые операции; телефон восстанавливает manifests и event cursor из snapshot.
+1. Runtime I validates current targets/results. In one local transaction it saves a changed instruction, the display manifest with desired_ref and the outgoing render command. Text is available immediately.
+2. A worker delivers the command to B, which uses a recoverable queue. If B is unavailable, I's tasks and saved S3 objects are not rolled back.
+3. I receives the webhook, checks it against the saved command/hash and reads B's exact state. For a ready result it validates context, refs and artifact metadata. B publishes ready only after PNG validation and durable byte storage; I does not redownload every image, while the phone checks the received bytes. A ready revision in the same current context may become ready_ref if newer than the current selection, even while a newer desired_ref is still being prepared. This allows visible progress during continuous frame arrival.
+4. I atomically saves the selected ready_ref, a new manifest revision and display.updated. Stale context/results do not alter the current screen. Once superseded is confirmed, an old command is not resent as a new render.
+5. WebSocket delivers the small persisted event. The phone reads the selected image from B over HTTPS. After restart, I recovers its outbox/inbox and unfinished operations; the phone recovers manifests and the event cursor from snapshot.
 
-Для каждого view достаточно одного выполняющегося render и одной ожидающей последней команды. Более новые команды заменяют ожидающие промежуточные; уже выполняющуюся можно завершить и показать при актуальном контексте. Ни одна принятая RGB-D запись или task/response event при таком объединении не теряется. Позднее можно разделить очередь render по проектам и workers без изменения клиентского формата.
+One active render and one latest queued command per view are sufficient. Newer commands replace queued intermediate commands; an active render may finish and be displayed if its context remains current. This coalescing loses no accepted RGB-D record or task/response event. Render queues can later be partitioned by project and worker without changing the client format.
 
-### 5.2 Inspector создаёт сессию и передаёт её телефону
+### 5.2 Inspector creates a session and assigns it to the phone
 
-Создание инициируется авторизованным web/backend потоком: `POST /v1/inspections/{inspection_id}/capture-sessions`. Это управляющий маршрут I; телефон не создаёт session_id. Пример запроса:
+An authorized web/backend flow initiates creation: `POST /v1/inspections/{inspection_id}/capture-sessions`. This is I's control route; the phone does not create session_id. Example request:
 
 ```json
 {
@@ -283,11 +283,11 @@ B отправляет `POST /internal/v1/display-events` на фиксиров�
 }
 ```
 
-I проверяет scope/устройство/room, берёт project/model/policy из инспекции, создаёт и сохраняет session + assignment в одной транзакции. 201 возвращает созданную сессию; повтор request_id/body — 200 с тем же session_id; другой body того же request_id — 409. Новый вызов без того же request_id — новая явно запрошенная сессия, а не транспортный retry.
+I validates scope/device/room, takes project/model/policy from the inspection, and creates and saves session + assignment in one transaction. 201 returns the created session; repeating request_id/body returns 200 with the same session_id; a different body under that request_id returns 409. A call without the same request_id is a new explicitly requested session, not a transport retry.
 
-GET capture-assignments возвращает `{"assignments":[...session objects...],"next_cursor":null}` для authenticated device. Переданный device_id сверяется с identity; он не позволяет читать чужие задания. Для MVP приложение опрашивает список при старте/возврате в foreground и пока ждёт assignment; интервал/backoff конфигурируется. Список отсортирован по серверному порядку назначения; непустой next_cursor читается до конца. Для поиска новых назначений после исчерпания списка клиент начинает новый обход; это страничный список назначений, а не event resume cursor. Повтор assignment дедуплицируется по session_id.
+GET capture-assignments returns `{"assignments":[...session objects...],"next_cursor":null}` for the authenticated device. Supplied device_id is checked against identity and cannot expose other devices' assignments. For the MVP, the app polls on startup/foreground return and while waiting for assignment; interval/backoff is configured. The list follows server assignment order; consume a nonempty next_cursor to the end. To find new assignments after exhausting the list, start a new traversal; this is a paginated assignment list, not an event resume cursor. Duplicate assignments are deduplicated by session_id.
 
-Пример назначенной сессии:
+Example assigned session:
 
 ```json
 {
@@ -314,15 +314,15 @@ GET capture-assignments возвращает `{"assignments":[...session objects
 }
 ```
 
-capture_origin: device | synthetic; input_mode: live_capture | recorded_capture | synthetic_fixture. Replay не меняет происхождение реальных данных на synthetic. model_is_synthetic независимо от происхождения capture. Одна session не смешивает источники. I проверяет доступ к parent_session и совпадение проекта/модели.
+capture_origin: device | synthetic; input_mode: live_capture | recorded_capture | synthetic_fixture. Replay does not change real-data origin to synthetic. model_is_synthetic is independent of capture origin. A session does not mix sources. I validates access to parent_session and matching project/model.
 
-POST capture-start: `{"schema_version":"0.1","operation_id":"START_UUID","device":{"name":"iPhone","os_version":"OS_VERSION","app_version":"0.1.0"}}`. I сверяет assignment и фиксирует capturing. Ответ 201/200: `{"session_id":"SESSION_UUID","operation_id":"START_UUID","capture_state":"capturing"}`. Повтор operation_id/body возвращает исходную квитанцию; другое содержимое того же ID — 409. При sealed/cancelled новая операция начала отклоняется. Полученный ранее assignment позволяет сохранять кадры локально offline; подтверждение начала отправляется с тем же session_id при восстановлении сети перед upload plans и completion.
+POST capture-start: `{"schema_version":"0.1","operation_id":"START_UUID","device":{"name":"iPhone","os_version":"OS_VERSION","app_version":"0.1.0"}}`. I verifies assignment and records capturing. Response 201/200: `{"session_id":"SESSION_UUID","operation_id":"START_UUID","capture_state":"capturing"}`. Repeating operation_id/body returns the original receipt; different content under the same ID returns 409. A new start operation is rejected when sealed/cancelled. A previously received assignment permits local offline frame capture; after reconnection, start acknowledgement uses the same session_id before upload plans and completion.
 
-### 5.3 S3 upload plan, сегменты и manifest
+### 5.3 S3 upload plan, segments and manifest
 
-**Предлагаемая конфигурация S3:** выделенный private bucket с versioning; I выдаёт presigned SigV4 PUT для разрешённых ключей с checksum и If-None-Match: *. Телефон не имеет ListBucket/DeleteObject или постоянных AWS credentials. Для S3-совместимого провайдера эти гарантии проверяются на тестовой среде. Регион, encryption, лимиты, сроки URLs и retention задаёт backend-конфигурация. Механизмы: [presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html), [условная запись](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html).
+**Proposed S3 configuration:** a dedicated private bucket with versioning; I issues presigned SigV4 PUTs for authorized keys with checksum and If-None-Match: *. The phone has no ListBucket/DeleteObject or persistent AWS credentials. These guarantees must be checked in a test environment for an S3-compatible provider. Backend configuration sets region, encryption, limits, URL lifetime and retention. Mechanisms: [presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html), [conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html).
 
-Типовые ключи:
+Typical keys:
 
 ```text
 projects/{project_id}/sessions/{session_id}/observations/{observation_id}/frame.json
@@ -332,7 +332,7 @@ projects/{project_id}/sessions/{session_id}/observations/{observation_id}/confid
 projects/{project_id}/sessions/{session_id}/manifests/{completion_id}.json
 ```
 
-Телефон передаёт POST upload-plans с request_id, kind=observation_files и objects, например:
+The phone sends POST upload-plans with request_id, kind=observation_files and objects, for example:
 
 ```json
 {
@@ -350,9 +350,9 @@ projects/{project_id}/sessions/{session_id}/manifests/{completion_id}.json
 }
 ```
 
-I формирует object_key сам, проверяет assignment, состояние session, разрешённые filenames/размеры и hashes. Возвращает items со status=upload_required | already_uploaded, object_key, ожидаемыми sha/size, upload_url, expires_at и точными headers; для already_uploaded дополнительно version_id, URL=null. Presigned параметры — временные credentials, не часть логической идентичности файла.
+I generates object_key, validates assignment, session state, permitted filenames/sizes and hashes. It returns items with status=upload_required | already_uploaded, object_key, expected sha/size, upload_url, expires_at and exact headers; already_uploaded additionally has version_id and URL=null. Presigned parameters are temporary credentials, not part of logical file identity.
 
-Пример ответа 201/200, когда файл нужно загрузить (URL, размер и hash условные; URL не рабочий):
+Example 201/200 response when upload is required (URL, size and hash are illustrative; the URL is not functional):
 
 ```json
 {
@@ -383,7 +383,7 @@ I формирует object_key сам, проверяет assignment, сост�
 }
 ```
 
-После проверки уже загруженного объекта I возвращает:
+After validating an already uploaded object, I returns:
 
 ```json
 {
@@ -410,15 +410,15 @@ I формирует object_key сам, проверяет assignment, сост�
 }
 ```
 
-Ответ содержит по одному item на каждый запрошенный объект; сопоставление по observation_id + name, а не позиции массива. Некорректный запрос отклоняется целиком стандартной ошибкой API, без частичного плана. Для kind=capture_manifest envelope содержит completion_id из запроса, item.observation_id=null, item.name="capture-manifest.json", media_type="application/json", object_key заканчивается на manifests/{completion_id}.json. Остальные поля и правила статусов те же. Для upload_required version_id=null до успешного PUT; для already_uploaded version_id обязателен, upload_url/expires_at=null, headers={}. Телефон отправляет указанные headers без API Bearer токена; успешный PUT без version-id требует сверки через I, а не фиктивной квитанции.
+The response has one item per requested object, matched by observation_id + name rather than array position. Invalid requests are rejected entirely with the standard API error, without a partial plan. For kind=capture_manifest, the envelope includes the request's completion_id, item.observation_id=null, item.name="capture-manifest.json", media_type="application/json", and an object_key ending in manifests/{completion_id}.json. Other fields/status rules are unchanged. upload_required has version_id=null until successful PUT; already_uploaded requires version_id, upload_url/expires_at=null and headers={}. The phone sends the specified headers without the API Bearer token; a successful PUT without version-id requires reconciliation through I, not a fabricated receipt.
 
-Для upload_required обязательные headers включают Content-Type, If-None-Match: * и x-amz-checksum-sha256 (base64 байтов SHA-256, при том что JSON sha256 — hex). Используется одиночный PutObject на файл; S3 multipart upload не требуется для обычного RGB-D файла и является отдельным расширением для больших файлов. При успешном PUT телефон сохраняет x-amz-version-id. S3 receipt не является принятой инспекцией.
+For upload_required, mandatory headers include Content-Type, If-None-Match: * and x-amz-checksum-sha256 (base64 of SHA-256 bytes, while JSON sha256 is hex). Each file uses one PutObject; ordinary RGB-D files do not require S3 multipart upload, which is a separate extension for large files. After a successful PUT, the phone saves x-amz-version-id. An S3 receipt is not an accepted inspection.
 
-Точный повтор upload request_id/body возвращает ту же логическую операцию и свежие URL при необходимости; другой body того же request_id — 409. Истёкший URL обновляется через I без смены object key/hash. При 412 Object exists или timeout после PUT I устанавливает version_id из сохранённой квитанции либо HEAD текущего write-once объекта, затем сверяет checksum/size: совпадение → already_uploaded, несовпадение → 409 file_conflict. Данные под тем же observation_id не заменяются другими байтами. Неподписанные overwrite/delete операции запрещены политикой доступа. I использует сохранённый S3 checksum или пересчитывает содержимое, а не доверяет одному сообщению телефона. См. [проверку целостности S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html).
+Repeating the exact upload request_id/body returns the same logical operation and fresh URLs if needed; a different body under the same request_id returns 409. Expired URLs are refreshed through I without changing object key/hash. On 412 Object exists or timeout after PUT, I obtains version_id from its saved receipt or HEAD of the current write-once object, then checks checksum/size: a match yields already_uploaded, a mismatch yields 409 file_conflict. Data under one observation_id cannot be replaced with different bytes. Access policy prohibits unsigned overwrite/delete operations. I uses the saved S3 checksum or recomputes content rather than trusting the phone's statement alone. See [S3 integrity checking](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html).
 
-Segment не регистрируется в G. Приложение создаёт segment_id на каждый запуск/сброс ARKit/непроверенную релокализацию и записывает его в frame.json и manifest. Между сегментами общая система координат не предполагается.
+Segments are not registered with G. The app creates segment_id for every ARKit start/reset/unverified relocalization and records it in frame.json and the manifest. A shared coordinate system between segments is not assumed.
 
-После окончания записи и загрузки файлов телефон формирует **capture_manifest_v1**. Сначала получает PUT plan с kind=capture_manifest, completion_id и единственным object name=capture-manifest.json, observation_id=null; I сопоставляет его ключу manifests/{completion_id}.json. Пример содержимого:
+After recording and file upload finish, the phone creates **capture_manifest_v1**. It first obtains a PUT plan with kind=capture_manifest, completion_id and one object named capture-manifest.json, observation_id=null; I maps it to manifests/{completion_id}.json. Example contents:
 
 ```json
 {
@@ -453,32 +453,32 @@ Segment не регистрируется в G. Приложение созда�
 }
 ```
 
-Каждый observation входит один раз и ссылается на объявленный segment; имена/ключи/versions принадлежат тому же prefix и observation. frame.json и rgb обязательны. depth обязателен только если frame.depth != null; confidence — только если frame.confidence != null. При RGB-only оба файла отсутствуют, их нельзя заменять пустыми файлами или синтетическими измерениями. Manifest перечисляет точный inventory без дубликатов; observation_count совпадает с длиной списка. Hash frame.json считается по исходным сохранённым байтам, без пересериализации. Новый manifest не меняет файлы наблюдений.
+Each observation appears once and references a declared segment; names/keys/versions belong to the same prefix and observation. frame.json and rgb are mandatory. depth is mandatory only when frame.depth != null; confidence only when frame.confidence != null. Both files are absent for RGB-only and must not be replaced by empty files or synthetic measurements. The manifest lists the exact inventory without duplicates; observation_count equals list length. frame.json is hashed from its original saved bytes without reserialization. A new manifest does not change observation files.
 
-Необязательный excluded_observations — список `{observation_id, reason}` для ранее заявленных локальных записей, которые явно не включены в передаваемый набор; по умолчанию пуст. ID принадлежит этой session и не повторяется среди observations; причина непустая. I сохраняет исключения и учитывает их при достаточности evidence: исключённая запись не считается обработанной или подтверждающей выполнение задания.
+Optional excluded_observations lists `{observation_id, reason}` for previously declared local records explicitly excluded from the submitted capture; it defaults to empty. Each ID belongs to this session and cannot also appear in observations; reason is nonempty. I retains exclusions and considers them when assessing evidence sufficiency: an excluded record is neither processed nor evidence of task completion.
 
-Финальный manifest загружается **последним**, когда все указанные object versions доступны. Его собственные version_id/sha256/byte_length передаются I в completion. Частичные данные могут лежать в S3, но не становятся входом G до принятия manifest I.
+The final manifest is uploaded **last**, once every listed object version is available. Its own version_id/sha256/byte_length are submitted to I in completion. Partial data may exist in S3 but does not become G input until I accepts the manifest.
 
-### 5.4 Наблюдение и бинарные форматы
+### 5.4 Observation and binary formats
 
-Каждое наблюдение сохраняется локально и отдельными объектами S3; HTTP multipart-запроса телефона к G нет. Файлы одного наблюдения:
+Each observation is saved locally and as separate S3 objects; the phone sends no HTTP multipart request to G. Observation files:
 
-| Роль | filename | Content-Type | Обязательность |
+| Role | filename | Content-Type | Required |
 |---|---|---|---|
-| `metadata` | `frame.json` | `application/json` | Да |
-| `rgb` | `rgb.jpg` | `image/jpeg` | Да |
-| `depth` | `depth.f32` | `application/octet-stream` | Только если metadata.depth != null |
-| `confidence` | `confidence.u8` | `application/octet-stream` | Только если metadata.confidence != null |
+| `metadata` | `frame.json` | `application/json` | Yes |
+| `rgb` | `rgb.jpg` | `image/jpeg` | Yes |
+| `depth` | `depth.f32` | `application/octet-stream` | Only when metadata.depth != null |
+| `confidence` | `confidence.u8` | `application/octet-stream` | Only when metadata.confidence != null |
 
-Один набор получается из **одного ARFrame**. Независимо снятое фото нельзя соединять с произвольным кадром depth.
+Each set comes from **one ARFrame**. An independently captured photograph must not be paired with an arbitrary depth frame.
 
-- RGB: JPEG исходного `capturedImage`, без поворота, crop, изменения размера и EXIF-поворота. Поворот экранного превью не меняет файлы и intrinsics.
-- Depth: несглаженный `sceneDepth`, float32 little-endian, метры, row-major, без padding строк; ровно `width × height × 4` байт. Значения NaN/Infinity/≤0 сохраняются как есть, но исключаются из геометрии.
-- Confidence: uint8 row-major, то же разрешение, ровно `width × height` байт; 0/1/2 = low/medium/high. Если нет карты — `confidence: null`, файл отсутствует.
-- Без normal tracking реальный кадр не сохраняется. На устройстве с поддержкой sceneDepth клиент ждёт карту глубины. На устройстве без LiDAR сохраняется RGB-only наблюдение: фото, K_rgb, T_world_camera и время из одного ARFrame; это визуальное evidence, а не измерение поверхности. У синтетического кадра `tracking_state: synthetic`, `depth_source: synthetic_plane`.
-- SHA-256 — lowercase hex от точных байтов файла. `byte_length` — точный размер файла. Имена файлов фиксированы, без произвольных путей.
+- RGB: JPEG from the original `capturedImage`, without rotation, crop, resizing or EXIF rotation. Rotating the screen preview does not change files or intrinsics.
+- Depth: unsmoothed `sceneDepth`, float32 little-endian, metres, row-major, no row padding; exactly `width × height × 4` bytes. NaN/Infinity/≤0 values are preserved but excluded from geometry.
+- Confidence: uint8 row-major, same resolution, exactly `width × height` bytes; 0/1/2 = low/medium/high. Without a map, `confidence: null` and no file.
+- A real frame is not saved without normal tracking. On sceneDepth-capable devices, the client waits for depth. Without LiDAR it saves an RGB-only observation: photograph, K_rgb, T_world_camera and time from one ARFrame; this is visual evidence, not a surface measurement. Synthetic frames use `tracking_state: synthetic`, `depth_source: synthetic_plane`.
+- SHA-256 is lowercase hex of exact file bytes. `byte_length` is the exact file size. Filenames are fixed, without arbitrary paths.
 
-Пример metadata, соответствует именам полей текущего Swift-кода:
+Example metadata using the current Swift field names:
 
 ```json
 {
@@ -507,13 +507,13 @@ Segment не регистрируется в G. Приложение созда�
 }
 ```
 
-Размеры, intrinsics и поза в примере условные, не результаты измерения. Geometry Service проверяет JPEG dimensions, бинарные размеры, хеши, форму/конечность матриц, положительные focal lengths, валидность rigid transform и принадлежность segment/session. Для frame.json 0.1/0.2 `frame_id == observation_id`. `instruction_id` — контекст съёмки, а не доказательство принадлежности пикселей конкретному BIM-объекту. I проверяет принадлежность instruction_id сессии по истории заданий. Поздний кадр со старой инструкцией может оставаться evidence, но не подтверждает выполнение новой версии задания. G читает исходные файлы из S3 и не обращается к телефону.
+Example dimensions, intrinsics and pose are illustrative, not measurements. Geometry Service checks JPEG dimensions, binary sizes, hashes, matrix shapes/finiteness, positive focal lengths, rigid-transform validity and segment/session membership. For frame.json 0.1/0.2, `frame_id == observation_id`. `instruction_id` is capture context, not proof that pixels belong to a particular BIM object. I validates instruction_id against session instruction history. A late frame with an old instruction may remain evidence but cannot establish completion of a new instruction revision. G reads source files from S3 and does not contact the phone.
 
-Для RGB-only в frame.json 0.2 `depth_source="none"`, а `depth`, `depth_size`, `depth_unit`, `depth_to_rgb_mapping`, `confidence` — явные JSON null. Остальные поля кадра сохраняют тот же смысл. capture_origin=device и input_mode=live_capture не означают наличие LiDAR. Новые RGB-D кадры тоже имеют версию 0.2; в них поля глубины заполнены как раньше. Legacy 0.1 допускается только с обязательной глубиной по прежней схеме.
+For RGB-only frame.json 0.2, `depth_source="none"`, and `depth`, `depth_size`, `depth_unit`, `depth_to_rgb_mapping`, `confidence` are explicit JSON null. Other fields retain their meaning. capture_origin=device and input_mode=live_capture do not imply LiDAR. New RGB-D frames also use version 0.2 with depth fields populated as before. Legacy 0.1 is accepted only with mandatory depth under the previous schema.
 
-I принимает и хранит RGB-only как визуальные наблюдения. Приём источника не означает пригодность для реконструкции. До запуска G runtime проверяет поддержку фактического набора: если G требует depth, ему не передаются RGB-only как измерения. Без пригодных RGB-D данных I запрашивает досъёмку с LiDAR либо использует согласованный визуальный инструмент; итог геометрической проверки остаётся needs_more_data/unknown. Для смешанного набора фактически использованные и исключённые observations должны быть явно перечислены в результате G. Конкретную поддержку RGB-only в G необходимо подтвердить его владельцу; этот текст не объявляет алгоритм реализованным.
+I accepts and stores RGB-only as visual observations. Source acceptance does not establish suitability for reconstruction. Before starting G, the runtime checks support for the actual capture: if G requires depth, RGB-only is not sent as measurement data. Without usable RGB-D, I requests additional LiDAR capture or uses an agreed visual tool; the geometric outcome remains needs_more_data/unknown. For a mixed capture, G's result must explicitly list used and excluded observations. G's owner must confirm its specific RGB-only support; this document does not claim that algorithm is implemented.
 
-### 5.5 Телефон завершает capture: ссылка → Inspector
+### 5.5 Phone capture completion: reference → Inspector
 
 POST I /v1/sessions/{s}/complete:
 
@@ -531,21 +531,21 @@ POST I /v1/sessions/{s}/complete:
 }
 ```
 
-Это устойчивая ссылка на конкретный S3 manifest, а не URL с истекающей подписью. I знает bucket/region по storage_id и самостоятельно выдаёт временный доступ. Произвольный bucket, внешний URL, локальный путь телефона или другой session prefix не принимается. Session ID в path, assignment, manifest и каждом frame совпадает. [S3 versionId](https://docs.aws.amazon.com/AmazonS3/latest/userguide/RetrievingObjectVersions.html) фиксирует конкретную версию вместо чтения текущего объекта по одному key.
+This is a durable reference to a specific S3 manifest, not an expiring signed URL. I resolves bucket/region from storage_id and grants temporary access itself. Arbitrary buckets, external URLs, local phone paths or another session's prefix are rejected. Session ID must match in the path, assignment, manifest and every frame. [S3 versionId](https://docs.aws.amazon.com/AmazonS3/latest/userguide/RetrievingObjectVersions.html) pins a specific version rather than reading the current object by key alone.
 
-1. I аутентифицирует устройство, сохраняет operation/body и capture_ref, переводит capture_state=submitted, processing_state=validating и отвечает 202 после durable commit: `{"session_id":"SESSION_UUID","completion":{"completion_id":"COMPLETION_UUID","status":"pending","error":null}}`. Другой completion при незавершённой проверке → 409 completion_in_progress. Точный повтор ID/body — 200 с состоянием этой операции; другой body того же ID → 409 idempotency_conflict.
-2. Worker читает **точную версию** manifest, проверяет byte_length/hash/schema, совпадение конфигурации I, непустой inventory/segments и отсутствие дубликатов. Проверяет существование/size/SHA всех указанных object versions и соответствие frame metadata. Набор должен включать observation IDs, ранее заявленные capture_recorded; исключение записи требует явной причины, а не молчаливой потери. Для больших данных допускается проверенный S3 checksum; если его нет/он непригоден, hash пересчитывается. Геометрическая корректность проверяется G/tools отдельно.
-3. При недостающих/несовпадающих файлах completion.status=rejected с деталями missing_files/hash_mismatches. Capture возвращается в capturing, input snapshot не фиксируется и G не запускается. Телефон завершает загрузку и отправляет **новый** completion_id/manifest. Повтор старого rejected возвращает прежний отказ.
-4. При временной недоступности S3 проверка остаётся pending и повторяется с теми же IDs. Это не доказательство отсутствия набора. При успешной проверке I атомарно фиксирует accepted source (manifest version/hash), capture_state=sealed, completion.status=accepted, processing_state=queued_geometry и outbox запуска G.
-5. После sealed новые upload plans, start или новый completion для этой session отклоняются с 409 session_closed; точный повтор принятой операции допустим. Выданные ранее URL могут ещё существовать, поэтому неизменяемость входа обеспечивают **зафиксированные object versions и hashes**, а не предположение, что ссылка сразу отозвана. Поздние посторонние объекты не входят в принятую версию manifest.
+1. I authenticates the device, saves operation/body and capture_ref, sets capture_state=submitted and processing_state=validating, then returns 202 after durable commit: `{"session_id":"SESSION_UUID","completion":{"completion_id":"COMPLETION_UUID","status":"pending","error":null}}`. Another completion during validation returns 409 completion_in_progress. An exact ID/body retry returns 200 with that operation's state; a different body under the same ID returns 409 idempotency_conflict.
+2. The worker reads the **exact manifest version**, validates byte_length/hash/schema, consistency with I's configuration, nonempty inventory/segments and no duplicates. It checks existence/size/SHA of all listed object versions and consistency with frame metadata. The capture must include observation IDs previously declared through capture_recorded; excluding a record requires an explicit reason rather than silent loss. Large data may use a validated S3 checksum; if absent/unusable, the hash is recomputed. G/tools validate geometric correctness separately.
+3. Missing/mismatched files produce completion.status=rejected with missing_files/hash_mismatches details. Capture returns to capturing, no input snapshot is pinned, and G is not started. The phone finishes uploading and sends a **new** completion_id/manifest. Repeating an old rejected request returns its previous rejection.
+4. Temporary S3 unavailability leaves validation pending and retries with the same IDs; it does not prove the capture is missing. On successful validation, I atomically pins the accepted source (manifest version/hash), capture_state=sealed, completion.status=accepted, processing_state=queued_geometry and the G-dispatch outbox entry.
+5. After sealed, new upload plans, start operations or new completions for this session return 409 session_closed; exact replay of an accepted operation is allowed. Previously issued URLs may still exist, so **pinned object versions and hashes** ensure input immutability, not an assumption that URLs are immediately revoked. Late unrelated objects are outside the accepted manifest version.
 
-Полный набор фиксируется в Inspector; вызова G seal нет. Ошибка/timeout G после фиксации не открывает capture заново. Для нового evidence I создаёт другую session. Состояние открытых заданий collecting не блокирует передачу набора на анализ: их фактическая пригодность может быть определена только после обработки.
+Inspector pins the complete capture; there is no G seal call. A G error/timeout after pinning does not reopen capture. I creates a different session for new evidence. Open collecting instructions do not block submitting the capture for analysis: their actual evidence sufficiency may only be determined after processing.
 
-### 5.6 События, инструкции и восстановление
+### 5.6 Events, instructions and recovery
 
-I ведёт одну сохраняемую историю session events. Основной foreground-транспорт — **WebSocket, исходящее соединение телефона с I**; GET events обслуживает replay и резервный polling. Бинарные картинки/RGB-D в поток событий не включаются.
+I maintains one persistent session-event history. The primary foreground transport is **WebSocket, initiated by the phone toward I**; GET events provides replay and fallback polling. Binary images/RGB-D are not included in the event stream.
 
-GET events без after возвращает начало доступной истории. Пример:
+GET events without after returns the beginning of available history. Example:
 
 ```json
 {
@@ -561,7 +561,7 @@ GET events без after возвращает начало доступной и�
       "model_version": "demo-room-v1",
       "target_element_ids": ["door-01"],
       "display_view_id": "view-ins-3",
-      "text": "Снимите правый край проёма с другого ракурса.",
+      "text": "Capture the right edge of the opening from another angle.",
       "language": "ru",
       "state": "pending",
       "target_region": null,
@@ -573,11 +573,11 @@ GET events без after возвращает начало доступной и�
 }
 ```
 
-Типы: instruction.created | instruction.updated | instruction.cancelled — полный объект instruction; session.updated — полное состояние I GET session; display.updated — полный display-манифест §5.1.3. События и курсоры одинаковы для HTTP и WebSocket. Доставка at-least-once; дедупликация по event_id, сохранение курсора только после применения всей доставленной порции. Старые/равные revisions одного ресурса не заменяют новые. Неизвестный тип пропускается с диагностикой и сохранением курсора.
+Types: instruction.created | instruction.updated | instruction.cancelled contain a full instruction; session.updated contains the full I GET session state; display.updated contains the full display manifest from §5.1.3. HTTP and WebSocket use identical events/cursors. Delivery is at-least-once; deduplicate by event_id and persist the cursor only after applying the entire delivered batch. Older/equal resource revisions cannot replace newer ones. Unknown types are skipped with diagnostics and cursor persistence.
 
-Состояния instruction: pending | collecting | satisfied | cannot_complete | cancelled. display_view_id nullable; ссылка не содержит render-ревизии. Изменение задачи увеличивает revision; обычное display.updated её не меняет. При отмене старый контекст картинки снимается. Для v0.1 target_region/audio=null; координаты и измерения не извлекаются разбором текста.
+Instruction states: pending | collecting | satisfied | cannot_complete | cancelled. display_view_id is nullable and contains no render revision. A changed task increases revision; ordinary display.updated does not. Cancellation removes old image context. For v0.1, target_region/audio=null; coordinates and measurements are not extracted by parsing text.
 
-**WebSocket:** `wss://<I>/v1/sessions/{s}/events/ws?after={cursor}`, Authorization в handshake, subprotocol inspector.events.v1. Сервер проверяет доступ и cursor до upgrade. Сначала replay после переданного курсора, затем новые события в том же порядке; регистрация live-подписки и чтение replay не оставляют промежутка с потерей событий. JSON-сообщение event batch:
+**WebSocket:** `wss://<I>/v1/sessions/{s}/events/ws?after={cursor}`, Authorization in the handshake, subprotocol inspector.events.v1. The server checks access and cursor before upgrade. It first replays after the supplied cursor, then sends new events in the same order; subscribing to live updates and reading replay must leave no event-loss gap. JSON event-batch message:
 
 ```json
 {
@@ -608,13 +608,13 @@ GET events без after возвращает начало доступной и�
 }
 ```
 
-Для heartbeat используются WebSocket Ping/Pong; интервалы и idle timeout — конфигурация развёртывания. Auth expiry/revocation закрывает поток и требует обновления доступа. Если cursor устарел до upgrade — HTTP 410; после upgrade — `{"type":"stream.error","error":{"code":"cursor_expired","message":"Reload snapshot","retryable":false,"details":{}}}`, затем закрытие соединения. Ошибки доступа не вызывают бесконечное переподключение с тем же токеном.
+Heartbeat uses WebSocket Ping/Pong; intervals and idle timeout are deployment settings. Auth expiry/revocation closes the stream and requires renewed access. A cursor expired before upgrade returns HTTP 410; after upgrade it sends `{"type":"stream.error","error":{"code":"cursor_expired","message":"Reload snapshot","retryable":false,"details":{}}}`, then closes. Access errors do not trigger endless reconnects with the same token.
 
-При старте/истёкшем cursor телефон читает **GET snapshot**. Ответ `{"session":{...},"instructions":[...],"displays":[...],"resume_cursor":"..."}` получен из одной серверной точки: все части включают события не позднее resume_cursor. Клиент атомарно применяет снимок и подключается после resume_cursor. События, возникшие во время скачивания snapshot, доступны в replay. Существующий GET instructions остаётся снимком списка заданий; для полного восстановления нового клиента используется snapshot.
+On startup/expired cursor, the phone reads **GET snapshot**. Response `{"session":{...},"instructions":[...],"displays":[...],"resume_cursor":"..."}` represents one server snapshot: all parts include events no later than resume_cursor. The client applies it atomically and connects after resume_cursor. Events produced during snapshot download are available in replay. Existing GET instructions remains an instruction-list snapshot; new clients use snapshot for complete recovery.
 
-При разрыве соединения приложение сохраняет состояние, переподключается после последнего применённого cursor с backoff+jitter. Если WSS временно недоступен, использует GET events последовательно, ориентир polling 2 секунды. has_more=true — немедленно читает следующую порцию. Один активный транспорт на сессию; переключение транспортов не сбрасывает cursor. Ограниченная очередь отправки сокета при медленном клиенте может закрыться с resync_required: серверная история сохраняется, телефон восстанавливается через replay/snapshot. Надёжность доставки обеспечивает прикладная история, а не само наличие открытого сокета.
+On disconnection, the app retains state and reconnects after its last applied cursor with backoff+jitter. If WSS is temporarily unavailable, it uses sequential GET events, targeting 2-second polling. has_more=true immediately triggers the next batch. Only one transport is active per session; switching does not reset the cursor. A bounded socket-send queue may close a slow client with resync_required: server history remains intact and the phone recovers through replay/snapshot. Application history provides delivery reliability, not merely an open socket.
 
-Foreground — условие целевой задержки. При уходе приложения в фон непрерывная доставка не является требованием; при возвращении выполняется синхронизация. Push/background notifications могут быть добавлены отдельно. Входящий webhook телефона не используется.
+The target latency assumes foreground operation. Continuous delivery in the background is not required; returning to foreground triggers synchronization. Push/background notifications may be added separately. No inbound phone webhook is used.
 
 **I POST response:**
 
@@ -631,34 +631,34 @@ Foreground — условие целевой задержки. При уходе
 }
 ```
 
-Действия: acknowledged | capture_recorded | cannot_complete | message. Capture_recorded означает, что телефон локально сохранил указанные observation IDs по заданию; это не подтверждение загрузки, принятия набора или пригодности измерений. I сохраняет IDs как заявленные, после принятия manifest сверяет их с набором, а затем проверяет evidence по результатам инструментов. Task остаётся collecting до выполнения критериев. Для capture_recorded нужен непустой список локальных наблюдений этой сессии, связанных с instruction_id; для остальных — пустой список. Для message нужен text; cannot_complete может содержать причину. input_mode: button | typed; voice — расширение.
+Actions: acknowledged | capture_recorded | cannot_complete | message. capture_recorded means the phone locally saved the listed observation IDs for an instruction; it does not confirm upload, capture acceptance or measurement suitability. I saves IDs as declared, reconciles them with the accepted manifest, then assesses evidence using tool results. The task remains collecting until its criteria are met. capture_recorded requires a nonempty list of local observations in this session linked to instruction_id; other actions require an empty list. message requires text; cannot_complete may include a reason. input_mode: button | typed; voice is an extension.
 
-Состояние collecting не запрещает отправить полный набор на обработку: проверка пригодности evidence может зависеть от Geometry Service. Если обработка выявила нехватку данных, I завершает результатом needs_more_data и создаёт новую follow-up session для досъёмки. В одной sealed session новая съёмка не открывается.
+collecting does not prevent submitting a complete capture for processing: evidence suitability may depend on Geometry Service. If processing identifies insufficient data, I finishes with needs_more_data and creates a new follow-up capture session. New capture cannot reopen a sealed session.
 
-Квитанция: `{"response_id":"RESPONSE_UUID","status":"accepted"}` — принятие ответа, не достаточность evidence. Семантически устаревшая instruction revision → 409 stale_instruction с текущей инструкцией в details. Изменение display-манифеста само по себе не вызывает этот конфликт. При осознанной новой отправке после конфликта — новый response_id. Точный повтор успешного response_id/body возвращает исходную квитанцию **до** проверки текущей revision; другой body того же ID → 409.
+Receipt: `{"response_id":"RESPONSE_UUID","status":"accepted"}` acknowledges the response, not evidence sufficiency. A semantically stale instruction revision returns 409 stale_instruction with the current instruction in details. Display-manifest changes alone do not cause this conflict. An intentional new submission after conflict needs a new response_id. Exact replay of a successful response_id/body returns its original receipt **before** checking the current revision; a different body under the same ID returns 409.
 
-### 5.6.1 Текущий MVP: локальные уведомления без APNs
+### 5.6.1 Current MVP: local notifications without APNs
 
-Согласовано с Олегом: стартовый экран ждёт назначение Inspector, без камеры и автоматически открытой локальной сессии. При получении новой assignment во время работы приложения в foreground клиент сохраняет назначение и создаёт локальное системное уведомление, если пользователь разрешил уведомления. Повторная доставка той же session_id не создаёт повторных уведомлений. Нажатие открывает приложение; доступность/актуальность сессии проверяется через I до перехода к съёмке. Камера включается пользователем. В отсутствии сети/доступа показывается ожидание, а не выдуманное задание.
+Agreed with Oleg: the start screen waits for an Inspector assignment without a camera or automatically opened local session. When a new assignment arrives while the app is in the foreground, the client persists it and creates a local system notification if the user granted permission. Redelivery of the same session_id creates no duplicate notification. Tapping opens the app; I validates session availability/currency before capture navigation. The user activates the camera. Without network/access, show waiting rather than an invented assignment.
 
-Этот режим не доставляет новые задания, когда iOS приостановила или закрыла приложение. При возвращении клиент перечитывает capture-assignments. Системное уведомление — дополнительный сигнал; отказ в разрешении не скрывает задание из интерфейса. На стартовом экране нет тестовых кнопок или входа в локальную съёмку; только заглушка ожидания назначения. Сетевой клиент assignment ещё требуется реализовать.
+This mode does not deliver new assignments while iOS suspends or closes the app. On return, the client rereads capture-assignments. A system notification is an additional signal; denied notification permission does not hide the assignment from the interface. The start screen has no test buttons or local-capture entry, only an assignment-waiting placeholder. The network assignment client still requires implementation.
 
-### 5.6.2 Будущее расширение APNs (выключено, не подключено)
+### 5.6.2 Future APNs extension (disabled, not connected)
 
-Inspector остаётся инициатором: после долговременного создания session + assignment сохраняет исходящую push-операцию. APNs — уведомление о назначении, не источник истины. Polling assignments и replay/snapshot остаются обязательными при открытии приложения. Доставка и показ не гарантируются; отключённые уведомления не блокируют съёмку. Нативный APNs требует Apple Developer Program; текущая Personal Team этой интеграции не обеспечивает. Web Push через отдельное Home Screen веб-приложение — возможная альтернатива, ещё не выбранная и не реализованная.
+Inspector remains the initiator: after durably creating session + assignment, it saves an outgoing push operation. APNs notifies of an assignment; it is not the source of truth. Assignment polling and replay/snapshot remain mandatory on app open. Delivery/display are not guaranteed; disabled notifications do not block capture. Native APNs requires Apple Developer Program membership; the current Personal Team does not provide this integration. Web Push through a separate Home Screen web app is a possible alternative, neither selected nor implemented.
 
-Предлагаемые API I (сервер пока не реализован):
+Proposed I APIs (server not yet implemented):
 
-- PUT /v1/devices/{device_id}/push-registration с API Bearer: `{"schema_version":"0.1","provider":"apns","token":"HEX_DEVICE_TOKEN","environment":"development","topic":"com.aiinspector.capture"}`. 201 при создании, 200/204 при идемпотентной замене текущей регистрации устройства. I сверяет device identity, разрешённые topic/environment; токен не даёт прав на сессии. Один актуальный токен на device/topic/environment, без дублирования подписок. APNs token обновляется при каждом запуске; повтор PUT использует актуальный токен, ошибки доступа требуют обновления авторизации.
-- DELETE того же пути отзывает регистрацию при выходе из аккаунта, 204 идемпотентно. Завершённый logout должен также отвязать регистрацию на сервере; отсутствие сети не даёт основания сообщать об успешном отзыве. Полноценный logout flow в iOS пока отсутствует.
+- PUT /v1/devices/{device_id}/push-registration with API Bearer: `{"schema_version":"0.1","provider":"apns","token":"HEX_DEVICE_TOKEN","environment":"development","topic":"com.aiinspector.capture"}`. 201 on creation, 200/204 on idempotent replacement of the device's current registration. I validates device identity and allowed topic/environment; the token grants no session rights. There is one current token per device/topic/environment without duplicate subscriptions. Refresh the APNs token on each launch; repeated PUT uses the current token, and access errors require renewed authorization.
+- DELETE on the same path revokes registration on logout, returning idempotent 204. Completed logout must also detach the registration server-side; no network connection does not justify claiming successful revocation. A complete iOS logout flow is not yet available.
 
-Пример payload: `{"aps":{"alert":{"title":"AI Inspector","body":"Вам назначена новая съёмка"},"sound":"default"},"schema_version":"0.1","type":"capture.assigned","event_id":"11111111-1111-4111-8111-111111111111","session_id":"22222222-2222-4222-8222-222222222222"}`. IDs — UUID; одно исходящее событие сохраняет event_id при повторах. I использует apns-push-type=alert и topic/environment соответствующей регистрации. Доступ к APNs signing key есть только у сервера; ключи, токены и приватные задания не попадают в push/debug-логи. Невалидный/отозванный APNs token деактивируется; временные ошибки повторяются с ограниченным backoff.
+Example payload: `{"aps":{"alert":{"title":"AI Inspector","body":"A new capture has been assigned to you"},"sound":"default"},"schema_version":"0.1","type":"capture.assigned","event_id":"11111111-1111-4111-8111-111111111111","session_id":"22222222-2222-4222-8222-222222222222"}`. IDs are UUIDs; an outgoing event retains event_id across retries. I uses apns-push-type=alert and the registration's topic/environment. Only the server accesses the APNs signing key; keys, tokens and private task content stay out of push/debug logs. Invalid/revoked APNs tokens are deactivated; temporary errors retry with bounded backoff.
 
-При нажатии клиент проверяет доступ и актуальность через I GET session/snapshot, затем открывает назначение; отменённая/закрытая/недоступная сессия не начинает новую съёмку. Существующая несохранённая работа не переключается автоматически. Камера включается пользователем. В foreground допускаются banner и карточка, без смены активной сессии. Сейчас мобильный код только сохраняет проверенный по формату hint; authenticated lookup и навигацию ещё нужно связать с backend. Локальный тест или симуляция не подтверждают доставку I → APNs → iPhone.
+On tap, the client checks access/currency through I GET session/snapshot, then opens the assignment; cancelled/closed/inaccessible sessions do not start new capture. Existing unsaved work is not switched automatically. The user activates the camera. Foreground banners/cards are allowed without changing the active session. Current mobile code only retains a format-validated hint; authenticated lookup and navigation still require backend integration. A local test or simulation does not verify I → APNs → iPhone delivery.
 
-### 5.7 Состояние Inspector и итог
+### 5.7 Inspector state and result
 
-I GET session / session.updated возвращает конфигурацию assignment из §5.2 и актуальные поля состояния. Ниже сокращённый пример полей состояния:
+I GET session / session.updated returns the assignment configuration from §5.2 and current state fields. Abbreviated state example:
 
 ```json
 {
@@ -676,42 +676,42 @@ I GET session / session.updated возвращает конфигурацию as
 }
 ```
 
-- capture_state: assigned | capturing | submitted | sealed | cancelled. Processing_state: idle | validating | queued_geometry | building_geometry | evaluating | completed | failed | cancelled. Capturing не означает, что файлы уже в S3; sealed означает, что вход зафиксирован, но обработка может идти/ошибиться.
-- completion=null до первой операции; затем текущая pending | rejected | accepted. Retry старого completion_id возвращает состояние именно старой операции. Отказ проверки источника — completion.error; сбой обработки — верхний error/geometry_job. Один timeout не меняет принятую операцию на failed.
-- source=null до первой проверки; далее status=pending | rejected | accepted с manifest_sha256 и принятым observation_count, когда известен. Geometry_job=null до создания операции; status=queued | fetching | processing | ready | failed | cancelled. Внутренний retry не создаёт новый job при неизвестном результате.
-- display_view_id — общий обзор комнаты/итога, у него instruction_id=null. Экран задания использует его display_view_id. Готовность картинки и ready_ref хранятся в отдельном display-манифесте I; она не продвигает processing state.
-- Перед финалом I сохраняет результаты каждой обязательной проверки либо допустимую причину неопределённости. После sealed новые задания съёмки создаются в follow-up session, которую I связывает с той же inspection_id. Отмена обработки фиксируется в I; поздние результаты не продвигают отменённый workflow.
+- capture_state: assigned | capturing | submitted | sealed | cancelled. Processing_state: idle | validating | queued_geometry | building_geometry | evaluating | completed | failed | cancelled. Capturing does not mean files are already in S3; sealed means input is pinned, while processing may continue/fail.
+- completion=null before the first operation; afterwards the current pending | rejected | accepted completion is shown. Retrying an old completion_id returns that particular operation's state. Source rejection is completion.error; processing failure is the top-level error/geometry_job. A single timeout does not change an accepted operation to failed.
+- source=null before initial validation; then status=pending | rejected | accepted with manifest_sha256 and accepted observation_count when known. Geometry_job=null until operation creation; status=queued | fetching | processing | ready | failed | cancelled. An internal retry does not create another job while its outcome is unknown.
+- display_view_id identifies the general room/result overview with instruction_id=null. A task screen uses its own display_view_id. Image readiness and ready_ref are stored in I's separate display manifest and do not advance processing state.
+- Before finalization, I saves results of every required check or an allowed reason for uncertainty. After sealed, new capture instructions belong to a follow-up session linked by I to the same inspection_id. Cancellation is recorded in I; late results cannot advance a cancelled workflow.
 
-Пример result для завершённого анализа:
+Example result for completed analysis:
 
 ```json
 {
   "outcome": "needs_more_data",
   "analysis_origin": "mock",
-  "summary": "Недостаточно данных о правой стороне проёма.",
+  "summary": "Insufficient evidence for the right side of the opening.",
   "evidence_observation_ids": ["OBSERVATION_UUID"],
   "report_url": null
 }
 ```
 
-Outcome: issues_found | no_issues_detected | needs_more_data; analysis_origin: live_model | recorded_model | mock. Evidence принадлежит принятому набору; межсессионные findings внутри инспекции хранят явные session refs. No_issues_detected — результат текущего анализа, не сертифицированная приёмка. Completed не означает отсутствие дефектов. Display failure не меняет сохранённый итог.
+Outcome: issues_found | no_issues_detected | needs_more_data; analysis_origin: live_model | recorded_model | mock. Evidence belongs to the accepted capture; cross-session findings within an inspection retain explicit session refs. No_issues_detected is the current analysis result, not certified acceptance. Completed does not mean defect-free. Display failure does not change the saved outcome.
 
-### 5.8 Inspector запускает Geometry Service по ссылке
+### 5.8 Inspector starts Geometry Service from a reference
 
-Ни один маршрут этого раздела не вызывается телефоном. У I/G/B — service identities с project/session scope; исходные AWS credentials хранилища телефону и G через приложение не передаются.
+The phone calls none of the routes in this section. I/G/B use service identities with project/session scope; original AWS storage credentials are not passed to the phone or through the app to G.
 
-| Принимающий сервис | Метод/путь | Назначение |
+| Receiving service | Method/path | Purpose |
 |---|---|---|
-| G | PUT /internal/v1/jobs/{job_id} | I создаёт устойчивый geometry job по зафиксированному источнику |
-| G | GET /internal/v1/jobs/{job_id} | I сверяет статус и пропущенные уведомления |
-| I | GET /internal/v1/sessions/{s}/capture-source | G получает/обновляет временный доступ только к принятому набору |
-| I | GET /internal/v1/sessions/{s}/capture-source/files?after={cursor}&limit=100 | G получает страницы ссылок на точные object versions набора |
-| I | POST /internal/v1/geometry-events | G сообщает состояние/готовность/ошибку задания |
-| B | PUT /internal/v1/sessions/{s}/views/{v}/revisions/{r} | I задаёт render-команду |
-| I | POST /internal/v1/display-events | B сообщает ready/failed/superseded |
-| I | GET /internal/v1/sessions/{s}/tool-results/{result_id}/revisions/{r} | Авторизованный B/tool читает неизменяемый результат I |
+| G | PUT /internal/v1/jobs/{job_id} | I creates a durable geometry job from the pinned source |
+| G | GET /internal/v1/jobs/{job_id} | I reconciles status and missed notifications |
+| I | GET /internal/v1/sessions/{s}/capture-source | G obtains/refreshes temporary access only to the accepted capture |
+| I | GET /internal/v1/sessions/{s}/capture-source/files?after={cursor}&limit=100 | G retrieves paginated references to exact object versions in the capture |
+| I | POST /internal/v1/geometry-events | G reports job state/readiness/failure |
+| B | PUT /internal/v1/sessions/{s}/views/{v}/revisions/{r} | I submits a render command |
+| I | POST /internal/v1/display-events | B reports ready/failed/superseded |
+| I | GET /internal/v1/sessions/{s}/tool-results/{result_id}/revisions/{r} | Authorized B/tool reads an immutable I result |
 
-I создаёт geometry_job_id и operation_key до вызова G, сохраняет job + outbox в той же транзакции, что принятый источник. Пример PUT job:
+I creates geometry_job_id and operation_key before invoking G and persists job + outbox in the same transaction as the accepted source. Example PUT job:
 
 ```json
 {
@@ -732,13 +732,13 @@ I создаёт geometry_job_id и operation_key до вызова G, сохр�
 }
 ```
 
-Source_ref.url — стабильная служебная ссылка I на уже принятый S3 набор; host/путь выбирает I из доверенной конфигурации. G не следует произвольному URL от телефона. Получив эту ссылку, G запрашивает I со своей service identity; I проверяет доступ job/session и возвращает storage_id, manifest version/hash/byte_length, presigned manifest_url, expires_at и files_url из таблицы. Приложение в этом обмене не участвует.
+Source_ref.url is I's stable service reference to an already accepted S3 capture; I chooses its host/path from trusted configuration. G does not follow arbitrary phone-provided URLs. G requests this reference from I using its service identity; I checks job/session access and returns storage_id, manifest version/hash/byte_length, presigned manifest_url, expires_at and files_url from the table. The app is not involved.
 
-GET capture-source/files выдаёт `items` с name, observation_id, object_key, version_id, byte_length, sha256, download_url, expires_at и next_cursor. Ссылки ограничены **точными версиями из принятого manifest**, а не всем bucket/prefix; страницы читают один неизменяемый snapshot. G скачивает байты напрямую из S3, не пересылая bearer token I на S3. При истечении URLs повторно получает доступ через I, сохраняя тот же job/source hash. Обновлённые подписи не меняют идентичность job и не требуют нового geometry run. Крупные RGB-D не проксируются через I.
+GET capture-source/files returns `items` containing name, observation_id, object_key, version_id, byte_length, sha256, download_url, expires_at and next_cursor. References are limited to **exact versions in the accepted manifest**, not the whole bucket/prefix; pages read one immutable snapshot. G downloads bytes directly from S3 without forwarding I's bearer token. On URL expiry it refreshes access through I while retaining the same job/source hash. New signatures do not change job identity or require a new geometry run. Large RGB-D files are not proxied through I.
 
-G отвечает 201 после durable записи job/очереди; точный повтор job_id/body — 200 с состоянием того же job; другое содержимое принятого ID или тот же operation_key с другими входами — 409. Повтор timeout не создаёт новый ID. При повторной обработке после терминального сбоя I создаёт явно новый AnalysisRun/job только по политике, сохраняя parent job и ту же immutable source ref. Транспортный retry и новый запуск обработки различаются.
+G returns 201 after durable job/queue storage; exact job_id/body replay returns 200 with that job's state; changed content for an accepted ID or the same operation_key with different inputs returns 409. Timeout retry does not create a new ID. Reprocessing after a terminal failure requires I to create an explicit new AnalysisRun/job under policy, retaining the parent job and same immutable source ref. A transport retry and a new processing run are distinct.
 
-Пример готового события G → I:
+Example G → I ready event:
 
 ```json
 {
@@ -756,40 +756,40 @@ G отвечает 201 после durable записи job/очереди; то�
 }
 ```
 
-Типы: geometry.updated | geometry.ready | geometry.failed. Updated содержит job status; ready требует geometry_revision; failed требует error и geometry_revision=null. I отвечает 202 после durable inbox; точный повтор source/event_id — 200, другой payload того же event_id — 409. G публикует через outbox/эквивалент и повторяет до подтверждения; I после рестарта/по таймауту сверяет GET job.
+Types: geometry.updated | geometry.ready | geometry.failed. Updated includes job status; ready requires geometry_revision; failed requires error and geometry_revision=null. I returns 202 after durable inbox storage; exact source/event_id replay returns 200, changed payload under that event_id returns 409. G publishes through an outbox/equivalent and retries until acknowledged; I reconciles through GET job after restart/timeout.
 
-GET job содержит job/session/project, неизменяемые входы и source hash, status/revision/error; ready — geometry_revision, evidence_observation_ids, excluded_observations с причинами и artifacts. Artifact: artifact_id, kind=point_cloud | reconstructed_model, URL, media_type, byte_length, sha256. Если данные исключены, они не скрываются; I проверяет пригодность результата по policy. Событие observation.accepted от G больше не используется: G обрабатывает полный набор, принятый I.
+GET job contains job/session/project, immutable inputs and source hash, status/revision/error; ready includes geometry_revision, evidence_observation_ids, excluded_observations with reasons, and artifacts. Artifact: artifact_id, kind=point_cloud | reconstructed_model, URL, media_type, byte_length, sha256. Excluded data remains visible; I validates result suitability against policy. G no longer emits observation.accepted: it processes the complete capture accepted by I.
 
-I не применяет старые/чужие job results к текущей session: проверяет job_id, source hash, model/profile, актуальную workflow version и отмену. Неизвестные/неготовые данные не считаются успешной геометрией. Конкретный формат реконструкции/PLY и геометрические гарантии нужно согласовать с владельцем G.
+I does not apply old/foreign job results to the current session: it checks job_id, source hash, model/profile, current workflow version and cancellation. Unknown/unready data is not successful geometry. The reconstruction/PLY format and geometric guarantees require agreement with G's owner.
 
-## 6. Координаты — обязательный пункт согласования
+## 6. Coordinates — mandatory agreement point
 
-- Все JSON-матрицы — **массивы строк**; умножаются на векторы-столбцы. Swift SIMD хранит столбцы: сериализация в приложении явно переставляет индексы.
-- `T_world_camera` — 4×4, **camera → world текущего segment**, не world → camera. Метры, правая система; world Y вверх, камера смотрит вдоль −Z, её X вправо, Y вверх.
-- `K_rgb` — 3×3 intrinsics сохранённого исходного RGB; не экранного превью.
-- Proposed pixel convention: начало сверху слева, u вправо, v вниз. `K_depth = diag(depthWidth/rgbWidth, depthHeight/rgbHeight, 1) × K_rgb`.
-- Для пикселя (u,v) с depth d: `p_optical = d × inverse(K_depth) × [u,v,1]`; затем `p_camera = diag(1,-1,-1) × p_optical`; затем `p_world = T_world_camera × [p_camera,1]`.
-- Это предлагаемое соглашение. Pixel-center convention, соответствие RGB/depth и знак осей **обязательно проверить на реальном наборе** до фиксации v1. Не считать синтетические тесты доказательством качества LiDAR.
-- В backend точка переводится в BIM через отдельно вычисленное `T_bim_world`. Исходные poses и measurements не переписывать под BIM и не притягивать измеренные дефекты к проектным поверхностям.
-- Поля `depth_to_rgb_mapping`/`coordinates` текущих локальных файлов пояснительные; сервер использует согласованную схему v0.1, а не парсит произвольный текст как алгоритм.
+- All JSON matrices are **arrays of rows**, multiplied by column vectors. Swift SIMD stores columns: app serialization explicitly reorders indices.
+- `T_world_camera` is 4×4, **camera → current segment world**, not world → camera. Metres, right-handed; world Y is up, the camera looks along −Z, with X right and Y up.
+- `K_rgb` is the 3×3 intrinsics matrix for the saved original RGB, not the screen preview.
+- Proposed pixel convention: origin at top left, u right, v down. `K_depth = diag(depthWidth/rgbWidth, depthHeight/rgbHeight, 1) × K_rgb`.
+- For pixel (u,v) at depth d: `p_optical = d × inverse(K_depth) × [u,v,1]`; then `p_camera = diag(1,-1,-1) × p_optical`; then `p_world = T_world_camera × [p_camera,1]`.
+- This is a proposed convention. Pixel-center convention, RGB/depth correspondence and axis signs **must be checked on real capture data** before freezing v1. Synthetic tests do not establish LiDAR quality.
+- The backend transforms a point into BIM through a separately computed `T_bim_world`. Do not rewrite source poses/measurements into BIM or force measured defects onto designed surfaces.
+- Current local-file `depth_to_rgb_mapping`/`coordinates` fields are explanatory; the server uses the agreed v0.1 schema rather than interpreting arbitrary prose as an algorithm.
 
-## 7. Инструменты Inspector: привязка, покрытие, сравнение
+## 7. Inspector tools: alignment, coverage and comparison
 
-**Решение владельца Inspector:** pipeline находится в I, вычисления выполняют заменяемые детерминированные инструменты. Выделять отдельную LLM или отдельный HTTP-сервис для каждого этапа необязательно. I предоставляет зафиксированные исходные данные S3, G — реконструкцию; B — эталонную геометрию. Реализация конкретного алгоритма и поддерживаемые проверки требуют отдельного согласования и не объявляются готовыми этим документом.
+**Inspector owner's decision:** I owns the pipeline; replaceable deterministic tools perform computations. A separate LLM or HTTP service per stage is unnecessary. I supplies pinned S3 source data, G supplies reconstruction and B supplies reference geometry. Specific algorithms and supported checks require separate agreement and are not declared implemented by this document.
 
-Последовательность I после capture completion: проверить и зафиксировать S3 manifest → GeometryPort.startBuild по ссылке на источник → принять и проверить geometry.ready → получить/проверить alignment → вычислить coverage → выполнить необходимые сравнения → сохранить результаты и обновить BIM render. Это финальный путь обработки; дополнительно во время съёмки отдельный L выполняет привязку и оценку покрытия по ранним наблюдениям (§13). I сохраняет измерения и применяет policy, затем агент объясняет сохранённый итог. Gate перед запуском G проверяет доступность и целостность входа; он не требует результата coverage, для которого ещё нужна реконструкция G.
+I's sequence after capture completion: validate and pin the S3 manifest → GeometryPort.startBuild using its source reference → accept and validate geometry.ready → obtain/validate alignment → compute coverage → perform required comparisons → save results and update the BIM render. This is the final processing path; during capture, separate L also performs alignment and coverage assessment from early observations (§13). I retains measurements and applies policy, then the agent explains the saved outcome. The pre-G gate checks input availability/integrity; it does not require coverage that still depends on G's reconstruction.
 
-Для запуска инструмента I сохраняет operation_key из inspection/session, типа операции и неизменяемых версий входов, включая manifest_sha256. Запись создаётся до внешнего вызова. Инструмент поддерживает этот ключ либо поиск задания по нему. Завершение сопоставляется с job_id/operation_key и версиями, старый результат сохраняется для истории, но не меняет текущий контекст. LLM не получает произвольную запись в state/БД и не ослабляет закреплённую политику.
+For tool execution, I stores an operation_key derived from inspection/session, operation type and immutable input versions, including manifest_sha256. This record precedes the external call. The tool supports the key or lookup by it. Completion is matched against job_id/operation_key and versions; old results remain in history without altering current context. The LLM cannot write arbitrary state/database changes or weaken pinned policy.
 
-Минимальные зависимости:
+Minimum dependencies:
 
-| Инструмент | Входы | Проверяемый результат |
+| Tool | Inputs | Validated result |
 |---|---|---|
-| Alignment | model_version, segment_id, калибровка, immutable evidence и независимые опорные данные | T_bim_world, метод/версия, метрики погрешности и неоднозначности, статус valid/invalid/unknown по policy |
-| Coverage | Геометрия комнаты, пригодная alignment revision для segment, RGB-D/poses/intrinsics, показатели качества | Версионированные наблюдённые/неизвестные/недостаточные участки, evidence refs и quality issues |
-| Compare | Закреплённый BIM, финальная geometry revision, пригодная alignment, policy/tolerances | Измерения по element/check ID, погрешность, evidence и непроверенные элементы; I вычисляет outcome |
+| Alignment | model_version, segment_id, calibration, immutable evidence and independent reference data | T_bim_world, method/version, error and ambiguity metrics, valid/invalid/unknown status under policy |
+| Coverage | Room geometry, usable alignment revision for the segment, RGB-D/poses/intrinsics and quality measures | Versioned observed/unknown/insufficient regions, evidence refs and quality issues |
+| Compare | Pinned BIM, final geometry revision, usable alignment, policy/tolerances | Measurements by element/check ID, uncertainty, evidence and unchecked elements; I calculates outcome |
 
-Все принятые I результаты доступны через фиксированный служебный GET tool-result. Оболочка:
+All results accepted by I are available through a fixed internal GET tool-result. Envelope:
 
 ```json
 {
@@ -820,19 +820,19 @@ I не применяет старые/чужие job results к текущей 
 }
 ```
 
-Оболочка — минимальная граница хранения/чтения Inspector. Детальные payload каждого kind, метод разбиения поверхностей и критерии принятия требуют согласования с реализацией tools; пример region не является готовым алгоритмом или подтверждённым реальным ID. B применяет coverage только когда поддерживает явно согласованный payload и geometry_package_version. Неподдерживаемая версия не превращается в фиктивное покрытие: measured overlay не отображается, I сохраняет ошибку совместимости, цель задания остаётся доступна.
+The envelope defines Inspector's minimum persistence/read boundary. Detailed payloads for each kind, surface-partitioning methods and acceptance criteria require agreement with tool implementations; an example region is neither an implemented algorithm nor a verified real ID. B applies coverage only when it supports the explicitly agreed payload and geometry_package_version. Unsupported versions do not become fabricated coverage: no measured overlay is displayed, I retains a compatibility error, and the task target remains available.
 
-Для alignment payload обязательны segment_id, T_bim_world и качество; reset ARKit требует отдельного результата для нового segment. Для coverage region IDs принадлежат подготовленной геометрии закреплённой модели. Крупные маски/инвентари могут быть immutable артефактами с content hash вместо массивов в событии. Отсутствие evidence, попадание поверхности в RGB-кадр и подтверждённое depth измерение имеют разные состояния. I не объявляет весь элемент покрытым из-за одного измеренного участка. Процент покрытия разрешён только с согласованным знаменателем/областью оценки.
+Alignment payloads require segment_id, T_bim_world and quality; an ARKit reset requires a separate result for the new segment. Coverage region IDs belong to the prepared geometry of the pinned model. Large masks/inventories may be immutable content-hashed artifacts rather than event arrays. Missing evidence, visibility in an RGB frame and confirmed depth measurement are distinct states. I does not declare a whole element covered based on one measured region. Coverage percentages require an agreed denominator/assessment extent.
 
-До пригодной alignment и согласованного coverage payload input_refs.coverage=null: B может показывать BIM и цель, а измеренное покрытие/положение камеры остаётся unknown. Подсветка «снять здесь» не обозначает «уже снято». Новый более точный расчёт может уменьшить оценку покрытия; монотонна версия результата, а не процент. Ошибка alignment не превращается в вывод о смещённой стене.
+Before usable alignment and an agreed coverage payload, input_refs.coverage=null: B may show BIM and the target, while measured coverage/camera position remain unknown. “Capture here” highlighting does not mean “already captured.” A more accurate recalculation may lower coverage; result version, not percentage, is monotonic. Alignment errors do not become findings of a displaced wall.
 
-Точный допуск, погрешность, критерии достаточности и schema Compare фиксируются отдельной policy/контрактом. no_issues_detected не преобразуется автоматически в compliant: I проверяет полноту scope и неопределённость. При недостатке данных результат — needs_more_data/внутренний inconclusive.
+Exact tolerance, uncertainty, sufficiency criteria and Compare schema are pinned through a separate policy/contract. no_issues_detected is not automatically compliant: I checks scope completeness and uncertainty. Insufficient data yields needs_more_data/internal inconclusive.
 
-Голос остаётся расширением: можно озвучивать существующий text локально. Аудиозагрузка/распознавание и input_mode=voice согласуются отдельно и не блокируют текст.
+Voice remains an extension: existing text may be spoken locally. Audio upload/recognition and input_mode=voice require separate agreement and do not block text.
 
-## 8. Ошибки, повторы и сохранность
+## 8. Errors, retries and preservation
 
-Ошибки I/B/G API:
+I/B/G API errors:
 
 ```json
 {
@@ -843,90 +843,90 @@ I не применяет старые/чужие job results к текущей 
 }
 ```
 
-| Случай | Действие |
+| Case | Action |
 |---|---|
-| 400 / 422 | Исправить данные; неизменённый запрос автоматически не повторять |
-| 401 / 403 API | Обновить доступ соответствующего сервиса, сохраняя очередь |
-| 403 / expired presigned S3 URL | Запросить свежий upload plan/download access у I; не менять source IDs/hash |
-| 404 | Проверить назначенную session, model, file version или job; недостающий файл не считается загруженным |
-| 409 | Разобрать code; не создавать новый ID для обычного retry |
-| 410 cursor_expired | Применить snapshot I и продолжить после resume_cursor |
-| 412 S3 conditional PUT | Сверить существующий объект через I; совпадает → already_uploaded, иначе file_conflict |
-| 413 / превышение лимитов | Показать ограничение, не менять RGB/depth без согласованной схемы |
-| 429 | Учитывать Retry-After |
-| Сеть / timeout / 5xx | Повтор той же операции/IDs/байтов, backoff с jitter |
+| 400 / 422 | Correct the data; do not automatically repeat the unchanged request |
+| 401 / 403 API | Renew access for the relevant service while preserving the queue |
+| 403 / expired presigned S3 URL | Request a fresh upload plan/download grant from I; retain source IDs/hash |
+| 404 | Check assigned session, model, file version or job; a missing file is not uploaded |
+| 409 | Inspect the code; do not create a new ID for an ordinary retry |
+| 410 cursor_expired | Apply I's snapshot and resume after resume_cursor |
+| 412 S3 conditional PUT | Reconcile the existing object through I; match → already_uploaded, otherwise file_conflict |
+| 413 / limits exceeded | Show the limit; do not change RGB/depth without an agreed schema |
+| 429 | Honor Retry-After |
+| Network / timeout / 5xx | Retry the same operation/IDs/bytes with backoff and jitter |
 
-Ориентир backoff: 1, 2, 4, 8… до 30 секунд, больше при Retry-After. Очередь переживает перезапуск. Телефон различает local_saved, uploaded_s3, accepted_by_inspector и processed; файлы не удаляются после одного PUT или HTTP 202. Срок хранения локальных/S3/render данных — конфигурация до интеграции.
+Suggested backoff: 1, 2, 4, 8… up to 30 seconds, longer for Retry-After. The queue survives restart. The phone distinguishes local_saved, uploaded_s3, accepted_by_inspector and processed; files are not deleted after one PUT or HTTP 202. Local/S3/render retention periods are configured before integration.
 
-I хранит принятые completion/job/tool/display операции и outbox/inbox. Сбой G не делает исходную ссылку открытой заново; сбой B не отменяет source или результат анализа. Presigned URLs, AWS/API credentials и содержимое кадров не пишутся в debug-логи. Жизненный цикл S3 не удаляет версии принятого источника, пока обязательные processing/retry операции используют их; retention должен учитывать и старые pinned versions, и текущие объекты.
+I retains accepted completion/job/tool/display operations and outbox/inbox records. G failure does not reopen the source; B failure does not cancel source acceptance or analysis results. Presigned URLs, AWS/API credentials and frame contents stay out of debug logs. S3 lifecycle rules must not delete accepted source versions while required processing/retries use them; retention covers old pinned versions as well as current objects.
 
-## 9. Подтверждённые решения и открытые зависимости
+## 9. Confirmed decisions and open dependencies
 
-Ранее подтверждённые решения владельца Inspector и продуктовые уточнения Олега редакции 6 (новые API L требуют согласования владельцами):
+Previously confirmed Inspector-owner decisions and Oleg's revision 6 product clarifications (new L APIs require implementation-owner agreement):
 
-- Session ID создаёт Inspector и передаёт iPhone.
-- Телефон сохраняет весь RGB-D набор под этим ID в S3, после завершения возвращает Inspector ссылку на набор.
-- Inspector запускает Geometry Service по ссылке; iPhone и G напрямую не связаны.
-- Редакция 6 расширяет прежний сценарий: во время съёмки L показывает положение и предварительное/подтверждённое покрытие по обработанным ранним наблюдениям; финальная реконструкция G остаётся отдельным этапом.
-- Inspector координирует инспекцию; отдельный L управляет привязкой и восстановлением, затем продолжает мониторинг. API I может служить транспортом без LLM на каждом сообщении.
-- B выдаёт готовую серверную BIM-картинку; ракурс задаёт I, телефон масштабирует локально. Обновление картинки ориентировано на 2–5 секунд; загрузка набора и реконструкция имеют отдельные длительности.
-- Для хакатона — один проект и один телефон; интерфейсы сохраняют scopes/версии для роста.
+- Inspector creates the session ID and passes it to the iPhone.
+- The phone stores the entire RGB-D capture in S3 under that ID and returns its reference to Inspector after completion.
+- Inspector starts Geometry Service using the reference; iPhone and G have no direct connection.
+- Revision 6 extends the earlier workflow: during capture, L displays position and provisional/confirmed coverage from processed early observations; G's final reconstruction remains separate.
+- Inspector coordinates inspection; separate L controls alignment/recovery and then continues monitoring. I's API may transport messages without an LLM call for each one.
+- B provides prepared server BIM images; I sets the viewpoint and the phone zooms locally. Image updates target 2–5 seconds; capture upload and reconstruction have separate durations.
+- The hackathon uses one project and one phone; interfaces retain scopes/versions for future expansion.
 
-Согласовать с владельцами реализаций:
+Agree with implementation owners:
 
-- [ ] G принимает job/source link от I, читает разрешённые S3 versions, поддерживает operation key, job status и callbacks; телефон не вызывает G.
-- [ ] iOS принимает backend session_id, сохраняет его offline, пишет segments/frame.json и финальный manifest, использует S3 checksum/presigned PUT и completion I.
-- [ ] Заданы S3 bucket/region/versioning, политики условной записи и checksum, backend roles, сроки URL/retention и тестовая среда.
-- [ ] Подтверждены I/B PNG, display manifests, WebSocket/snapshot/replay, render commands/webhooks и токены с проектными правами.
-- [ ] Заданы лимиты набора/файлов/изображений, частоты запросов и очередей, история событий и таймауты. Значения — конфигурация, не выбор LLM.
-- [ ] Согласованы вычислительная геометрия B, payloads alignment/coverage/Compare, поддерживаемые проверки и качество/допуски. Их реализация не объявляется готовой этим контрактом.
+- [ ] G accepts job/source references from I, reads authorized S3 versions, supports operation keys, job status and callbacks; the phone does not invoke G.
+- [ ] iOS accepts the backend session_id, retains it offline, writes segments/frame.json and the final manifest, and uses S3 checksum/presigned PUT plus I completion.
+- [ ] S3 bucket/region/versioning, conditional-write/checksum policies, backend roles, URL/retention lifetimes and a test environment are configured.
+- [ ] I/B PNG, display manifests, WebSocket/snapshot/replay, render commands/webhooks and project-scoped tokens are confirmed.
+- [ ] Capture/file/image limits, request rates, queue limits, event history and timeouts are configured rather than selected by the LLM.
+- [ ] B's computational geometry, alignment/coverage/Compare payloads, supported checks and quality/tolerances are agreed. This contract does not declare them implemented.
 
-## 10. Приёмка интеграции
+## 10. Integration acceptance
 
-1. I создаёт один session_id; повтор запроса создания и повтор assignment не создают другую сессию. Телефон сохраняет ID после перезапуска.
-2. Все локальные/S3 captures и manifest имеют этот session ID. Reset камеры создаёт segment, а не новый capture session; разные сегменты не смешиваются без alignment.
-3. Телефон работает только с I/B/S3: сетевой клиент и конфигурация не содержат обязательного G endpoint/token.
-4. Обрыв S3 PUT и timeout после успешной записи восстанавливаются с тем же объектом/checksum; 412 сверяется, без скрытого overwrite. Хеши frame.json и бинарных файлов соответствуют сохранённым байтам.
-5. Completion с недостающими/подменёнными файлами отклоняется без запуска G. Принятая точная версия manifest и файлов фиксируется I; поздняя новая версия S3 не меняет вход job.
-6. После restart/timeout I отправляет G тот же job_id/operation_key/source. G обновляет истёкший доступ через I, читает S3 и не обращается к телефону.
-7. Геометрический результат проверен на реальном RGB-D: оси, intrinsics, depth и измеренная ошибка; исключённые кадры перечислены явно. Mock/synthetic/recorded различаются.
-8. Во время localizing/relocalizing отображаются только инструкции L, во время inspecting — I. После handoff оба интерфейса получают положение/покрытие; unknown и preliminary не отображаются как verified_capture. Проверяются потеря привязки, восстановление, отсутствие BIM и устаревшие callbacks (§13).
-9. Render/progress не меняет semantic task revision. Captured acknowledgement не закрывает task без фактической проверки; collecting не блокирует запуск полного набора.
-10. WSS replay/snapshot, повторные callbacks и старые geometry/render revisions не теряют события и не заменяют актуальный контекст. Истёкший PNG URL обновляется для того же artifact/hash.
-11. После sealed новый capture получает ID от I с parent_session_id. Сбой G/B и поздние события не открывают старую съёмку и не запускают дубли операций.
-12. Условия 2–5-секундного display-обновления измерены отдельно от времени upload/geometry; приведены p50/p95, сеть, модель и разрешение.
-13. Доступ другого device/project к assignment, manifest, S3 URLs, job и PNG отклоняется. Данные не становятся публичными по знанию UUID или object prefix.
+1. I creates one session_id; repeated creation requests and assignments create no second session. The phone retains the ID across restart.
+2. All local/S3 captures and the manifest carry this session ID. Camera reset creates a segment, not a new capture session; segments are not combined without alignment.
+3. The phone communicates only with I/B/S3: its network client/configuration has no mandatory G endpoint/token.
+4. Interrupted S3 PUT and timeout after successful storage recover using the same object/checksum; 412 is reconciled without hidden overwrite. frame.json and binary hashes match saved bytes.
+5. Completion with missing/substituted files is rejected without starting G. I pins the exact accepted manifest/file versions; a later S3 version does not change job input.
+6. After restart/timeout, I sends G the same job_id/operation_key/source. G refreshes expired access through I, reads S3 and does not contact the phone.
+7. Geometry is validated on real RGB-D: axes, intrinsics, depth and measured error; excluded frames are explicit. Mock/synthetic/recorded origins are distinguished.
+8. Only L instructions appear during localizing/relocalizing, and I instructions during inspecting. After handoff, both interfaces receive position/coverage; unknown and preliminary are not shown as verified_capture. Test alignment loss/recovery, absent BIM and stale callbacks (§13).
+9. Render/progress does not change semantic task revision. Capture acknowledgement does not complete a task without validation; collecting does not block full-capture processing.
+10. WSS replay/snapshot, repeated callbacks and older geometry/render revisions neither lose events nor replace current context. Expired PNG URLs refresh for the same artifact/hash.
+11. After sealed, new capture receives an I-issued ID with parent_session_id. G/B failures and late events neither reopen old capture nor duplicate operations.
+12. Conditions for 2–5-second display refresh are measured separately from upload/geometry time; report p50/p95, network, model and resolution.
+13. Access by another device/project to assignments, manifests, S3 URLs, jobs and PNGs is rejected. Knowing a UUID or object prefix does not make data public.
 
-## 11. История редакций и миграция
+## 11. Revision history and migration
 
-**Редакция 6:** отдельный Localization Service, самостоятельное руководство пользователем при привязке, передача управления обратно Inspector, параллельная телеметрия/покрытие и временный возврат при потере привязки. Добавлен §13 с предлагаемым API. Прежние ограничения «только после полного набора» заменены этой логикой. Существующий Geometry и финальный ZIP не меняются. Эта редакция обновляет тот же общий файл; отдельный документ локализации удалён.
+**Revision 6:** separate Localization Service, autonomous guidance during alignment, return of control to Inspector, parallel telemetry/coverage and temporary takeover on alignment loss. §13 adds proposed APIs. This replaces earlier “only after complete capture” restrictions. Existing Geometry and final ZIP remain unchanged. This revision updates the same shared file; the separate localization document was removed.
 
-Редакция 1 предлагала прямые API iPhone к G/I и G → I notifications. Редакция 2 выделила B с локальной сценой; редакция 3 уточнила серверный PNG, WebSocket и Inspector-owned tools.
+Revision 1 proposed direct iPhone APIs to G/I and G → I notifications. Revision 2 separated B with a local scene; revision 3 clarified server PNG, WebSocket and Inspector-owned tools.
 
-**Редакция 4 по последнему уточнению владельца заменяет транспорт capture:** session_id создаёт I; iPhone → S3 → completion со ссылкой в I → job от I в G → чтение G из S3. Удалены телефонные G session/segment/observation/uploads endpoints, G durable receipt для телефона, G observation.accepted и протокол I → G seal. Новый источник истины о принятом полном наборе — Inspector и его pinned S3 manifest. Во время съёмки measured coverage не обещается.
+**Revision 4 replaces capture transport following the owner's latest clarification:** I creates session_id; iPhone → S3 → completion reference to I → I submits G job → G reads S3. Phone-facing G session/segment/observation/upload endpoints, G's durable phone receipt, G observation.accepted and I → G seal were removed. Inspector and its pinned S3 manifest become the source of truth for the accepted full capture. Measured coverage during capture is not promised.
 
-В редакции 4 сохранялся frame.json 0.1; редакция 5 предлагает frame.json 0.2 с nullable depth и legacy-чтением 0.1. Бинарные соглашения RGB-D сохраняются; HTTP multipart телефона к G заменён загрузкой объектов S3. Старое observations_submitted заменено capture_recorded с явным смыслом локального прогресса. Изменены session creation, completion, geometry jobs и source ownership. Это несовместимое изменение транспорта для уже выпущенного клиента; до реализации всем участникам нужно выбрать одну редакцию. Предлагаемая schema_version=0.1 относится к ещё не выпущенному контракту, а не является заявлением совместимости со старыми endpoints.
+Revision 4 retained frame.json 0.1; revision 5 proposes frame.json 0.2 with nullable depth and legacy 0.1 reading. RGB-D binary conventions remain; S3 object uploads replace phone-to-G HTTP multipart. capture_recorded replaces observations_submitted with explicit local-progress semantics. Session creation, completion, geometry jobs and source ownership change. This transport change is incompatible with an already released client; participants must select one revision before implementation. Proposed schema_version=0.1 describes an unreleased contract, not compatibility with old endpoints.
 
-Редакция основана на последнем обсуждении Inspector в этом чате и «Open design orchestrator chat» для server-render/WebSocket. Исходное вложение — историческая версия; эта копия в репозитории является текущим предложением. Провайдер BIM и детальные schemas tools/Compare — отдельные зависимости.
+This revision follows the latest Inspector discussion in this chat and “Open design orchestrator chat” for server-render/WebSocket behavior. The original attachment is historical; this repository copy is the current proposal. The BIM provider and detailed tool/Compare schemas remain separate dependencies.
 
-## 12. Исполнение Inspector и дальнейший рост
+## 12. Inspector execution and future growth
 
-Для нового сценария L выделяется как отдельный сервис локализации/покрытия; backend I сохраняет координацию, транспортный API, адаптер B и устойчивые очереди. Логические порты не требуют немедленного развёртывания каждого модуля как микросервиса. Дальнейшее выделение tools/renderer в процессы не меняет идентификаторы, версии и публичные события.
+In the new workflow, L is a separate localization/coverage service; backend I retains coordination, transport APIs, the B adapter and durable queues. Logical ports do not require deploying every module as a microservice immediately. Later separation of tools/renderers into processes does not change identifiers, versions or public events.
 
-- **Состояние:** одна authoritative запись inspection/session и проверка expected state version при применении proposal/result. I атомарно фиксирует предметные изменения и outbox; принимающие сервисы используют durable inbox и дедупликацию. Checkpointer оркестратора не заменяет предметное хранилище и ключи внешних операций.
-- **Планирование:** capture registration/source verification, tools и render имеют отдельные ограниченные очереди. Быстрый транспорт повторяет сообщения; runtime решает, какой актуальный контекст применять. Очереди могут разделяться по project/session, с лимитами конкурентности и справедливостью между проектами. Брокер для хакатона не обязателен; долговременная доставка обязательна.
-- **Рендеринг:** подготовленный BIM кэшируется по project/model_version, применяются новые display state и refs. I объединяет частые coverage updates и вызывает агента при значимых изменениях. Render job никогда не обрабатывает произвольный пользовательский скрипт или URL. Изображения и большие данные передаются как защищённые артефакты по HTTPS; события содержат небольшие refs.
-- **Версии:** task revision, display manifest revision, view revision, geometry revision и tool-result revision имеют разные области. Ни cursor событий, ни revision G не заменяют версии результатов I/B. Применение проверяет весь необходимый набор входов, включая policy/model/segment/alignment.
-- **Наблюдаемость:** correlation/operation IDs связывают capture completion I, geometry job, tool job, render job, inbox/outbox и display event; credentials, signed URLs и payload кадров в debug-логи не попадают. Метрики: возраст очередей, retries, ошибки tools/render, lag событий, задержка новой картинки и пропущенные промежуточные render.
-- **Измерение задержки:** отдельно фиксируются capture finish→загрузка всех объектов S3, completion I→готовность геометрии, geometry→tool results, принятое display state I→render.ready→показ на телефоне. Цель 2–5 секунд относится к последнему пути обновления картинки при foreground и согласованных условиях сети/модели. Время загрузки всего набора и реконструкции измеряется отдельно; оно не обещается равным 2–5 секундам. Метрики p50/p95 и объёмы/разрешение определяются на реальном прогоне, до обещаний SLA.
-- **Развитие:** несколько независимых capture sessions/проектов используют те же scopes и протокол. Совместная запись нескольких телефонов в одну сессию, AR-наложение, свободная интерактивная 3D-навигация и видеострим являются отдельными расширениями с явным согласованием capabilities/schema.
+- **State:** one authoritative inspection/session record, with expected-state-version checks when applying proposals/results. I atomically saves domain changes and outbox entries; receiving services use durable inboxes and deduplication. The orchestrator checkpointer does not replace domain storage or external-operation keys.
+- **Scheduling:** capture registration/source validation, tools and rendering use separate bounded queues. Fast transport retries messages; the runtime decides which current context applies. Queues may be partitioned by project/session with concurrency limits and cross-project fairness. A broker is optional for the hackathon; durable delivery is mandatory.
+- **Rendering:** prepared BIM is cached by project/model_version, then updated display state/refs are applied. I coalesces frequent coverage updates and invokes the agent on meaningful changes. Render jobs never process arbitrary user scripts or URLs. Images/large data travel as protected HTTPS artifacts; events contain small references.
+- **Versions:** task revision, display manifest revision, view revision, geometry revision and tool-result revision have different scopes. Neither event cursors nor G revisions replace I/B result versions. Application checks all necessary inputs, including policy/model/segment/alignment.
+- **Observability:** correlation/operation IDs connect I capture completion, geometry/tool/render jobs, inbox/outbox and display events; credentials, signed URLs and frame payloads stay out of debug logs. Metrics include queue age, retries, tool/render errors, event lag, new-image latency and coalesced intermediate renders.
+- **Latency measurement:** separately record capture finish→all S3 objects uploaded, I completion→geometry ready, geometry→tool results, and accepted I display state→render.ready→phone display. The 2–5-second target applies only to the last image-update path in foreground under agreed network/model conditions. Full-capture upload and reconstruction are measured separately and are not promised within 2–5 seconds. Establish p50/p95 and volume/resolution on real runs before promising an SLA.
+- **Expansion:** multiple independent capture sessions/projects use the same scopes/protocol. Multiple phones writing one session, AR overlays, free interactive 3D navigation and video streaming are separate extensions requiring explicit capability/schema agreement.
 
-Транспортные опоры: [WebSocket, RFC 6455](https://www.rfc-editor.org/rfc/rfc6455) для соединения и Ping/Pong; [HTTP Caching, RFC 9111](https://www.rfc-editor.org/rfc/rfc9111) для Cache-Control. Replay, snapshots, идемпотентность и версии — правила приложения Inspector поверх транспорта.
+Transport references: [WebSocket, RFC 6455](https://www.rfc-editor.org/rfc/rfc6455) for connections and Ping/Pong; [HTTP Caching, RFC 9111](https://www.rfc-editor.org/rfc/rfc9111) for Cache-Control. Replay, snapshots, idempotency and versions are Inspector application rules above transport.
 
 
-## 13. Localization Service: управление, ранние наблюдения и онлайн-покрытие
+## 13. Localization Service: control, early observations and online coverage
 
-Продуктовый сценарий подтверждён Олегом; следующие wire-схемы предлагаются владельцам реализаций. Это часть настоящего общего контракта, не отдельный источник истины. Термины и примеры API сохранены на английском.
+Oleg confirmed the product workflow; the following wire schemas are proposed to implementation owners. They form part of this shared contract, not a separate source of truth. API terms/examples remain in English.
 
 ### 13.1. Scope and responsibilities
 
@@ -1056,17 +1056,17 @@ BIM axes, units and large survey offsets once on the backend; retain the reversi
 source-to-working-frame transform. Viewer geometry uses this same working frame.
 A revision/context change requires a new session, not silent rebinding.
 
-#### Регистрация нового ARKit-сегмента (уточнение клиентской подготовки)
+#### Registering a new ARKit segment (client preparation clarification)
 
-До первой телеметрии нового сегмента клиент вызывает POST
-`/v1/sessions/{session_id}/spatial-segments` с `protocol=live_bim_v1`,
-`operation_id` и `segment_id` (UUID). 201/200 возвращает session_id и segment_id.
-Повтор того же тела идемпотентен; конфликт ID → 409. API разрешает только назначенный
-телефон и capturing-сессию, сохраняет сегмент и сообщает L о начале/сбросе камеры.
-После этого разрешена camera.pose. Новый сегмент инвалидирует прежнюю привязку;
-старые сегменты не могут снова стать текущими от поздней телеметрии. Клиент сохраняет
-фото и при недоступности L, не показывая локализацию как успешную. Возможность
-live_localization включается только при поддержке этого маршрута вместе с остальными.
+Before sending telemetry for a new segment, the client calls POST
+`/v1/sessions/{session_id}/spatial-segments` with `protocol=live_bim_v1`,
+`operation_id` and `segment_id` (UUID). 201/200 returns session_id and segment_id.
+An identical body is idempotent; conflicting IDs return 409. The API permits only the assigned
+phone and a capturing session, persists the segment and informs L of camera start/reset.
+Only then is camera.pose allowed. A new segment invalidates previous alignment;
+late telemetry cannot make an old segment current again. The client retains
+photos even when L is unavailable, without presenting localization as successful. The
+live_localization capability is enabled only when this route and the others are supported.
 
 ### 13.4. Early evidence (new endpoint; existing upload plans)
 
