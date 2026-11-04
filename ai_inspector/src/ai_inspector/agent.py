@@ -70,6 +70,7 @@ TOOL_DESCRIPTIONS = {
     "progress4d_result": "Read the connected construction progress monitoring result for this conversation and show its weekly 4D viewer. Use for requests about construction progress, stages, weekly changes or schedule. This reads saved evidence; it does not analyze newly supplied links or photos.",
     "device_status": "Read whether this chat's configured iPhone currently has a live connection. Offline does not cancel a session.",
 }
+PHONE_TOOLS = frozenset(("session_create", "session_import", "session_get", "device_status"))
 TOOLS = [{"type": "function", "function": {"name": name, "description": description,
           "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}}
          for name, description in TOOL_DESCRIPTIONS.items()]
@@ -404,6 +405,8 @@ class OrchestratorAgent:
         if run.get('geometry_continuation', {}).get('summary'):
             raise APIError(502, 'invalid_tool_arguments', 'This completed review continuation can only explain its accepted report')
         name = call["function"]["name"]
+        if not self.settings.phone_handoff_enabled and name in PHONE_TOOLS:
+            raise APIError(502, "invalid_tool_arguments", "Phone capture is unavailable in the isolated public demo. Use the live operator workspace.")
         catalog = self.inspectors.catalog()
         if name not in TOOL_DESCRIPTIONS and not (name == "delegate_inspection" and catalog):
             raise APIError(502, "unknown_model_tool", "The model selected an unavailable tool")
@@ -746,6 +749,9 @@ class OrchestratorAgent:
                 stop.wait(self.settings.worker_interval_s)
 
     def _execute(self, principal, run, plan):
+        if not self.settings.phone_handoff_enabled and plan["name"] in PHONE_TOOLS:
+            raise APIError(403, "phone_handoff_unavailable",
+                           "Phone capture is unavailable in the isolated public demo. Use the live operator workspace.")
         chat, session = self._context(principal, run)
         if plan['name'] == 'progress4d_result':
             return progress4d.agent_result(self.service, principal, run['chat_id'], plan['progress4d_project']), None
@@ -843,17 +849,24 @@ class OrchestratorAgent:
                                                   fetch=bool(run.get("prompt_management_version")))
             if not prompt.startswith(ORCHESTRATOR_IDENTITY):
                 prompt = ORCHESTRATOR_IDENTITY + "\n" + prompt
+            if not self.settings.phone_handoff_enabled:
+                prompt += ("\nThis is an isolated public demo with no phone connection or capture handoff. "
+                           "Do not claim a session was assigned to a real phone, even if earlier demo history says so. "
+                           "For phone capture, direct the user to sign in to the live operator workspace.")
             if run.get("inspection_request"):
                 prompt += "\nThis run has a validated typed inspection_request. For its analysis use the registered discrepancy_inspector. Only Inspector calls the verifier; do not invent cases or measurements."
             if run.get('geometry_continuation', {}).get('summary'):
                 prompt += '\nThis is a server continuation after accepted reviews. Explain the supplied aggregate, distinguish no candidates from compliance, and retain unknowns. Do not start another inspection or capture.'
             monitoring = progress4d.has_saved_result(self.settings) or bool(self.settings.progress4d_base_url and json.loads(self.settings.progress4d_chat_projects_json).get(run['chat_id']))
             prompt += "\nYou choose the workflow from the user's request, not from a UI mode. If construction progress monitoring is connected and requested, call progress4d_result; its accepted result creates a 4D output card. Describe only returned evidence. It is saved data, not processing of new attachments or URLs. Do not claim arbitrary folder links were downloaded. For a subsequent detailed installation question in the same chat, use selected drawing/photo inputs via existing comparison tools, or ask for the missing close-up photo and reference/detail. Never reuse a progress percentage as installation compliance. For monitoring, use latest_progress counts including retained_past_present; a no_data forecast is not absence of historical evidence. Keep the reply short in the user's language (2-4 sentences); translate phase names, avoid internal tool names/status codes and duplicate tables because the viewer already contains the full analysis."
-            context = {"progress_monitoring_connected": monitoring, "project_id": chat["project_id"], "device_id": chat["device_id"],
-                       "room_id": chat["room_id"], "session": session_summary(session),
+            context = {"progress_monitoring_connected": monitoring, "project_id": chat["project_id"],
+                       "device_id": chat["device_id"] if self.settings.phone_handoff_enabled else None,
+                       "room_id": chat["room_id"], "session": session_summary(session) if self.settings.phone_handoff_enabled else None,
                        "registered_inspectors": self.inspectors.catalog()}
             tools = [tool for tool in TOOLS if tool['function']['name'] != 'drawing_photo_compare'
                      or len(run.get('file_ids', [])) >= 2]
+            if not self.settings.phone_handoff_enabled:
+                tools = [tool for tool in tools if tool['function']['name'] not in PHONE_TOOLS]
             if run.get('geometry_continuation', {}).get('summary'):
                 return ([{'role': 'developer', 'content': prompt}] + run['messages'], [])
             tools = [tool for tool in tools if tool['function']['name'] != 'progress4d_result' or monitoring]

@@ -273,7 +273,8 @@ def create_app(settings: Settings | None = None, *, service=None, background_wor
 
     @app.get("/v1/capabilities", tags=["operations"])
     def capabilities():
-        return {"schema_version": "0.1", "workflow": "capture_to_geometry_v1", "device_websocket": True,
+        return {"schema_version": "0.1", "workflow": "capture_to_geometry_v1", "device_websocket": settings.phone_handoff_enabled,
+                "phone_handoff_available": settings.phone_handoff_enabled,
                 "capture_formats": ["supabase_capture_v1", "supabase_capture_zip_v1", "supabase_geometry_parts_v1", "versioned_s3_v1"],
                 "max_archive_bytes": settings.max_archive_bytes,
                 "max_unpacked_archive_bytes": settings.max_unpacked_archive_bytes,

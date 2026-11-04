@@ -59,6 +59,7 @@ class Settings:
     bim_storage: str = "local"
     meta_base_url: str = "https://api.meta.ai/v1"
     public_demo_enabled: bool = False
+    phone_handoff_enabled: bool = True
     saved_demo_dir: str = ""
     saved_demo_inputs_dir: str = ""
     voice_enabled: bool = False

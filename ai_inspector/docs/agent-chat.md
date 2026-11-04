@@ -24,6 +24,8 @@ The [IFC/scan discrepancy review contract](ifc-discrepancy-review.md) is impleme
 
 With no configured registration, no specialist is available. The orchestrator's direct tools handle session creation/status, device presence and configured drawing/photo comparison; `delegate_inspection` is offered only with registered profiles. A general question need not create capture. `session_create` requires an explicit capture request, reuses an open session, and creates a linked rescan after sealing/cancellation only when requested. Its optional `review_after_geometry` defaults false: an explicit IFC/scan inspection request can register a durable downstream review. A new chat must select exactly one IFC, pinned into the inspection before assignment. Existing sessions retain their original model identity. Optional capture_task is operator context, not a remote camera command. Device acknowledgement, capture and accepted source remain distinct facts.
 
+Public visitor chats under `/public-demo` use an isolated project and have phone handoff disabled. They do not receive session/device tools, and a persisted tool command from an older visitor run cannot create another demo assignment. Real capture from chat requires operator access: `/demo` offers **Connect live project**, and a same-tab Control Room login is also reused. Guest task IDs from older demo runs do not belong to the phone's project.
+
 [InspectorProfile/InspectorRegistry](../src/ai_inspector/inspectors.py) define trusted local profiles; application composition can pass them to `InspectorService(settings, inspectors=(...))`. For example:
 
 ```python
