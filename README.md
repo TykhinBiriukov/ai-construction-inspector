@@ -1,12 +1,12 @@
 # AI Construction Inspector
 
-**A powerful AI inspection workspace connecting building plans, site evidence and engineering decisions.**
+**A powerful multi-agent system for construction quality control and progress monitoring.**
 
-A quality engineer opens a drawing, looks at the installation and asks: **does the work match the design, and what proves it?** A project manager asks what changed since the previous survey. An acceptance engineer needs to trace a finding back to the right element, photograph and requirement.
+**Delegate the evidence-gathering and analysis work of construction inspection to a coordinated AI system.** AI Construction Inspector connects people on site, project documents and specialized agents in one ambitious, practical product: identify discrepancies, review completed work and give managers structured evidence for the next decision.
 
-**AI Construction Inspector brings these questions into one ambitious, practical product.** Its thoughtfully engineered architecture combines visual reasoning, metric 3D reconstruction and a hierarchy of inspection agents to turn photographs, RGB-D captures and building information models (BIM) into structured findings with linked evidence. One cohesive conversational workspace connects **drawing/photo inspection, scan-to-BIM comparison and construction progress review**.
+**One business workflow, versatile inspection capabilities.** Drawing/photo analysis, scan-to-BIM comparison and progress review serve the same objective: control the quality and monitor the execution of construction work. Their different inputs let teams choose the evidence that fits the task, from a drawing and photograph to calibrated depth captures or repeated surveys.
 
-**A simple start, a sophisticated inspection system: begin with a drawing and a photograph.** The browser workspace handles the interaction; LiDAR capture is an additional capability for depth-based inspection. Project teams use the hosted product without deploying its internal services. Voice input lets an engineer dictate a request, review the transcription and send it from the same workspace.
+**Sophisticated engineering behind a simple working interface.** The conversational workspace combines visual reasoning, metric reconstruction and a hierarchy of inspection agents. Users can submit project files, dictate a request and inspect findings beside their source evidence. The iPhone client adds assigned RGB-D capture for depth-based inspection; teams using the hosted workspace do not deploy its internal services.
 
 **[Open the web demo](https://inspector.campuscompile.eu/demo)** · [Three-scenario walkthrough](ai_inspector/docs/guided-demo.md#reviewer-quick-start) · [Explore the evidence](docs/evidence/2026-11-03/README.md) · [Run the components](docs/reproducible-setup.md)
 
@@ -36,7 +36,17 @@ For new work, the entry point matches the task: **drawing + photo** for visual i
 
 ## Problem and value
 
-**A compelling business problem with tangible operational stakes.** Contractors, quality-control teams and acceptance engineers repeatedly reconcile design intent with physical work. The evidence is distributed across drawings, models, photographs and site visits. AI Inspector puts the comparison and its supporting material in one place, so a finding can be understood, checked and revisited.
+**Control work while it is happening, and put actionable evidence in the hands of the people making decisions.** A specialist-led site check can involve scheduling, travel and coordination before the inspection even begins. Meanwhile, managers need to decide whether work can advance, an installation needs correction, or a specialist should investigate further.
+
+**AI Inspector is designed around a more responsive, agent-assisted workflow:** a person already on site supplies observations, the system processes the evidence, and a manager reviews the findings. Inspection requests, capture assignments, model analysis and evidence validation connect field observations to that decision. The commercial value is clear: reduce the wait for information, focus specialist attention where it matters and help teams address discrepancies before they affect subsequent work.
+
+| Step | People and agents working together | Value for the construction team |
+|---|---|---|
+| Define the check | A manager supplies the task and relevant design documents | A clear inspection objective tied to the project |
+| Collect site evidence | A person on site supplies photographs or uses the assigned iPhone capture session | Evidence collection can start with someone already at the location |
+| Process and validate | Specialized workflows compare observations with requirements or geometry; model review and deterministic checks validate the findings | Structured analysis with traceable supporting evidence |
+| Make the next decision | The manager reviews findings and decides on progression, correction or specialist involvement | An informed handoff between inspection and project execution |
+| Repeat as work advances | New observations reuse applicable requirements and feed subsequent reviews | Consistent follow-up throughout the work |
 
 PlanGrid and FMI's *Construction Disconnected* study estimated that poor project data and communication accounted for **$31.3 billion in U.S. construction rework in 2018**, or **48% of rework costs**, based on a survey of 599 industry participants. This quantifies the economic problem AI Inspector addresses. [Study, printed pages 4 and 19–20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
 
@@ -51,7 +61,7 @@ PlanGrid and FMI's *Construction Disconnected* study estimated that poor project
 | Site engineer | Document the physical condition of a room | iPhone RGB-D capture, metric reconstruction and model comparison |
 | Project manager | Review progress across repeated surveys | Dated evidence, scheduled IFC elements and a shared progress viewer |
 
-**A compelling commercial opportunity: repeated inspection across the construction lifecycle.** The same project generates new photographs, design revisions, capture sessions and progress reviews. Reusable requirements and persistent evidence make that repetition valuable: teams can build on earlier work while preserving the source of each finding. Contractors and inspection teams are natural buyers because these workflows sit directly inside quality control, acceptance and project delivery.
+**A compelling commercial opportunity: repeated inspection across the construction lifecycle.** The same project generates new photographs, design revisions, capture sessions and progress reviews. Reusable requirements and persistent evidence make that repetition valuable: teams can build on earlier work while preserving the source of each finding. Contractors and inspection teams are natural buyers because these workflows sit directly inside quality control, acceptance and project delivery. The business audience spans building contractors, renovation teams and infrastructure contractors: the shared task is documenting work, comparing it with project requirements and coordinating the next decision. Teams select the inspection capability and evidence format appropriate to each task.
 
 **Accessible capture, powerful processing, one elegant workspace.** Drawing/photo inspection starts with documents and a photograph. Depth inspection adds a LiDAR-equipped iPhone and its calibrated observations. The product combines familiar collection tools with advanced geometry and AI review behind a single interface.
 
@@ -145,6 +155,17 @@ The Inspector runtime owns capture assignments, uploads and durable computation 
 
 These mechanisms give the product a durable foundation: operations retain their identity across retries, completed computations can be recovered, and findings remain connected to the evidence that produced them.
 
+### What makes this inspection system technically distinctive
+
+**Powerful visual intelligence, grounded in structured requirements and measurable evidence.** The system gives VLM analysis an explicit inspection process: drawing-derived checklists, distinct assessment and review contexts, numerical geometry, and deterministic validation of report structure and source bindings. Geometry Inspector adds a dedicated Verifier agent to its evidence-review hierarchy.
+
+- **Stable requirements across repeated checks.** Drawing/Photo extracts the design requirements before assessing the observation, then reuses their identities when a new photograph arrives.
+- **Focused reasoning and a fresh review.** The staged workflow separates requirement extraction, photo assessment and review into **three model contexts**. Recorded runs reuse **one 11-item checklist across three analyses**.
+- **Semantic perception connected to metric geometry.** SAM masks are projected and fused using depth evidence; numerical code calculates geometric comparisons, while Spark agents interpret and review the findings.
+- **Findings an engineer can investigate.** Source images, evidence regions, IFC identities and measurement bindings connect conclusions to their supporting material.
+
+[Drawing/photo workflow and recorded comparisons](docs/evidence/2026-11-03/README.md#2-drawingphoto-from-joint-context-to-frozen-requirements) · [Agent verification contract](ai_inspector/docs/ifc-discrepancy-review.md)
+
 ## How we use Meta models
 
 **Deeply integrated Meta intelligence powers the product's reasoning, perception and voice interaction.** Each integration has a concrete responsibility in the inspection workflow.
@@ -187,7 +208,7 @@ The design combines **semantic understanding with numerical measurement**. The m
 
 The service compares a drawing or PDF page with a site photograph for the user's inspection task. Its **staged workflow** separates three responsibilities: extract requirements from the drawing, assess the photograph against those fixed requirements, then review the findings in a fresh context with both originals. Stable requirement IDs and source bindings make the checklist reusable for subsequent photographs.
 
-Requirements cover geometry, material, product, measurement, installation and performance. Evidence regions connect design claims and site observations. Named grid views and server-side crop mapping keep image references tied to the original pixels. The shared-context `legacy` workflow and the staged workflow are both implemented; configuration selects the path.
+Requirements cover geometry, material, product, measurement, installation and performance. Evidence regions connect design claims and site observations. Named grid views and server-side crop mapping keep image references tied to the original pixels. The shared-context `legacy` workflow and the staged workflow are both implemented. The checked-in Cloudflare configuration and reproducible setup guide select **`staged`**, bringing checklist-based assessment and fresh-context review into that configuration.
 
 [Service and API](drawing_photo_service/README.md) · [Legacy engine](drawing_photo_service/engine.py) · [Staged requirements and prompts](drawing_photo_service/staged.py) · [Evidence grounding](drawing_photo_service/grounding.py) · [Persistence](drawing_photo_service/app.py) · [Inspector adapter](ai_inspector/src/ai_inspector/drawing_photo.py)
 
