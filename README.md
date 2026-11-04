@@ -161,6 +161,8 @@ The real-room Geometry run integrates **99/99 RGB-D frames** and produces **469,
 
 **Completed Inspector/Verifier review.** All **11 review batches** for the real-room result completed on 2 November 2026. A separate numerical check recomputed four matched door/window dimensions against the laser-derived IFC, including source hashes and signed differences. [Review outcomes and reference verification](docs/evidence/2026-11-04/README.md).
 
+Controlled validation demonstrated the Inspector–Verifier workflow’s ability to identify a known discrepancy and support its conclusion with traceable evidence.
+
 The drawing/photo evidence includes recorded live-model analyses, a same-input comparison of shared-context and staged workflows, and three runs with reusable frozen requirements. Progress4D includes six dated development evaluation records and a saved seven-week walkthrough. [Inspect the cases and reports](docs/evidence/2026-11-03/README.md).
 
 ## Architecture
