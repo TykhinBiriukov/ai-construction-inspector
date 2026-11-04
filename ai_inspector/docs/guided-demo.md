@@ -124,6 +124,24 @@ Never include expected answers or evaluation truth among model inputs. A missing
 source set is marked unavailable, not replaced with reports or a prepared scene.
 An input-only directory does not establish a connected Progress4D result.
 
+The native Docker image builds a separate, immutable source library at
+`/opt/inspector-demo-inputs` and sets `INSPECTOR_SAVED_DEMO_INPUTS_DIR` to that
+directory. The library is loaded for both operator and isolated visitor examples;
+it supplements the existing read-only recorded-result mount. An explicit
+`scenario-inputs.json` in `INSPECTOR_SAVED_DEMO_DIR` takes precedence for the
+scenarios it defines. A configured bundled library with missing files fails
+startup rather than silently showing a partial list. Other installations can
+set the same variable to a separately prepared input library.
+
+Image preparation uses the published, hash-pinned Geometry evidence archive and
+the repository's Progress4D inputs, without relying on a developer's local files.
+The model example includes `room.ifc`, an original source frame, the capture
+manifest, the export/result manifest and the full archive. Export metadata and
+the archive are download-only; retained outputs are not analysis inputs.
+Construction progress includes the project IFC, an original photograph from each
+of seven weeks and a complete input-only ZIP. Source hashes are verified while
+building the image; a missing or changed source stops the build before rollout.
+
 The prepared Progress4D source package is published under
 [`resources/progress4d/inputs`](https://github.com/TykhinBiriukov/ai-construction-inspector/tree/main/resources/progress4d/inputs).
 Keep it separate from the sibling replay data. A compact input example can attach

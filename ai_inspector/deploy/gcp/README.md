@@ -28,3 +28,15 @@ before restart, then check authenticated health before recording the revision.
 Keep the previous image for rollback. Docker cache is disposable; authoritative
 files/history remain in Supabase. The old Python Worker stays available for
 rollback and must not be auto-deployed by the frontend workflow in native mode.
+
+The Docker build also prepares the example inputs in `/opt/inspector-demo-inputs`
+and sets `INSPECTOR_SAVED_DEMO_INPUTS_DIR`. It uses the checked-in Progress4D
+inputs and the Geometry release archive pinned by the evidence manifest. The
+preparer verifies source hashes and packages the IFC, source/export manifests,
+seven weekly photos and download-only archives. GitHub release access is needed
+during this cached build step; requests do not download external assets at runtime.
+A failed preparation stops the build, leaving the current container running.
+
+The existing `/demo-assets` mount remains the recorded-result library. No local
+developer fixtures need to be copied to that mount. An operator-authored
+`scenario-inputs.json` there overrides the corresponding bundled examples.

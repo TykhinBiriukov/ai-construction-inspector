@@ -117,7 +117,7 @@ def _input_scenarios(root):
     return result
 
 
-def _scenario_library(root, assets, recorded=True):
+def _scenario_library(root, assets, recorded=True, input_root=None):
     """Read-only previews of configured examples; never create chat attachments."""
     definitions = {
         'geometry': {'title': 'Photo and 3D model', 'files': [],
@@ -128,9 +128,9 @@ def _scenario_library(root, assets, recorded=True):
             'notice': 'Saved weekly monitoring result. The reference model and photo illustrate the example; opening it does not analyze these files again.'},
     }
     paths = {}
-    def add(scenario, identity, path, description, attach=True):
+    def add(scenario, identity, path, description, attach=True, source_root=None):
         path = path.resolve()
-        if not path.is_relative_to(root) or not path.is_file():
+        if not path.is_relative_to(source_root or root) or not path.is_file():
             return
         kind = {'.ifc': 'ifc', '.json': 'json', '.pdf': 'pdf', '.zip': 'archive'}.get(path.suffix.lower(), 'image')
         definitions[scenario]['files'].append({'id': identity, 'name': path.name,
@@ -161,12 +161,20 @@ def _scenario_library(root, assets, recorded=True):
             value.update(files=[], prompt='', notice='The source files for this example are not available locally.')
     if not recorded:
         paths.clear()
-    for scenario, entry in _input_scenarios(root).items():
-        definitions[scenario] = {key: entry[key] for key in ('title', 'description', 'prompt', 'notice')}
-        definitions[scenario].update(mode='inputs', files=[])
-        paths = {key: path for key, path in paths.items() if key[0] != scenario}
-        for identity, path, description, attach in entry['files']:
-            add(scenario, identity, path, description, attach)
+    # Image-bundled defaults work without copying private local fixtures to the VM.
+    # An operator's explicit manifest retains precedence over bundled examples.
+    libraries = [input_root, root] if input_root else [root]
+    for library in libraries:
+        entries = _input_scenarios(library)
+        if library == input_root and (not entries or any(
+                not path.is_file() for entry in entries.values() for _, path, _, _ in entry['files'])):
+            raise RuntimeError('Configured demo input library is incomplete')
+        for scenario, entry in entries.items():
+            definitions[scenario] = {key: entry[key] for key in ('title', 'description', 'prompt', 'notice')}
+            definitions[scenario].update(mode='inputs', files=[])
+            paths = {key: path for key, path in paths.items() if key[0] != scenario}
+            for identity, path, description, attach in entry['files']:
+                add(scenario, identity, path, description, attach, source_root=library)
     for value in definitions.values():
         value['files'].sort(key=lambda item: item['kind'] != 'ifc')
         value['available'] = bool(value['files'])
@@ -175,11 +183,12 @@ def _scenario_library(root, assets, recorded=True):
 
 def routes(app,service,recorded=True):
     root=Path(service.settings.saved_demo_dir).resolve()
+    input_root=Path(service.settings.saved_demo_inputs_dir).resolve() if service.settings.saved_demo_inputs_dir else None
     assets={'room':root/'room.ifc','room-photo':root/'week-06-photo.jpg','drawing':root/'window-demo/Window Drawing.png','drawing-photo':root/'window-demo/Window Photo.png','window-photo':root/'window-demo/Window Photo.png','incorrect-window-photo':root/'window-demo/Incorrect Window Photo.png'}
     manifest=root/'geometry-demo/assets.json'
     if recorded and manifest.exists():assets.update({key:root/'geometry-demo'/name for key,name in json.loads(manifest.read_text()).items()})
     assets['geometry-comparison']=root/'geometry-demo/comparison.json.gz'
-    scenarios, preview_paths = _scenario_library(root, assets, recorded)
+    scenarios, preview_paths = _scenario_library(root, assets, recorded, input_root)
     def authorize(request):
         if not hmac.compare_digest(request.headers.get('authorization',''), 'Bearer '+service.settings.operator_token):
             raise HTTPException(401)
@@ -210,8 +219,11 @@ def routes(app,service,recorded=True):
 
 def configure(app, service):
     root=Path(service.settings.saved_demo_dir).resolve()
+    input_root=Path(service.settings.saved_demo_inputs_dir).resolve() if service.settings.saved_demo_inputs_dir else None
+    if input_root and not (input_root/'scenario-inputs.json').is_file():
+        raise RuntimeError('Configured demo input library is missing')
     recorded=all((root/path).is_file() for path in ('geometry-demo/result.json', 'timeline.json', 'window-demo/observations.json'))
-    if not recorded and not (root/'scenario-inputs.json').is_file():
+    if not recorded and not input_root and not (root/'scenario-inputs.json').is_file():
         raise RuntimeError('Saved demo dataset is incomplete')
     if recorded:
         install(service)

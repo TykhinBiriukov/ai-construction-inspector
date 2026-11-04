@@ -64,7 +64,8 @@ class PublicDemo:
             # remote agents, Geometry or Localization credentials into a visitor app.
             config=Settings(data_dir=self.settings.data_dir/'public-demo'/session,
                 operator_token=token,device_token=secrets.token_urlsafe(32),project_id='demo-'+session,
-                saved_demo_dir=self.settings.saved_demo_dir,meta_base_url=self.settings.meta_base_url,
+                saved_demo_dir=self.settings.saved_demo_dir,saved_demo_inputs_dir=self.settings.saved_demo_inputs_dir,
+                meta_base_url=self.settings.meta_base_url,
                 meta_model=self.settings.meta_model,meta_api_key=self.settings.meta_api_key,
                 meta_timeout_s=self.settings.meta_timeout_s,voice_enabled=self.settings.voice_enabled,
                 max_bim_bytes=8*1024*1024)
