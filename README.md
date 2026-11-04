@@ -76,34 +76,55 @@ Users interact with one **AI Inspector**. Internally, conversation, durable work
 
 ```mermaid
 flowchart TB
-    User[User] --> Web[Inspector web workspace]
-    Web --> Backend[Inspector API and durable session services]
-    Backend <--> Bob[Main orchestrator: Bob]
-    Bob <--> Spark[Meta Muse Spark 1.3]
-    Phone[iPhone RGB-D capture] -->|Authenticated channel and upload completion| Backend
-    Phone -->|Scoped signed uploads| Capture[(Private capture storage)]
-    Backend -->|Validate and pin complete source plus IFC| Queue[Capture and review worker]
-    Capture -->|Verified source reads| Queue
-    Queue -->|One durable inspection operation| Geometry[Geometry Engine]
-    Geometry <--> SAM[Meta SAM 3.1]
-    Geometry --> Results[(Committed geometry artifacts)]
-    Results -->|Verified manifests and bounded evidence| Queue
-    Queue -->|Validated evidence batches| Bob
-    Bob -->|Registered A2A task| GI[Geometry Inspector]
-    GI -->|Scoped evidence read| Backend
-    GI -->|Fixed A2A review hop| GV[Geometry Verifier]
-    GI <--> Spark
-    GV <--> Spark
-    Bob -->|Predefined HTTP tool| Drawing[Drawing and photo service]
-    Drawing <--> Spark
-    Backend -->|Pinned IFC and session binding| Loc[Localization Service]
-    Phone -->|Session-scoped spatial observations| Loc
-    Surveys[Dated photo surveys plus scheduled IFC] --> Progress[Progress4D service]
-    Progress <--> Spark
-    Backend -->|Read existing mapped result| Progress
+    subgraph Inspector["AI Inspector — orchestration and user workspace"]
+        Bob["Main orchestrator · Bob<br/>Muse Spark 1.3 · task planning and tool selection"]
+        User["User input<br/>Task, drawings, photographs and IFC"]
+        Runtime["Inspector runtime<br/>Sessions, durable tasks and pinned evidence"]
+        Phone["iPhone capture client<br/>RGB-D, calibration and camera poses"]
+        Bob <-->|"Input and findings through the web workspace"| User
+        Bob <-->|"Scoped tools and workflow state"| Runtime
+        Runtime -->|"Assign capture task"| Phone
+        Phone -->|"Captured data via signed uploads"| Runtime
+    end
+
+    subgraph Agents["Agent delegation — independent contexts and scoped responsibilities"]
+        GI["Geometry Inspector · domain sub-agent<br/>Muse Spark 1.3 · evidence-based inspection"]
+        GV["Geometry Verifier · validation sub-agent<br/>Muse Spark 1.3 · independent evidence review"]
+        GI -->|"Delegate verification"| GV
+        GV -->|"Typed decision or request for more evidence"| GI
+    end
+
+    subgraph Services["Specialized services — computation and model workflows"]
+        Geometry["Geometry Engine · computation service<br/>RGB-D reconstruction → SAM 3.1 masks → IFC comparison"]
+        Drawing["Drawing / Photo · analysis service<br/>Muse Spark 1.3"]
+        Checklist["Staged workflow: drawing requirements"]
+        Assessment["Photo assessment against fixed requirements"]
+        Review["Fresh-context review<br/>Both original images and draft findings"]
+        Progress["Progress4D · monitoring service<br/>Dated surveys + scheduled IFC · Muse Spark 1.3"]
+        Loc["Localization · spatial service<br/>Capture / IFC alignment"]
+        Drawing -->|"When staged workflow is selected"| Checklist
+        Checklist --> Assessment --> Review
+    end
+
+    Bob -->|"Delegate registered A2A task"| GI
+    GI -->|"Validated inspection report"| Bob
+    Runtime -->|"Scoped, pinned evidence"| GI
+    Runtime -->|"Capture worker dispatches durable job"| Geometry
+    Geometry -->|"Committed measurements and evidence"| Runtime
+    Bob <-->|"Drawing / photo tool: task and report"| Drawing
+    Bob <-->|"Progress tool: read mapped, processed results"| Progress
+    Runtime <-->|"Pinned IFC, session and spatial state"| Loc
+    Phone -->|"Session-scoped observations"| Loc
+
+    classDef orchestrator fill:#dbeafe,stroke:#2563eb,stroke-width:2px;
+    classDef agent fill:#ede9fe,stroke:#7c3aed;
+    classDef service fill:#f0fdf4,stroke:#16a34a;
+    class Bob orchestrator;
+    class GI,GV agent;
+    class Geometry,Drawing,Progress,Loc service;
 ```
 
-Arrows show the implemented service interfaces. Heavy reconstruction runs outside the chat request. Source code for all components is collected on `main`; deployment branches, configuration and credentials remain independently managed.
+Bob coordinates the multi-agent system through registered domain inspectors and scoped service tools. Geometry Inspector delegates validation to its own Geometry Verifier; each agent has its own context, instructions and execution budget. Drawing/Photo provides an internal staged model workflow, while Geometry Engine, Progress4D and Localization provide specialized services. The Inspector runtime owns capture assignments, uploads and durable computation jobs. Heavy reconstruction runs outside the chat request. Source code for all components is collected on `main`; deployment branches, configuration and credentials remain independently managed.
 
 ### Design choices and their purpose
 
