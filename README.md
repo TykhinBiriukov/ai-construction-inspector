@@ -1,63 +1,65 @@
 # AI Construction Inspector
 
-**Turn site photographs, depth captures and building plans into traceable inspection findings.**
+**A powerful AI inspection workspace connecting building plans, site evidence and engineering decisions.**
 
-AI Construction Inspector helps a construction team connect what was designed with what can actually be observed on site. In one workspace, a user can compare a photograph with a drawing, review a scan against a building information model (BIM), and explore construction progress over time. Findings stay connected to their source evidence; missing visibility remains a reason to gather more evidence.
+A quality engineer opens a drawing, looks at the installation and asks: **does the work match the design, and what proves it?** A project manager asks what changed since the previous survey. An acceptance engineer needs to trace a finding back to the right element, photograph and requirement.
+
+**AI Construction Inspector brings these questions into one ambitious, practical product.** Its thoughtfully engineered architecture combines visual reasoning, metric 3D reconstruction and a hierarchy of inspection agents to turn photographs, RGB-D captures and building information models (BIM) into structured findings with linked evidence. One cohesive conversational workspace connects **drawing/photo inspection, scan-to-BIM comparison and construction progress review**.
+
+**A simple start, a sophisticated inspection system: begin with a drawing and a photograph.** The browser workspace handles the interaction; LiDAR capture is an additional capability for depth-based inspection. Project teams use the hosted product without deploying its internal services. Voice input lets an engineer dictate a request, review the transcription and send it from the same workspace.
+
+**[Open the web demo](https://inspector.campuscompile.eu/demo)** · [Three-scenario walkthrough](ai_inspector/docs/guided-demo.md#reviewer-quick-start) · [Explore the evidence](docs/evidence/2026-11-03/README.md) · [Run the components](docs/reproducible-setup.md)
 
 | Project | Details |
 |---|---|
-| Event | [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) |
-| Track | Track 2 |
-| Hackathon dates | 26 October–4 November 2026, as published by the organizer |
+| Event | [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) · Track 2 |
+| Hackathon dates | 26 October–4 November 2026 |
 | Team development period | 27 October–3 November 2026 (implementation history in this repository) |
-| Web demo | [Open AI Inspector](https://inspector.campuscompile.eu/demo) — explore three guided scenarios with prepared data; no phone or local installation needed for the walkthrough |
+| Meta models | **Muse Spark 1.3 · SAM 3.1 · Muse Voice Transcribe 1.0** |
 | Creators | Tykhin Biriukov, Egor Pichugin and Oleg Kulikov |
-| Meta models in the implementation | Muse Spark 1.3, SAM 3.1 and Muse Voice Transcribe 1.0 |
 
-The team knows this problem from work in construction. **Egor Pichugin** worked as a quality-control engineer and regularly inspected work on construction sites. **Oleg Kulikov** held an engineering management role and worked on acceptance of renovation and major refurbishment of premises. **Tykhin Biriukov** worked on solar-panel installation. That experience shaped the project around practical questions: which element needs attention, what evidence supports the finding, and what should be checked next?
-
-[Demo walkthrough](#demo-walkthrough) · [Problem and value](#problem-and-value) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons) · [Reproducible setup](docs/reproducible-setup.md)
+[Demo walkthrough](#demo-walkthrough) · [Problem and value](#problem-and-value) · [Measured results](#measured-results) · [Architecture](#architecture) · [Meta models](#how-we-use-meta-models) · [Service details](#service-details) · [Approach comparisons](#approach-comparisons)
 
 ## Demo walkthrough
 
-[Open the web demo](https://inspector.campuscompile.eu/demo), then choose **Compare the 3D model with site photos**, **Check installation against the drawing**, or **Review construction progress**. Each scenario opens prepared evidence and a retained result in the same workspace. The walkthrough demonstrates the user flow from source evidence to a reviewable result; it reuses saved computations rather than rerunning the full pipeline. For the exact steps and expected output, see the [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start).
+[Open AI Inspector](https://inspector.campuscompile.eu/demo) and select a scenario. Prepared inputs and saved computations make the product immediately explorable in the browser, without a phone or local installation.
 
-For a new inspection, the user works with project documents and photographs in one web workspace; the iPhone client adds RGB-D capture when depth is needed. Drawing/photo comparison does not require LiDAR, and a hosted user does not need to deploy the backend services. A new phone capture is also unnecessary for reprocessing: Geometry accepts an existing RGB-D session with its calibration, camera poses and IFC reference. The public real-room archive supplies these source inputs; fresh processing uses the Geometry runtime and configured Meta access.
-
-This system works with more than ordinary chat attachments. A scan comparison needs RGB photographs, LiDAR depth and confidence, camera calibration and poses, capture metadata, and an IFC reference model. Progress monitoring needs overlapping dated surveys and a model with a work schedule. A visitor should be able to explore the product without first obtaining a compatible device, access to a construction site and its design files.
-
-The demo uses prepared inputs and saved computation results. Start with the [versioned evidence cases](docs/evidence/2026-11-03/README.md): the primary case is a completed Geometry reconstruction from **99 real-room RGB-D observations**, with public numerical reports, source hashes and image-reference identities. The [evidence download guide](docs/evidence/2026-11-03/data-access.md) links the detailed experiment records and verification instructions. The complete [IFC/capture/mesh archive is available in the evidence release](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03).
-
-| Case | Available evidence | What it establishes |
+| Choose | Explore | Product value |
 |---|---|---|
-| Real-room scan versus BIM | Public comparison reports and hashes; downloadable archive holds 396 capture files, pinned IFC, point cloud, meshes and stage manifests | Completed Geometry computation; 6 object candidates, 5 observed surfaces and traceable source frames |
-| Photograph versus drawing | Same-input legacy/staged reports; three frozen-checklist runs with audit diagnostics and evidence regions | Historical live model analyses, requirement reuse and retained uncertainty |
-| Construction progress | Six dated development evaluation records and the saved seven-week walkthrough | Six dated monitoring records and a prepared seventh visualization scene |
+| **Check installation against the drawing** | Drawing, site photograph and linked findings | Review the installation against its design requirements |
+| **Compare the 3D model with site photos** | IFC model, reconstructed geometry, measurements and source images | Investigate differences in their spatial and visual context |
+| **Review construction progress** | Dated observations and a seven-week walkthrough | Follow the relationship between planned work and observed progress |
 
-The [case guide](docs/evidence/2026-11-03/README.md) connects source provenance, saved results, experiment records and reproduction instructions.
+The [reviewer quick start](ai_inspector/docs/guided-demo.md#reviewer-quick-start) provides the steps and expected output. Scenario selection opens retained results; fresh analysis and model follow-up questions use their respective processing paths.
 
-For the interactive workspace, follow the [guided demo](ai_inspector/docs/guided-demo.md). Selecting a saved scenario reads retained results; it does not perform a new reconstruction. Model follow-up questions and fresh analysis are separate paths. A reviewer can inspect the release package without a running service or model credentials.
+For new work, the entry point matches the task: **drawing + photo** for visual inspection, **RGB-D capture + IFC** for metric comparison, and **dated photo surveys + scheduled IFC** for progress analysis. An existing calibrated RGB-D session can be reprocessed without another phone capture. The [public real-room package](https://github.com/TykhinBiriukov/ai-construction-inspector/releases/tag/evidence-2026-11-03) includes 99 observations, their 396 capture files, a pinned IFC, meshes and processing manifests.
 
 ## Problem and value
 
-Inspection requires someone to reconcile drawings, revisions, models, site conditions and photographs. Fragmented evidence makes defects harder to identify, explain and revisit. Repeated manual comparison also consumes engineering time that could be spent resolving the actual issue.
+**A compelling business problem with tangible operational stakes.** Contractors, quality-control teams and acceptance engineers repeatedly reconcile design intent with physical work. The evidence is distributed across drawings, models, photographs and site visits. AI Inspector puts the comparison and its supporting material in one place, so a finding can be understood, checked and revisited.
 
-PlanGrid and FMI's *Construction Disconnected* study estimated that poor project data and communication accounted for **$31.3 billion in U.S. construction rework in 2018**, or **48% of rework costs**. The study surveyed 599 industry participants. These historical industry estimates describe the scale of the problem. [Study, printed pages 4 and 19–20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
+PlanGrid and FMI's *Construction Disconnected* study estimated that poor project data and communication accounted for **$31.3 billion in U.S. construction rework in 2018**, or **48% of rework costs**, based on a survey of 599 industry participants. This quantifies the economic problem AI Inspector addresses. [Study, printed pages 4 and 19–20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf).
 
-![2018 U.S. construction rework attribution: poor project data 22%, poor communication 26%, other factors 52%. These are industry estimates, not AI Inspector performance.](docs/assets/rework-context.svg)
+![2018 U.S. construction rework attribution: poor project data 22%, poor communication 26%, other factors 52%.](docs/assets/rework-context.svg)
 
-*Source: [PlanGrid/FMI, Construction Disconnected (2018), printed page 20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf). The categories share one denominator: attributed U.S. rework costs.*
+*Source: [PlanGrid/FMI, Construction Disconnected (2018), printed page 20](https://www.autodesk.com/blogs/construction/wp-content/uploads/2023/03/Construction_Disconnected.pdf). Industry rework-cost estimates.*
 
-Professional mobile mapping already addresses reality capture. For example, [NavVis VLX 3](https://www.navvis.com/vlx-3) is a wearable system with LiDAR and cameras, while [Leica Pegasus:Backpack](https://leica-geosystems.com/ja-jp/about-us/news-room/customer-magazine/reporter-79/capturing-reality-on-the-go) illustrates backpack-based mapping. Our direction is to make evidence collection and inspection more accessible through LiDAR-equipped consumer devices and, later, autonomous capture equipment.
-
-| Practical value | Implemented mechanism | Outcome to track |
+| Who uses it | The job | What AI Inspector brings together |
 |---|---|---|
-| Reduce repetitive comparison work | Drawing-derived checklists, reusable requirements and element-linked evidence | Engineer time per accepted finding, including correction and review |
-| Make discrepancies easier to investigate | Source hashes, IFC identities, photos and measurements remain linked | Time to locate and verify the source of a finding |
-| Avoid unsupported certainty | Visibility, correspondence and quality limits stay explicit | False findings, missed findings and useful requests for additional evidence |
-| Make repeated surveys useful | Dated observations and a shared progress viewer | Agreement with independently reviewed site records |
+| Quality-control engineer | Check installation against the design | Drawing-derived requirements, photo assessment and reviewed findings |
+| Acceptance engineer | Explain and revisit a discrepancy | IFC element identities, measurements, original photographs and source references |
+| Site engineer | Document the physical condition of a room | iPhone RGB-D capture, metric reconstruction and model comparison |
+| Project manager | Review progress across repeated surveys | Dated evidence, scheduled IFC elements and a shared progress viewer |
 
-**Measured engineering gains.** The project publishes numerical comparisons alongside its implementation:
+**A compelling commercial opportunity: repeated inspection across the construction lifecycle.** The same project generates new photographs, design revisions, capture sessions and progress reviews. Reusable requirements and persistent evidence make that repetition valuable: teams can build on earlier work while preserving the source of each finding. Contractors and inspection teams are natural buyers because these workflows sit directly inside quality control, acceptance and project delivery.
+
+**Accessible capture, powerful processing, one elegant workspace.** Drawing/photo inspection starts with documents and a photograph. Depth inspection adds a LiDAR-equipped iPhone and its calibrated observations. The product combines familiar collection tools with advanced geometry and AI review behind a single interface.
+
+**Grounded in valuable, firsthand construction experience.** Egor Pichugin worked as a quality-control engineer performing site inspections. Oleg Kulikov worked in engineering management and acceptance of renovation and major refurbishment. Tykhin Biriukov worked on solar-panel installation. Their experience shapes the product around the questions practitioners actually ask: what needs attention, where is the evidence, and what should be checked next?
+
+## Measured results
+
+The implementation is accompanied by **real-room processing records, numerical comparisons and reproducible experiment artifacts**. These concrete results showcase the depth of engineering behind the product.
 
 | Measurement | Recorded result | Evidence |
 |---|---|---|
@@ -66,13 +68,15 @@ Professional mobile mapping already addresses reality capture. For example, [Nav
 | Correct wall-side correspondence in 18 controlled cases | Incorrect displacement measurements **9/18 → 0/18** | [Wall-correspondence comparison](docs/evidence/2026-11-03/controlled-comparison.md) |
 | Reuse of unchanged Meta segmentation inputs | Retained run records **462 SAM cache hits and 0 misses** | [Real-room run records](docs/evidence/2026-11-03/README.md) |
 
-The industry study quantifies the economic problem; the project experiments quantify improvements in its processing pipeline. Together with reusable drawing requirements and source-linked findings, these results explain the practical value: less repeated inference, better geometric correspondence and easier evidence review.
+The real-room Geometry run integrates **99/99 RGB-D frames** and produces **469,270 surface points and 896,924 mesh triangles**, with source identities preserved through reconstruction, segmentation and comparison. The public result includes six object candidates and five observed surfaces. The [evidence guide](docs/evidence/2026-11-03/README.md) connects the capture, model provenance, processing history and findings; the [download guide](docs/evidence/2026-11-03/data-access.md) provides versioned records and integrity checks.
+
+The drawing/photo evidence includes recorded live-model analyses, a same-input comparison of shared-context and staged workflows, and three runs with reusable frozen requirements. Progress4D includes six dated development evaluation records and a saved seven-week walkthrough. [Inspect the cases and reports](docs/evidence/2026-11-03/README.md).
 
 ## Architecture
 
-Users interact with one **AI Inspector**. Internally, conversation, durable workflow ownership, numerical computation and evidence review have separate responsibilities.
+**One cohesive product experience, a powerful multi-agent architecture underneath.** Bob, the main orchestrator, routes tasks through scoped tools and registered domain inspectors. Geometry Inspector owns the inspection task and delegates evidence validation to its own Geometry Verifier. Each agent has a separate context, instructions, tools and execution budget.
 
-**AI validation is implemented.** Geometry Inspector delegates candidate decisions to a separate Geometry Verifier agent, which reviews the pinned evidence and can request more data or reject an unsupported candidate. The staged Drawing/Photo workflow also reviews the draft against both original images while keeping the drawing-derived requirements fixed. Deterministic validation checks report identities, evidence references and the required schema. The model reviewers and deterministic checks form complementary validation layers.
+**Thoughtfully layered verification is built into the architecture.** The Geometry Verifier reviews pinned candidate evidence. Drawing/Photo's staged workflow uses a fresh model context to review the draft against both original images and fixed requirements. Deterministic checks validate identities, measurements, evidence references and schemas. This combines specialized model reasoning with explicit computational checks.
 
 ```mermaid
 flowchart TB
@@ -124,9 +128,9 @@ flowchart TB
     class Geometry,Drawing,Progress,Loc service;
 ```
 
-Bob coordinates the multi-agent system through registered domain inspectors and scoped service tools. Geometry Inspector delegates validation to its own Geometry Verifier; each agent has its own context, instructions and execution budget. Drawing/Photo provides an internal staged model workflow, while Geometry Engine, Progress4D and Localization provide specialized services. The Inspector runtime owns capture assignments, uploads and durable computation jobs. Heavy reconstruction runs outside the chat request. Source code for all components is collected on `main`; deployment branches, configuration and credentials remain independently managed.
+The Inspector runtime owns capture assignments, uploads and durable computation jobs. Geometry Engine, Drawing/Photo, Progress4D and Localization are specialized services with explicit contracts; Geometry Inspector and Geometry Verifier form the agent delegation hierarchy. Heavy reconstruction runs outside the chat request, and committed results return to the inspection workflow. Source for all components is collected on `main`, with component setup and deployment documented in their guides.
 
-### Design choices and their purpose
+### Thoughtful engineering built around the workflow
 
 | Engineering choice | Why it matters | Implementation to inspect |
 |---|---|---|
@@ -136,14 +140,14 @@ Bob coordinates the multi-agent system through registered domain inspectors and 
 | Immutable inputs and content-addressed evidence | A finding can be traced to a specific drawing, capture, IFC and successful processing attempt | [Geometry handoff](ai_inspector/docs/capture-to-geometry.md), [workspace](ai_inspector/src/ai_inspector/workspace.py) |
 | Separate computation and interpretation | Geometry produces numerical evidence; language models explain and review bounded evidence | [Geometry pipeline](geometry-engine/geometry_engine/pipeline.py), [review contract](ai_inspector/docs/ifc-discrepancy-review.md) |
 | Small, versioned service boundaries | Components can use different native dependencies and independent persistence without coupling their lifecycles | [A2A protocol](ai_inspector/src/ai_inspector/a2a_protocol.py), [component setup](docs/reproducible-setup.md) |
-| Evidence-aware presentation | Unknowns, partial visibility and synthetic origin survive into the user's result | [Geometry viewer contract](ai_inspector/docs/capture-to-geometry.md#inspection-results-viewer), [drawing/photo schemas](drawing_photo_service/models.py) |
+| Evidence-rich presentation | Results retain source provenance, measurement context and visibility information | [Geometry viewer contract](ai_inspector/docs/capture-to-geometry.md#inspection-results-viewer), [drawing/photo schemas](drawing_photo_service/models.py) |
 | Metadata-only observability | Latency, attempts, usage and prompt versions can be examined without automatically exporting source images or chat text | [Observability](ai_inspector/src/ai_inspector/observability.py), [Langfuse guide](ai_inspector/docs/agent-chat.md#langfuse-cloud-traces-prompts-and-evaluation) |
 
-These choices address concrete failure modes: mobile disconnects, long reconstruction jobs, uncertain network outcomes and malformed model output. Durable ownership, idempotent operations and versioned evidence make failures recoverable and findings auditable.
+These mechanisms give the product a durable foundation: operations retain their identity across retries, completed computations can be recovered, and findings remain connected to the evidence that produced them.
 
 ## How we use Meta models
 
-Meta models are part of the actual processing paths, including orchestration, visual interpretation, segmentation and speech-to-text. The interfaces below are documented in Meta's [model catalog](https://dev.meta.ai/docs/models) and [SAM 3.1 API guide](https://dev.meta.ai/docs/sam/overview); the table identifies the capabilities this project actually uses.
+**Deeply integrated Meta intelligence powers the product's reasoning, perception and voice interaction.** Each integration has a concrete responsibility in the inspection workflow.
 
 | Component | Model and interface | Model responsibility | Responsibility retained by code |
 |---|---|---|---|
@@ -153,241 +157,91 @@ Meta models are part of the actual processing paths, including orchestration, vi
 | Progress4D visual evidence | `muse-spark-1.3`, image input and JSON schema | Assess product evidence from selected views and distinguish visibility/material/installation claims | Camera reconstruction, IFC registration, visibility gates, temporal aggregation and forecast rules |
 | Voice input | `muse-voice-transcribe-1.0`, Meta Model API `/asr/transcribe` | Turn a spoken inspection request into text | Push-to-talk capture, mono PCM WAV conversion, authentication, audio validation and insertion into an editable message draft |
 
-The [shared harness](ai_inspector/src/ai_inspector/agent_runtime.py) freezes each model request before network I/O; the [Meta adapter](ai_inspector/src/ai_inspector/model_client.py) validates returned messages and exposes safe errors. The [SAM adapter](geometry-engine/geometry_engine/segmentation/sam_backend.py) uses hosted inference with bounded responses and the official decoder; no local SAM weights or NVIDIA GPU are required for that path. See also the [drawing/photo client](drawing_photo_service/engine.py), [Progress4D perception](progress4d_service/perception.py), and the [voice transcription adapter](ai_inspector/src/ai_inspector/voice.py).
-
-Models operate through scoped, predefined tools. Numerical geometry comes from the reconstruction and comparison services; Muse Spark reviews and explains the resulting evidence. Voice transcription converts speech into an editable draft, with audio handled in memory.
+The [shared agent harness](ai_inspector/src/ai_inspector/agent_runtime.py) manages durable model requests and tool execution. The [Meta adapter](ai_inspector/src/ai_inspector/model_client.py) validates returned messages. The [SAM adapter](geometry-engine/geometry_engine/segmentation/sam_backend.py) uses hosted inference and the official decoder; metric reconstruction and comparison run on CPU. The [voice adapter](ai_inspector/src/ai_inspector/voice.py) turns push-to-talk speech into an editable draft, with audio handled in memory. Model interfaces: [Meta model catalog](https://dev.meta.ai/docs/models) · [SAM API](https://dev.meta.ai/docs/sam/overview).
 
 ## Service details
 
-### 1. Inspector backend, orchestrator and web workspace
+### Inspector: a cohesive, capable engineering workspace
 
-**Role.** Own user chats, capture assignments, accepted sources, Geometry operations and the presentation of results. Native execution uses FastAPI/Pydantic with SQLite by default and optional PostgreSQL/private remote storage; a separate Cloudflare deployment path is provided. The browser renders IFC, PDF and images using Three.js, web-ifc and PDF.js. Push-to-talk dictation uses Muse Voice Transcribe 1.0 to insert spoken requests into an editable draft before sending.
+The web workspace brings chat, drawings, photographs, IFC models and review artifacts together with Three.js, web-ifc and PDF.js. The backend owns persistent sessions, capture assignments, processing operations and agent execution. Typed artifacts make findings explorable alongside their source material. Durable commands, request identities and fenced task ownership preserve continuity across long-running work and reconnects.
 
-**Agent execution.** Bob is the internal main orchestrator. Each registered inspector has its own instructions, permitted tools, step budget, state and history through `AgentHarness`. Direct tools cover capture/session status, saved Geometry results, drawing/photo comparison and, for a mapped project, saved Progress4D results. Registration and selected files determine which tools are offered. The model cannot register arbitrary services or choose service endpoints.
+[Backend and setup](ai_inspector/README.md) · [Agent contract](ai_inspector/docs/agent-chat.md) · [API](ai_inspector/src/ai_inspector/api.py) · [Web integration](ai_inspector/docs/web-integration.md) · [Viewer](ai_inspector/viewer/README.md)
 
-**Recovery.** Chat/run history, pending model requests and planned tool commands are durable. Exact request IDs and bodies distinguish retry from new work. A completed request replays its result; an uncertain request keeps its operation identity. Model `tool_call_id` is not the backend operation ID. At most two invalid-argument repair attempts are allowed within the model-turn budget, and rejected calls never execute.
+### Geometry Inspector and Geometry Verifier: focused expertise and rigorous review
 
-**Capture lifecycle.** The server generates session IDs. Assignment, device presence, acknowledgement, camera start, accepted source and Geometry completion are separate facts. A tab closing or phone going offline does not cancel the session. A new explicitly requested capture after sealing creates a linked session. Upload safety and source validation precede dispatch; only the existing capture worker creates the initial Geometry operation.
+Geometry Inspector owns the geometry/BIM inspection task. Its Geometry Verifier receives a bounded evidence package and returns a typed review decision. Both operate as independent A2A services with their own task stores and workers. Source hashes, candidate identities and measurement bindings connect the agent's conclusion to the computation that supports it; the orchestrator validates the accepted report before presenting it.
 
-**User workspace.** Files, selections, plans and observations are scoped to the caller/chat. Originals and accepted history retain their identity. The viewer links geometry findings to IFC elements and image evidence; opening it does not trigger analysis. Typed response artifacts are rendered as data, not model-supplied executable HTML. Manual work-plan confirmation remains an operator action.
+[Roles, schemas and setup](ai_inspector/docs/ifc-discrepancy-review.md) · [Agent services](ai_inspector/src/ai_inspector/discrepancy_agents.py) · [Report schemas](ai_inspector/src/ai_inspector/discrepancy.py) · [Evidence adapter](ai_inspector/src/ai_inspector/discrepancy_evidence.py)
 
-**Inspect:** [backend setup](ai_inspector/README.md) · [agent contract](ai_inspector/docs/agent-chat.md) · [API](ai_inspector/src/ai_inspector/api.py) · [web contract](ai_inspector/docs/web-integration.md) · [viewer](ai_inspector/viewer/README.md).
+### Geometry Engine: sophisticated metric reconstruction meets Meta perception
 
-### 2. Geometry Inspector and Geometry Verifier
+Geometry Engine reconstructs observed surfaces from RGB-D frames with **Open3D TSDF and original ARKit camera poses**. Meta SAM segments structural elements in selected RGB views. Depth-supported projection and multiview fusion connect those masks to the mesh; observed contours provide opening candidates. Rigid IFC registration and geometric comparison produce dimensions, displacements and surface differences.
 
-**Role.** Geometry Inspector owns the geometry/BIM inspection task. Geometry Verifier is its narrower verification sub-agent, not another inspector directly reporting to Bob. Both run as independent native A2A HTTP+JSON services with their own task stores and workers.
+The design combines **semantic understanding with numerical measurement**. The mesh preserves the observed geometry; registration uses a rigid transform with scale fixed to one. Dominant normals, yaw hypotheses and robust point-to-plane ICP support alignment. Projection-camera adjustment improves mask placement against the fixed mesh.
 
-**Evidence flow.** The capture worker validates compact Geometry results and prepares bounded candidate batches. Geometry Inspector can read only the pinned evidence granted to its task and can delegate only to its configured verifier. The verifier is tool-free. It returns a typed decision over the supplied candidates; deterministic code checks case IDs, source/evidence hashes and measurement bindings before assembling the report. Bob checks the accepted report again before using it.
+**Efficient reuse is engineered into the pipeline.** Exact-input SAM caching reuses unchanged masks across geometry settings and IFC comparisons. Each completed stage publishes a manifest with content hashes, allowing workers to restore verified computations after a restart. Reconstruction, segmentation, comparison and viewer export remain separately traceable.
 
-**Versioning.** Default profiles are version `3`; new Geometry reviews use evidence projection `2` over compact result `2.0`. Legacy requests retain their original evidence and replay behavior. Bob→Inspector registration, Inspector→Verifier registration and live agent cards must agree independently.
+[Service and setup](geometry-engine/README.md) · [Reconstruction](geometry-engine/geometry_engine/reconstruction/service.py) · [Registration](geometry-engine/geometry_engine/comparison/bim_registration.py) · [Mask fusion](geometry-engine/geometry_engine/segmentation/mask_fusion.py) · [Opening contours](geometry-engine/geometry_engine/openings/mesh_boundaries.py) · [Inspector handoff](ai_inspector/docs/capture-to-geometry.md)
 
-**Recovery and limits.** Separate persistent task stores, frozen child requests, bounded polling and lease fencing permit remote work to continue without the browser. Default model budgets are 12 turns for Geometry Inspector and 3 for the verifier. Waiting for the verifier is bounded by 120 polls or 10 minutes.
+### Drawing/Photo: structured reasoning, reusable requirements and a fresh review
 
-**Inspect:** [roles, schemas, bindings and native setup](ai_inspector/docs/ifc-discrepancy-review.md) · [service factories](ai_inspector/src/ai_inspector/discrepancy_agents.py) · [report schemas](ai_inspector/src/ai_inspector/discrepancy.py) · [evidence adapter](ai_inspector/src/ai_inspector/discrepancy_evidence.py).
+The service compares a drawing or PDF page with a site photograph for the user's inspection task. Its **staged workflow** separates three responsibilities: extract requirements from the drawing, assess the photograph against those fixed requirements, then review the findings in a fresh context with both originals. Stable requirement IDs and source bindings make the checklist reusable for subsequent photographs.
 
-### 3. Geometry Engine
+Requirements cover geometry, material, product, measurement, installation and performance. Evidence regions connect design claims and site observations. Named grid views and server-side crop mapping keep image references tied to the original pixels. The shared-context `legacy` workflow and the staged workflow are both implemented; configuration selects the path.
 
-**Role.** Reconstruct metric observed geometry from RGB-D capture and compare it with an IFC design. This is a computation service; it does not make the final inspection decision.
+[Service and API](drawing_photo_service/README.md) · [Legacy engine](drawing_photo_service/engine.py) · [Staged requirements and prompts](drawing_photo_service/staged.py) · [Evidence grounding](drawing_photo_service/grounding.py) · [Persistence](drawing_photo_service/app.py) · [Inspector adapter](ai_inspector/src/ai_inspector/drawing_photo.py)
 
-```mermaid
-flowchart LR
-    A[RGB-D and original ARKit poses] --> B[CPU TSDF reconstruction]
-    B --> C[Mesh cleaning and frame selection]
-    C --> D[Hosted Meta SAM masks]
-    D --> E[Depth-supported projection and multiview fusion]
-    E --> F[Observed opening contours]
-    F --> G[Rigid IFC registration]
-    G --> H[Surface and opening differences]
-    H --> I[Compact 2.0 evidence and optional viewer]
-```
+### Progress4D: a richer view of construction progress
 
-**Geometry.** Open3D TSDF integrates depth using the original ARKit poses. The default voxel size is 0.02 m and truncation is 0.08 m for TSDF integration. Camera adjustment for projecting masks leaves mesh vertices fixed. Masks are projected onto visible, depth-supported triangles and fused across views; opening candidates come from mesh contours and their wall interfaces.
+Progress4D combines overlapping photo surveys, an IFC work schedule and Meta visual assessment. PyCOLMAP reconstructs camera poses and sparse geometry; the configurable OpenMVS CPU path adds a dense textured surface. Registration connects observations to the model, while selected views supply product-level evidence for Muse Spark. Deterministic temporal logic produces a timeline, counts, activity and conditional forecasts.
 
-**Registration and comparison.** Dominant normals and four yaw hypotheses initialize robust point-to-plane ICP with a Tukey loss. Registration is rigid with scale fixed to one: the scan is not resized or reshaped to match the design. Observable directions, gravity agreement and competing poses contribute to rejection of weak or ambiguous alignment. The registration path targets predominantly orthogonal rooms. Outputs include matched IFC IDs, dimensions, displacement and partial surface deviations.
+The progress viewer brings these dated results into the Inspector workspace through a scoped bridge. Versioned evidence cards, source dates and separate material/installation fields make the reasoning behind each status inspectable.
 
-**Research basis and project adaptation.**
+[Service, supported inputs and setup](progress4d_service/README.md) · [Pipeline](progress4d_service/pipeline.py) · [Surface adapter](progress4d_service/surface.py) · [Visual assessment](progress4d_service/perception.py) · [Temporal logic](progress4d_service/temporal.py) · [Inspector integration](ai_inspector/docs/progress4d.md)
 
-| Method and primary source | How this implementation uses it |
-|---|---|
-| Volumetric depth fusion: [Curless and Levoy, SIGGRAPH 1996](https://graphics.stanford.edu/papers/volrange/), [Open3D TSDF integration](https://www.open3d.org/docs/latest/tutorial/t_reconstruction_system/integration.html) | Open3D's CPU voxel integration with ARKit input adaptation, confidence filtering and source provenance |
-| Robust point-to-plane alignment: [Open3D robust kernels](https://www.open3d.org/docs/latest/tutorial/pipelines/robust_kernels.html) | Tukey weighting reduces outlier influence; project code adds bounded yaw hypotheses and alignment rejection checks |
-| Cross-view mask grouping: [Open3DIS, CVPR 2024](https://arxiv.org/abs/2312.10671) | Adapts depth consistency and region-overlap grouping to CPU mesh-face areas, with per-frame vote caps and semantic conflict checks; does not run the full learned Open3DIS pipeline |
+### iPhone capture and Localization: bring physical observations into the workflow
 
-Exact upstream code references and licenses are retained in [Geometry method notices](geometry-engine/THIRD_PARTY_NOTICES.md).
+The SwiftUI/ARKit client captures RGB imagery and, on LiDAR-equipped devices, depth and confidence with camera intrinsics, poses and frame identities. Inspector assigns the session; the phone uploads through scoped signed permissions. Keychain credentials and persistent retry journals support secure, recoverable capture delivery.
 
-**Durability.** `POST /inspections` returns `202` after persisting the job. PostgreSQL owns jobs, stage attempts and leases; large artifacts live in Storage. Each successful stage commits an immutable manifest with hashes and sizes. A restarted worker restores verified completed stages into a fresh workspace. Transient failures have bounded retries; failed or partial uploads do not become checkpoints. Viewer export is separate and can reuse completed computations.
+Localization provides session-bound spatial observations and capture/IFC alignment using depth backprojection, gravity-aligned plane fitting and rigid registration. Its IFC room model establishes the coordinate frame for supported capture workflows.
 
-**Efficiency.** SAM inference is cached by exact image, prompt, model/decoder identity and preprocessing version. Geometry settings or a different IFC can reuse unchanged 2D masks while recomputing dependent stages. Each prompt is cached independently, including verified empty results. A new comparison uses a new operation identity and retains previous results.
-
-**Output meaning.** Compact `2.0` lengths are metres and differences are `scan − IFC`. Unknown measurements stay `null`. Unobserved and unavailable-reference objects remain distinct from absence or successful matches. Processing tolerance, compared area and quality flags accompany each result. The Geometry API operates behind a trusted single-tenant service boundary.
-
-**Inspect:** [service/API/setup](geometry-engine/README.md) · [reconstruction](geometry-engine/geometry_engine/reconstruction/service.py) · [registration](geometry-engine/geometry_engine/comparison/bim_registration.py) · [mask fusion](geometry-engine/geometry_engine/segmentation/mask_fusion.py) · [opening contours](geometry-engine/geometry_engine/openings/mesh_boundaries.py) · [Inspector acceptance](ai_inspector/docs/capture-to-geometry.md).
-
-### 4. Drawing/photo analysis service
-
-**Role.** Compare one explicitly supplied 2D drawing or PDF page with one site photograph for a concrete user task. Inputs are selected images or rendered PDF pages, paired with the user's inspection task.
-
-**Two implemented workflows.** `legacy` analyzes both sources in one conversation and reviews evidence crops in that history. `staged` separates requirement extraction, photo assessment and final review into fresh model contexts:
-
-```mermaid
-flowchart LR
-    subgraph Legacy[Legacy: shared model history]
-        direction TB
-        LInputs[Drawing and current photo] --> LAnalysis[Joint analysis]
-        LAnalysis --> LReview[Evidence crop review in the same history]
-        LReview --> LReport[Findings and evidence]
-    end
-    subgraph Staged[Staged: separate model contexts]
-        direction TB
-        Drawing[Drawing only] --> Checklist[Requirement extraction]
-        Checklist --> Snapshot[Validated reusable checklist]
-        Snapshot --> Photo[Checklist and current photo assessment]
-        Photo --> Review[Fresh review with both originals and draft]
-        Review --> Report[Findings by stable requirement ID]
-        Saved[Compatible saved checklist] -.->|New photo: skip extraction| Photo
-    end
-```
-
-**Checklist as a source artifact.** The actual schema is [`Checklist` / `ChecklistItem`](drawing_photo_service/staged.py). It permits up to 12 atomic requirements with stable `R01`-style IDs. Photo and review phases must preserve each requirement's ID, category, criterion and design claim exactly.
-
-| Category | What a requirement may establish | Evidence boundary |
-|---|---|---|
-| `geometry` | Visible presence, count, position or relationships | Visual similarity does not identify a material or manufacturer |
-| `material` | An explicitly specified material class | Drawing annotation and appropriate observable evidence are required |
-| `product` | A specified manufacturer, model or grade | Similar shape alone is insufficient |
-| `measurement` | A dimensioned quantity with units | A photograph without a reliable scale cannot verify it |
-| `installation` | A specified process or interface | Concealed workmanship may be unverifiable in the supplied view |
-| `performance` | A specified functional/test property | Appearance alone cannot replace the relevant test evidence |
-
-**Illustrative checklist: window detail.** Assume a drawing explicitly shows the following requirements. Each row in this illustrative example assesses one property:
-
-| ID / category | Requirement extracted from the drawing | Evidence in the current photo | Result |
-|---|---|---|---|
-| `R01` / `geometry` | A continuous strip spans the lower frame-to-wall interface | The corresponding strip is visible continuously across the entire required span | `match` for visible continuity only |
-| `R02` / `material` | The strip is specified as a waterproof membrane | The strip is visible but its composition cannot be identified | `inconclusive`; appearance does not verify material |
-| `R03` / `installation` | The membrane is bonded behind the frame | The bonded interface is concealed | `inconclusive`; concealed is not missing |
-| `R04` / `measurement` | The overlap meets the dimension printed on the drawing | The photo has no reliable scale | `inconclusive`; request measurement evidence |
-
-A `mismatch` requires a visible contradiction at the corresponding location. The saved source artifact contains each requirement's ID, category, criterion, design claim, drawing evidence regions and limitations; the [schema and phase prompts](drawing_photo_service/staged.py) define the complete format. The snapshot binds the drawing hash, page, dimensions, task context and named views. A subsequent photo can reuse it without inheriting earlier photo observations. The Inspector adapter selects a compatible checklist from the same chat; changing the scope requires an explicit new checklist.
-
-**Grounding and uncertainty.** Models refer to named A–J/1–10 grid views. Server code maps crop references back to the original image rather than trusting model-generated exact pixel coordinates. A finding carries design and photo claims, correspondence, visibility, evidence regions, verdict, limitations and questions. Uncertain correspondence or inadequate visibility cannot produce a conclusive verdict. A fresh model context performs the final review against both source images and the frozen requirements.
-
-**Execution.** Both modes use a 240-second budget checked between model calls and at most 9 model calls; staged allows at most 3 per phase, including crop/repair calls. Requests, originals, reports and audit are persisted in SQLite or a separate PostgreSQL schema. Exact replay retains the task ID/body. Async admission and durable Inspector polling connect the service to the chat workflow; the [service guide](drawing_photo_service/README.md) documents execution states and recovery.
-
-**Inspect:** [service and API](drawing_photo_service/README.md) · [legacy engine](drawing_photo_service/engine.py) · [staged prompts and checklist](drawing_photo_service/staged.py) · [grounding](drawing_photo_service/grounding.py) · [admission/persistence](drawing_photo_service/app.py) · [Inspector adapter](ai_inspector/src/ai_inspector/drawing_photo.py).
-
-### 5. Construction monitoring / Progress4D
-
-**Role.** Convert dated overlapping photo surveys into reconstructed views and product-level progress evidence against an IFC work schedule. This is a separate photo-only path; it does not require the LiDAR Geometry pipeline.
-
-**Processing.** PyCOLMAP reconstructs camera poses and sparse points. Permanent IFC walls/slab provide metric registration; scheduled products are excluded from alignment targets. The configurable OpenMVS CPU path creates a dense mesh with photographic textures. IFC geometry is not substituted for observed surfaces. Selected view evidence is assessed by Muse Spark, then deterministic temporal logic produces the saved timeline, counts, activity and conditional forecasts.
-
-**Scope.** One axis-aligned rectangular room; 8–100 overlapping upright photographs from one camera with fixed zoom and equal dimensions; timezone-aware dates; one IFC schedule with explicit tasks, products and finish-start dependencies without lag. Quantities count identified products, not measured areas or volumes. Hidden work retains its evidence date and uncertainty. Forecasts based on assumptions are labeled separately from rates computed from fully observed counts.
-
-**Variants.** The original path produces sparse/stereo points using PyCOLMAP and OpenCV StereoSGBM. With `PROGRESS4D_OPENMVS_BIN`, the service runs OpenMVS 2.4.0 for dense reconstruction and textured GLB output. Evidence version `2` uses independent, larger two-view cards, frontal-view ranking and separate material/installation fields.
-
-**Method references.** [COLMAP's documentation and research references](https://colmap.github.io/) describe the camera/sparse reconstruction foundation. [OpenCV StereoSGBM](https://docs.opencv.org/4.x/d2/d85/classcv_1_1StereoSGBM.html) documents the stereo matcher used by the point path; [OpenMVS 2.4.0](https://github.com/cdcseacave/openMVS/blob/v2.4.0/README.md) documents dense reconstruction and texturing from calibrated cameras and sparse points. IFC registration, product evidence, temporal aggregation and the chat bridge are project-specific layers.
-
-**Durability and integration.** A SQLite queue persists immutable submissions and attempt history; one API process owns a data directory and manages reconstruction child processes. The native Inspector `progress4d_result` tool reads an already processed project bound to that chat by server configuration. Its same-origin bridge checks access and forwards bounded artifacts without exposing service credentials. The native backend provides the documented Progress4D integration.
-
-**Inspect:** [service, capture constraints and native setup](progress4d_service/README.md) · [pipeline](progress4d_service/pipeline.py) · [surface adapter](progress4d_service/surface.py) · [visual assessment](progress4d_service/perception.py) · [temporal logic](progress4d_service/temporal.py) · [chat/viewer bridge](ai_inspector/docs/progress4d.md).
-
-### 6. iPhone capture application
-
-**Role.** Acquire observations and deliver them with their calibration and identity. The SwiftUI/ARKit app targets iOS 17. RGB-only observations are possible on iPhone 11; depth-dependent workflows require a compatible LiDAR device.
-
-Each observation retains RGB, depth/confidence when available, frame metadata, camera intrinsics and pose. Independent ARKit segments preserve tracking context. The phone initiates its authenticated channel, receives an assignment, and uploads through scoped signed permissions. Device credentials stay in Keychain. Retry journals retain exact operation identity, and upload failure does not delete local originals.
-
-Inspector owns assigned inspection sessions; a separate standalone mode supports capture testing. The app builds with macOS/Xcode and uses a physical iPhone for ARKit capture.
-
-**Inspect:** [iOS setup](ios/README.md) · [server integration](docs/inspector-server-integration.md) · [implementation and pending checks](docs/mobile-integration-status.md) · [capture format](ai_inspector/docs/zip-capture.md).
-
-### 7. Localization Service
-
-**Role.** Estimate the device/capture position relative to a supported room and provide spatial evidence. Inspector hands off the pinned IFC and session binding through a dedicated server credential; the phone receives a session-scoped token for spatial observations and poses. The cloud implementation persists state under its own restricted PostgreSQL role/schema.
-
-**Supported solver.** A restricted IFC importer accepts an axis-aligned rectangular room with four walls, a floor and a space in metre units, including supported door/window openings. The selected entry door establishes the room frame. Depth backprojection, gravity-aligned plane fitting and bounded rigid registration use observed geometry. Coverage records depth support and observation provenance.
-
-**Inspect:** [current cloud protocol and constraints](localization_service/deploy/README.md) · [cloud API](localization_service/cloud_server.py) · [registration](localization_service/registration.py) · [Inspector adapter](ai_inspector/src/ai_inspector/localization.py) · [original lab experiments](localization_service/README.md).
+[iOS setup](ios/README.md) · [Server integration](docs/inspector-server-integration.md) · [Mobile integration](docs/mobile-integration-status.md) · [Capture format](ai_inspector/docs/zip-capture.md) · [Localization setup](localization_service/deploy/README.md) · [Cloud API](localization_service/cloud_server.py) · [Registration](localization_service/registration.py) · [Inspector adapter](ai_inspector/src/ai_inspector/localization.py) · [Localization experiments](localization_service/README.md)
 
 ## Approach comparisons
 
-The project combines implementation with exploration of alternative pipelines. The following tables compare **mechanisms and tradeoffs** for the stated inputs and recovery needs. Linked studies provide numerical results and reproduction protocols.
+**The implementation reflects careful refinement and substantial technical depth.** The project records alternative approaches, same-input comparisons and numerical experiments alongside the code.
 
-### Geometry: moving from experiments to the current measurement path
-
-| Area | Earlier exploration described in project history | Current implemented path | Engineering purpose |
-|---|---|---|---|
-| Reconstruction | Pose refinement, ICP/pose-graph experiments | Original ARKit poses plus TSDF | Preserves recorded camera estimates |
-| Structural representation | Wall labels with plane-fitting experiments | Mesh labels with visible, depth-supported multiview fusion | Retains observed irregular geometry and per-view depth support |
-| Opening boundaries | VLM selection, numbered image lines and manual-window experiments | Mesh contours and wall-interface support followed by IFC matching | Bases dimensions on geometry with contour and alignment quality gates |
-| Repeated work | Local stage execution/resume | Durable stage manifests and exact-input SAM cache | Reuses matching inference results and restores completed stages after worker restart |
-
-The [workflow evolution study](docs/evidence/2026-11-03/workflow-evolution.md) links the actual historical commits and reports a paired projection result on the real-room case: mean per-frame median residual fell from **10.99 to 7.93 mm on the same 68 accepted frames**, with 9/77 views rejected. This measures projection consistency against the retained mesh. See the study for the protocol, complete per-frame data and numerical ground-truth experiments. The analysis runs on GCP, separately from the live services.
-
-A [controlled numerical comparison with four figures](docs/evidence/2026-11-03/controlled-comparison.md) adds known ground truth: in 12 varied room cases, mean camera translation error falls from **70.16 to 5.07 mm** with the current policy; in 18 two-sided-wall cases, camera-side matching reduces incorrect displacement measurements from **9/18 to 0/18**. The study includes a reproducible 26-case camera-pose benchmark with generated ground truth and an 18-case wall-correspondence benchmark.
-
-Historical methods and implementation references are documented in the [Geometry README](geometry-engine/README.md), [method notices](geometry-engine/THIRD_PARTY_NOTICES.md) and [workflow evolution study](docs/evidence/2026-11-03/workflow-evolution.md).
-
-### Drawing/photo: shared history versus staged requirements
-
-| Dimension | `legacy` | `staged` |
+| Area | Implemented refinement | Why it matters |
 |---|---|---|
-| Initial model context | Drawing and photo together | Drawing alone builds requirements |
-| Photo judgment | Developed in the shared history | Fresh context receives the frozen checklist and current photo |
-| Final review | Same history plus evidence crops | Fresh context with both original sources and the draft |
-| Repeat photo | Repeats the joint workflow | Can reuse the bound checklist and skip requirement extraction |
-| Requirement categories | General finding structure | Stable IDs and six explicit property categories |
-| Execution structure | Shared analysis history | Separate stages, structured handoffs and schema checks |
+| Geometry reconstruction | Original ARKit poses with TSDF; projection-only camera adjustment | Preserves the metric reconstruction while refining semantic projection |
+| Structural evidence | Depth-supported multiview mask fusion and mesh contours | Connects Meta semantics to observed surfaces and opening geometry |
+| Drawing/photo reasoning | Separate requirement extraction, assessment and final review | Reuses design requirements while reviewing each photograph in its own context |
+| Repeated computations | Exact-input SAM cache and durable stage manifests | Reuses matching inference and recovers completed work |
+| Progress evidence | Larger independent view cards with distinct material/installation fields | Gives visual assessment richer evidence and structured outputs |
 
-The improvement claimed is **explicit separation and reuse of requirements**. The configured Inspector default remains `legacy` unless `INSPECTOR_DRAWING_PHOTO_WORKFLOW=staged` is set.
+The [workflow evolution study](docs/evidence/2026-11-03/workflow-evolution.md) links historical implementations and paired real-room diagnostics. The [controlled comparison](docs/evidence/2026-11-03/controlled-comparison.md) includes generated ground truth, per-case records and four figures. The [drawing/photo comparison](docs/evidence/2026-11-03/README.md#same-input-legacystaged-run) records model calls, processing time and findings on the same inputs.
 
-### Progress4D: geometry output and evidence resolution
-
-```mermaid
-flowchart LR
-    Photos[Overlapping survey photos] --> SfM[PyCOLMAP camera and point reconstruction]
-    SfM --> Points[Legacy: sparse and stereo points]
-    SfM --> Dense[Configured: OpenMVS dense surface and texture]
-    Points --> Evidence[Selected product views]
-    Dense --> Evidence
-    Evidence --> V1[Version 1: compact contact sheets]
-    Evidence --> V2[Version 2: independent larger cards]
-    V1 --> Timeline[Validated states and dated timeline]
-    V2 --> Timeline
-```
-
-| Choice | Earlier/default option | Configured option | What changes |
-|---|---|---|---|
-| Reconstruction output | Sparse/StereoSGBM points | OpenMVS dense textured surface | A more detailed observed surface; native binaries and additional CPU work are required |
-| Two-view evidence | Two 320×320 view cells; up to 12 products/request | Version 2: two 640×940 cells; up to 4 products/request | Larger independent evidence cards and smaller batches, with additional image/context cost |
-| Judgment structure | Presence state and reason | Separate observed surface, material verification and installation state | Makes unsupported material/installation claims easier to identify |
-
-OpenMVS preserves observed coverage with hole closing and artificial tower points disabled. Versioned configuration, input hashes and synthetic/site labels accompany comparisons.
-
-### Recorded comparisons
-
-The [saved same-input drawing/photo comparison](docs/evidence/2026-11-03/README.md#same-input-legacystaged-run) supplies per-run time, model calls and judgments. Geometry studies include paired real-room projection diagnostics and controlled numerical cases. Input identities, model/prompt versions and detailed records are linked from the [evidence guide](docs/evidence/2026-11-03/README.md).
+The numerical foundations include [volumetric depth fusion](https://graphics.stanford.edu/papers/volrange/), [Open3D TSDF](https://www.open3d.org/docs/latest/tutorial/t_reconstruction_system/integration.html), [robust point-to-plane alignment](https://www.open3d.org/docs/latest/tutorial/pipelines/robust_kernels.html) and depth/overlap grouping adapted from [Open3DIS](https://arxiv.org/abs/2312.10671). Progress reconstruction uses [COLMAP](https://colmap.github.io/), [OpenCV StereoSGBM](https://docs.opencv.org/4.x/d2/d85/classcv_1_1StereoSGBM.html) and [OpenMVS](https://github.com/cdcseacave/openMVS/blob/v2.4.0/README.md). Project-specific adapters, evidence contracts, registration and review workflows connect these methods into the product. [Method notices and upstream references](geometry-engine/THIRD_PARTY_NOTICES.md).
 
 ## Reproducible setup
 
-Start with the [step-by-step setup guide](docs/reproducible-setup.md). It covers source revision, prerequisites, separate environments, where each key belongs, startup order, local ports, expected checks and the inputs needed to exercise each workflow.
+For the product walkthrough, [open the hosted demo](https://inspector.campuscompile.eu/demo). For development and new processing, the [step-by-step setup guide](docs/reproducible-setup.md) explains environments, credentials, startup order and workflow inputs.
 
-| Goal | Start here | Additional requirements |
-|---|---|---|
-| Open the workspace and use chat | [Inspector](ai_inspector/README.md) | Python 3.12+, operator/device configuration and a working Meta key for chat |
-| Compare a drawing and photo | [Drawing/photo](drawing_photo_service/README.md) | Separate minion process/environment, service token, Meta access, selected input pair |
-| Process a fresh RGB-D capture | [Geometry](geometry-engine/README.md) | Complete capture, pinned IFC, private Storage, PostgreSQL, hosted SAM access and API/worker |
-| Review Geometry evidence | [Two review agents](ai_inspector/docs/ifc-discrepancy-review.md) | Separate task stores, caller credentials, matching profile registrations and Meta access |
-| Explore construction progress | [Progress4D](progress4d_service/README.md) | Scheduled IFC, dated overlapping photos, native dependencies; OpenMVS for textured output |
-| Capture on a phone | [iOS](ios/README.md) | macOS/Xcode, real compatible iPhone, configured Inspector and upload storage |
-| Use the restricted spatial solver | [Localization](localization_service/deploy/README.md) | Supported IFC, service/database setup and session-bound phone integration |
+| Workflow | Guide |
+|---|---|
+| Workspace and Meta-powered chat | [Inspector setup](ai_inspector/README.md) |
+| Drawing/photo analysis | [Drawing/photo service](drawing_photo_service/README.md) |
+| RGB-D reconstruction and IFC comparison | [Geometry API and worker](geometry-engine/README.md) |
+| Geometry agent review | [Inspector and Verifier](ai_inspector/docs/ifc-discrepancy-review.md) |
+| Photo-based progress monitoring | [Progress4D](progress4d_service/README.md) |
+| Phone capture | [iOS](ios/README.md) |
+| Spatial integration | [Localization](localization_service/deploy/README.md) |
 
-Each service has its own environment and scoped credentials. The [Geometry evidence guide](docs/evidence/2026-11-03/README.md) links compact summaries and manifests; the [data access guide](docs/evidence/2026-11-03/data-access.md) lists the versioned Release packages and their contents. Deployment configuration is documented in the component guides.
+The [evidence guide](docs/evidence/2026-11-03/README.md) connects source data, summaries and manifests. The [data access guide](docs/evidence/2026-11-03/data-access.md) provides versioned public packages and integrity checks.
 
 ## Verification
 
-Source and maintained contracts are linked above. Generated `/docs`, `/openapi.json` and `/contracts` describe the service schemas. Component tests cover deterministic behavior and service contracts; the [evidence cases](docs/evidence/2026-11-03/README.md) document recorded model runs and numerical experiments. See [backend verification](ai_inspector/README.md#verification) for the test workflow.
+Component tests exercise deterministic behavior and service contracts. The [evidence cases](docs/evidence/2026-11-03/README.md) document recorded model runs and numerical experiments with source identities and reproduction protocols. Generated `/docs`, `/openapi.json` and `/contracts` describe the service schemas. [Backend verification workflow](ai_inspector/README.md#verification).
 
 ## Component and license references
 
