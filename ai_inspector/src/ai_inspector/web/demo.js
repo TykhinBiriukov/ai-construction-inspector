@@ -1033,6 +1033,7 @@
         }
         await send();if(current!==epoch)return;
         const last=chat?.runs?.at(-1);
+        if(last?.text===entry.prompt&&last.auto_resume){paintExampleStatus('Analysis is continuing automatically. Follow progress in the chat.');return;}
         if(last?.text!==entry.prompt||last.status!=='completed')throw Error(last?.error?.message||'Analysis is not finished. Resume the saved request.');
         lastExample=item;lastExampleMode='inputs';ask.textContent='Continue in chat';paintExampleStatus('Analysis request completed. Review the response and any available evidence.');$('demo-example-actions').hidden=false;return;
       }

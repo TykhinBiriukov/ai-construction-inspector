@@ -847,9 +847,23 @@ class OrchestratorAgent:
                 return self.public_run(run)
             lease = str(uuid4())
             run.update(status="running", error=None)
+            if run.pop("model_retry_waiting", False):
+                run["remote_waiting"] = False
             connection.execute("UPDATE agent_runs SET lease_token=?, lease_until=?, data=? WHERE run_id=?",
                                (lease, time.time() + self.settings.meta_timeout_s + 60, canonical_json(run), run_id))
         def checkpoint(*, link_session=None):
+            # Schedule before releasing the lease: the worker resumes the frozen
+            # model request, never replays an already completed tool command.
+            error = run.get("error") or {}
+            event = (run.get("activity_events") or [{}])[-1]
+            if (run["status"] == "retryable" and error.get("retryable")
+                    and error.get("code") == "model_unavailable"
+                    and run.get("pending_model") and event.get("kind") == "model"
+                    and run.get("model_retry_count", 0) < 2):
+                run["model_retry_count"] = run.get("model_retry_count", 0) + 1
+                run["model_retry_waiting"] = run["remote_waiting"] = True
+                run["remote_next_attempt_at"] = time.time() + 5 * run["model_retry_count"]
+                run["error"] = {**error, "message": "The AI service is taking longer than expected. Retrying this saved request automatically."}
             self._save(run, lease, release=run["status"] in ("completed", "failed", "retryable"), link_session=link_session)
         def prepare_model():
             chat, session = self._context(principal, run)
