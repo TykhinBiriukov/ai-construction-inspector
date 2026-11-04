@@ -1,0 +1,697 @@
+{
+  "checked_on": "2026-11-04",
+  "source": "Authenticated read-only Inspector API; completed report and source-session bindings",
+  "review_id": "9e859592-5027-5f16-94a0-7eae67034277",
+  "status": "completed",
+  "completed_at": "2026-11-02T18:53:56.766451Z",
+  "reviewed_batches": 11,
+  "counts": {
+    "confirmed": 0,
+    "needs_more_data": 8,
+    "rejected": 3
+  },
+  "source_session_id": "2b6b4560-c2d5-482d-880b-21f34502b9f2",
+  "result_session_id": "84989f82-35d4-5bdc-aaa2-e445c4f895b9",
+  "geometry_job_id": "54a47af7-ec32-4275-aee2-d07bd92550b1",
+  "ifc_sha256": "4a618081be81cad4b7bba0eec22486038bc96d37e4778276d2f20a7d8143c51d",
+  "result_manifest_sha256": "e391ca94ecf25cd110fb2974cfce11e88cb4e212f42a493d3baa1eb4cc60b3d8",
+  "cases": [
+    {
+      "category": "scan_only",
+      "context": {
+        "evidence_ids": [
+          "e-a7a9dfca0436893d05917438e9f9fc57",
+          "e-60c69797c3e05ac284ca93d172a71317",
+          "e-b34c4b0fecffc923e92f37d9b2b2f4e3",
+          "e-0b96f65fb644e0519a0f79fa722d52b5",
+          "e-67c9010cd96771cfa80bb8f8a7a7f532",
+          "e-bfd8992a7fb1085390847614c80f890a"
+        ],
+        "ifc_id": null,
+        "location": "",
+        "mismatch_types": [],
+        "object_type": "door",
+        "segment_id": "mesh_door_000"
+      },
+      "case_id": "61de0784-ceff-50ef-8014-dc2dc2557caf",
+      "data_requests": [
+        "Confirm checked IFC scope for this location and whether a door is expected there.",
+        "Provide metric extent of mesh_door_000 with uncertainty and whole-element verification status.",
+        "Provide boundary correspondence proof on all sides clarifying incomplete wall interfaces.",
+        "Provide displacement alignment proof or state unavailable.",
+        "Clarify whether overlay region corresponds to mesh_door_000 versus coat-board furniture and provide frames covering full object."
+      ],
+      "decision_reason": "Unmatched scan door with null dimensions and null displacement; boundary support false and accuracy unverified, and reference scope unchecked, so unmatched status cannot confirm an extra built door; photos show related RGB/overlay views and a grey door fragment but not complete extent.",
+      "detection_reason": "Scan object was not matched; extra object, fragment or segmentation error requires review.",
+      "evidence_used": [
+        "e-a7a9dfca0436893d05917438e9f9fc57",
+        "e-60c69797c3e05ac284ca93d172a71317",
+        "e-b34c4b0fecffc923e92f37d9b2b2f4e3",
+        "e-0b96f65fb644e0519a0f79fa722d52b5",
+        "e-67c9010cd96771cfa80bb8f8a7a7f532",
+        "e-bfd8992a7fb1085390847614c80f890a"
+      ],
+      "limitations": [
+        "Source reports null dimensions and null displacement; no metric measurement supplied.",
+        "Boundary_supported_on_all_sides false with incomplete interfaces and unverified correspondence; absolute_accuracy_verified false.",
+        "Reference facts report reference_scope_checked false, expected_region_observed false, and unreported coverage and checked IFC scope.",
+        "Photo previews are resized full images with no metric inference; RGB and overlay of same frame are related views, not independent observations.",
+        "Artifact metadata alone does not establish IFC/mesh/cloud bytes were read; upstream claims uncertified."
+      ],
+      "measurement_ids": [],
+      "status": "needs_more_data",
+      "reviewer_task_id": "6c1fad6b-754e-4d65-bb77-ded88d1aa9cc",
+      "review_sha256": "271a0408de8221b3e363bdbd107c5f420ab7ae31b09803a7a15b88b159e1aa53",
+      "package_sha256": "2333c97d0295a4b4f43ca0fe3ad463d4c6b380d89983039464de9fa7b8f33300",
+      "measurements": []
+    },
+    {
+      "category": "scan_only",
+      "context": {
+        "evidence_ids": [
+          "e-7e4b503a4533a4d90c48ee367284613b",
+          "e-0cae921965b695e710de5c7b600ba1ac",
+          "e-4ce4a46c1e684b542641efbe7028051c",
+          "e-90d46466ecf70379b3c4d109801c64b7",
+          "e-8ffb664377ee94c9cf830fe8466824b2",
+          "e-e4599fa625b795a8684eccb12353ea93"
+        ],
+        "ifc_id": null,
+        "location": "",
+        "mismatch_types": [],
+        "object_type": "door",
+        "segment_id": "mesh_door_001"
+      },
+      "case_id": "83ba07c9-56f8-5154-bfc0-27c130e07758",
+      "data_requests": [
+        "Report checked IFC scope for the expected door region including checked GUIDs and observation coverage.",
+        "Provide scan door width/height/extent with uncertainty, method, and compared area for mesh_door_001.",
+        "Provide displacement/alignment proof tying mesh_door_001 to project coordinates.",
+        "Provide boundary support on all sides showing the complete opening with frame-bound overlay/mesh annotation.",
+        "Verify and report absolute accuracy for the compared area."
+      ],
+      "decision_reason": "scan_object_not_matched with null ifc_guid and null dimensions/displacement cannot prove an extra door; zero measurements supplied; absolute_accuracy_verified=false and boundary_supported_on_all_sides=false with incomplete interfaces and unverified correspondence; rgb and overlay of frame d22feec1 and of frame 26c7255c are related views of same frames, not independent, and frame 51319bcb has only rgb reported; visible fragments do not establish a complete opening.",
+      "detection_reason": "Scan object was not matched; extra object, fragment or segmentation error requires review.",
+      "evidence_used": [
+        "e-7e4b503a4533a4d90c48ee367284613b",
+        "e-0cae921965b695e710de5c7b600ba1ac",
+        "e-4ce4a46c1e684b542641efbe7028051c",
+        "e-90d46466ecf70379b3c4d109801c64b7",
+        "e-8ffb664377ee94c9cf830fe8466824b2",
+        "e-e4599fa625b795a8684eccb12353ea93"
+      ],
+      "limitations": [
+        "No metric measurements, dimensions or displacements reported; null means unreported, never zero.",
+        "Absolute accuracy unverified and boundary_supported_on_all_sides=false with incomplete wall interfaces and boundary_correspondence_unverified.",
+        "reference_scope_checked=false and expected_region_observed=false; IFC not-found is not physical absence.",
+        "acceptance_tolerance_m=null; comparison tolerance 0.1m is geometry processing parameter, not project acceptance rule.",
+        "Photo previews are resized bounded views with no metric inference; RGB/overlay of one frame are related views, not independent; unreported roles/frames unknown.",
+        "Artifact metadata alone does not mean IFC/mesh/cloud bytes were read; algorithms and coverage not independently certified."
+      ],
+      "measurement_ids": [],
+      "status": "needs_more_data",
+      "reviewer_task_id": "989f250f-f450-4c27-b0d5-0eba8902901d",
+      "review_sha256": "44a06887b87e69ff36df5b13ddfe6d620e7235b6f87c85a16af948cc5f1ba234",
+      "package_sha256": "5feb2faecdf03faacb1abc0015d2b2462e367235e71ebd2b9aa25aa87e751d0a",
+      "measurements": []
+    },
+    {
+      "category": "geometry_mismatch",
+      "context": {
+        "evidence_ids": [
+          "e-97f1610aec75e8121b5c898acb98369b",
+          "e-1a47d77b05b24cadbddb5f37c7832fd0",
+          "e-2c51c1c82a4c764fd64294bf5883a46f",
+          "e-8a20bd2b65ad495778fb3a96d1a0d906",
+          "e-9ede67713766065967e6c37a4ef7682c",
+          "e-9e4057826a43dcc17065017437c55268"
+        ],
+        "ifc_id": "0oE0T2Q6P6px_guRMq_GEr",
+        "location": "",
+        "mismatch_types": [
+          "shape_or_dimensions",
+          "displacement"
+        ],
+        "object_type": "door",
+        "segment_id": "mesh_door_002"
+      },
+      "case_id": "6ee881ab-148e-5dcc-beb5-737bbf0020cc",
+      "data_requests": [
+        "Provide explicit project acceptance intervals for height, width and displacement for door 0oE0T2Q6P6px_guRMq_GEr.",
+        "Provide measurement uncertainty, extent and algorithm identity for m-height, m-width, m-along_wall, m-normal_to_wall, m-vertical.",
+        "Provide alignment proof with coordinate_frame_id for displacement measurements m-along_wall, m-normal_to_wall, m-vertical.",
+        "Clarify boundary support on all sides, boundary correspondence, incomplete wall interfaces and resolve possible_duplicate_fragments.",
+        "Provide whole-element verification and complete extent plus observation coverage for all 4 listed frames."
+      ],
+      "decision_reason": "Cannot confirm shape/displacement deviation for matched door mesh_door_002: no acceptance intervals supplied, uncertainties/extents unknown and displacement alignment_verified=false; absolute accuracy unverified, boundaries unsupported with unverified correspondence and possible duplicates; photos show a door fragment but are non-metric and same-frame rgb/overlay are not independent.",
+      "detection_reason": "Review supplied differences or uncertain correspondence; matched is not a compliance verdict.",
+      "evidence_used": [
+        "e-97f1610aec75e8121b5c898acb98369b",
+        "e-1a47d77b05b24cadbddb5f37c7832fd0",
+        "e-2c51c1c82a4c764fd64294bf5883a46f",
+        "e-8a20bd2b65ad495778fb3a96d1a0d906",
+        "e-9ede67713766065967e6c37a4ef7682c",
+        "e-9e4057826a43dcc17065017437c55268"
+      ],
+      "limitations": [
+        "No project acceptance rule supplied: acceptance_tolerance_m null and all acceptance_interval null; tolerance 0.1 is geometry processing parameter only.",
+        "All supplied measurements lack uncertainty and have extent unknown; algorithm identity/version unreported.",
+        "Displacement measurements require alignment but alignment_verified=false and coordinate_frame_id null.",
+        "absolute_accuracy_verified=false, boundary_supported_on_all_sides=false, boundary_correspondence_unverified with incomplete interfaces and possible_duplicate_fragments.",
+        "Matched means correspondence only; does not establish compliance or full element verification.",
+        "Photo rgb and overlay of same frame are related views, not independent observations and not metric; only 2 of 4 frames have photo_evidence.",
+        "Reference scope, observation coverage and complete target extent unreported; expected_region_observed false.",
+        "Artifact metadata alone does not prove IFC/mesh/cloud bytes were read."
+      ],
+      "measurement_ids": [
+        "m-height",
+        "m-width",
+        "m-along_wall",
+        "m-normal_to_wall",
+        "m-vertical"
+      ],
+      "status": "needs_more_data",
+      "reviewer_task_id": "a62d2740-bb3b-4b6d-bd0b-934fa32f5140",
+      "review_sha256": "d7d6bbde35229be380c60c807ff54d435be89fa4056940bf9583573f44cbaff6",
+      "package_sha256": "bf851c487195950f2a4e0cb5e4be611224fd498fd9c855e016b2f5d659b30c2a",
+      "measurements": [
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; underlying algorithm identity and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 2.173,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-height",
+          "observed": 2.1586224259750506,
+          "parameter": "height",
+          "requires_alignment": false,
+          "source_asset_ids": [
+            "e-1a47d77b05b24cadbddb5f37c7832fd0"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; underlying algorithm identity and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 0.919,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-width",
+          "observed": 0.8959636654750832,
+          "parameter": "width",
+          "requires_alignment": false,
+          "source_asset_ids": [
+            "e-1a47d77b05b24cadbddb5f37c7832fd0"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; alignment proof and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 0.0,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-along_wall",
+          "observed": -0.055292456834613035,
+          "parameter": "along_wall",
+          "requires_alignment": true,
+          "source_asset_ids": [
+            "e-1a47d77b05b24cadbddb5f37c7832fd0"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; alignment proof and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 0.0,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-normal_to_wall",
+          "observed": 0.025768845200312418,
+          "parameter": "normal_to_wall",
+          "requires_alignment": true,
+          "source_asset_ids": [
+            "e-1a47d77b05b24cadbddb5f37c7832fd0"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; alignment proof and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 0.0,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-vertical",
+          "observed": 0.058373630607339244,
+          "parameter": "vertical",
+          "requires_alignment": true,
+          "source_asset_ids": [
+            "e-1a47d77b05b24cadbddb5f37c7832fd0"
+          ],
+          "unit": "m"
+        }
+      ]
+    },
+    {
+      "category": "scan_only",
+      "context": {
+        "evidence_ids": [
+          "e-0b68d1a755d598f49e48360b8932d47f",
+          "e-e91f4b42a91e63f50ce69e5faaa3ffb3",
+          "e-18075dd5aa1e903ddb31137713129bfd",
+          "e-32727fa01722bea78bef8fc314c143bf",
+          "e-8482f614484725c88e9ef47b3731e252"
+        ],
+        "ifc_id": null,
+        "location": "",
+        "mismatch_types": [],
+        "object_type": "door",
+        "segment_id": "mesh_door_003"
+      },
+      "case_id": "b1dae2c4-74fc-5e82-905a-5d72984caf5f",
+      "data_requests": [
+        "Provide checked IFC scope around mesh_door_003 location to determine if an IFC door was missed or absent.",
+        "Provide metric extent and dimensions with uncertainty for mesh_door_003 and proof boundaries are supported on all sides.",
+        "Provide absolute-accuracy verification and displacement alignment proof for the compared area.",
+        "Provide observation-coverage map confirming expected region was observed and complete target extent."
+      ],
+      "decision_reason": "Cannot confirm extra door: scan_object_not_matched alone does not prove an extra built object; no metric dimensions/displacement reported, reference_scope_checked false and expected_region_observed false, boundaries unsupported and absolute accuracy unverified.",
+      "detection_reason": "Scan object was not matched; extra object, fragment or segmentation error requires review.",
+      "evidence_used": [
+        "e-0b68d1a755d598f49e48360b8932d47f",
+        "e-e91f4b42a91e63f50ce69e5faaa3ffb3",
+        "e-18075dd5aa1e903ddb31137713129bfd",
+        "e-32727fa01722bea78bef8fc314c143bf",
+        "e-8482f614484725c88e9ef47b3731e252"
+      ],
+      "limitations": [
+        "No metric measurements reported; null means unreported, never zero.",
+        "Observation coverage, checked IFC scope and complete target extent unreported.",
+        "boundary_correspondence_unverified with incomplete wall interfaces on all sides.",
+        "absolute_accuracy_verified false; supplied method/coverage claims not independently certified.",
+        "No explicitly supplied project acceptance interval; tolerance 0.1 is geometry processing parameter only.",
+        "RGB and overlay of same frame are related views, not independent observations.",
+        "Artifact metadata alone does not mean IFC/mesh/cloud bytes were read."
+      ],
+      "measurement_ids": [],
+      "status": "needs_more_data",
+      "reviewer_task_id": "7173bd29-cd6c-43cb-880b-cc760e96192f",
+      "review_sha256": "17bed77464a4cc9216a4268c0c6850f471c10a44f33ae94fadae39bbfab5d303",
+      "package_sha256": "c6c622eb6ea3c4eaa03114ca37e574334f9848e2e9fb5e4d0e00bdeb10809084",
+      "measurements": []
+    },
+    {
+      "category": "geometry_mismatch",
+      "context": {
+        "evidence_ids": [
+          "e-dd786914799d0631c25904cd74642887",
+          "e-002bf822e696e3f6a1e26686e86d0622",
+          "e-a9d36794851f226d952f10ea7fd0b649",
+          "e-2a34945b57f1982bf38cd50a67233e5c",
+          "e-98f067a2b26de8420a407fc31b27d4d2",
+          "e-1bc68317f2f99d530ddfb27552061897"
+        ],
+        "ifc_id": "1q37$RPED5g9Qi8ZTYNzyK",
+        "location": "",
+        "mismatch_types": [
+          "shape_or_dimensions",
+          "displacement"
+        ],
+        "object_type": "window",
+        "segment_id": "mesh_window_004"
+      },
+      "case_id": "1c242026-9a6e-5345-a6aa-1bb27a43e785",
+      "data_requests": [
+        "Provide project acceptance intervals for width, height and displacement for this window.",
+        "Provide measurement uncertainty, method traceability and verified extent for m-width and m-height.",
+        "Provide alignment proof with coordinate frame and uncertainty for m-along_wall, m-normal_to_wall and m-vertical.",
+        "Provide boundary correspondence proof showing full supported opening extent addressing incomplete wall interfaces.",
+        "Provide absolute accuracy verification for the compared area.",
+        "Provide complete observation coverage proving full window extent."
+      ],
+      "decision_reason": "Reported scan_minus_ifc: width -0.102m (3.2289 vs 3.331m), height -0.013m, along_wall -0.008m, normal 0.049m, vertical -0.025m, but acceptance_interval null, uncertainty unreported, extent unknown, alignment_verified false, absolute_accuracy_verified false and boundary_supported false with boundary_correspondence_unverified. 0.1m tolerance is processing parameter only. Photos show window fragment but previews have no metric inference and RGB/overlay of same frame are one observation. Deviation cannot be confirmed.",
+      "detection_reason": "Review supplied differences or uncertain correspondence; matched is not a compliance verdict.",
+      "evidence_used": [
+        "e-dd786914799d0631c25904cd74642887",
+        "e-002bf822e696e3f6a1e26686e86d0622",
+        "e-a9d36794851f226d952f10ea7fd0b649",
+        "e-2a34945b57f1982bf38cd50a67233e5c",
+        "e-98f067a2b26de8420a407fc31b27d4d2",
+        "e-1bc68317f2f99d530ddfb27552061897"
+      ],
+      "limitations": [
+        "acceptance_interval null for all measurements; no project acceptance rule supplied.",
+        "measurement uncertainty/algorithm identity unreported; extent unknown.",
+        "alignment_verified false and coordinate_frame_id null for displacement measurements.",
+        "absolute_accuracy_verified false; boundary_supported_on_all_sides false with incomplete wall interfaces and boundary_correspondence_unverified.",
+        "photo previews are resized full images with no metric inference; RGB and overlay of same frame are related views, not independent.",
+        "reference_scope_checked false and expected_region_observed false; observation coverage and complete target extent unreported."
+      ],
+      "measurement_ids": [
+        "m-height",
+        "m-width",
+        "m-along_wall",
+        "m-normal_to_wall",
+        "m-vertical"
+      ],
+      "status": "needs_more_data",
+      "reviewer_task_id": "31b81443-914b-46da-bf7d-301ce9119c8c",
+      "review_sha256": "e972b76b09a89b0263a3dcbd21bc02cfb5646ef89f60bf72c368a4c9211c47ab",
+      "package_sha256": "7ce21c068294058d01cdb76eceee4c557f3dff8dde83f750ce50673ef22bc7a2",
+      "measurements": [
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; underlying algorithm identity and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 1.5130000710487366,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-height",
+          "observed": 1.4999701306411146,
+          "parameter": "height",
+          "requires_alignment": false,
+          "source_asset_ids": [
+            "e-002bf822e696e3f6a1e26686e86d0622"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; underlying algorithm identity and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 3.3310000896453857,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-width",
+          "observed": 3.2289242522390964,
+          "parameter": "width",
+          "requires_alignment": false,
+          "source_asset_ids": [
+            "e-002bf822e696e3f6a1e26686e86d0622"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; alignment proof and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 0.0,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-along_wall",
+          "observed": -0.008425032839213031,
+          "parameter": "along_wall",
+          "requires_alignment": true,
+          "source_asset_ids": [
+            "e-002bf822e696e3f6a1e26686e86d0622"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; alignment proof and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 0.0,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-normal_to_wall",
+          "observed": 0.049351688657329085,
+          "parameter": "normal_to_wall",
+          "requires_alignment": true,
+          "source_asset_ids": [
+            "e-002bf822e696e3f6a1e26686e86d0622"
+          ],
+          "unit": "m"
+        },
+        {
+          "acceptance_interval": null,
+          "algorithm": "Geometry compact v2; alignment proof and uncertainty are unreported",
+          "algorithm_version": "unreported",
+          "alignment_verified": false,
+          "coordinate_frame_id": null,
+          "expected": 0.0,
+          "extent": "unknown",
+          "interval": null,
+          "measurement_id": "m-vertical",
+          "observed": -0.025049470946194363,
+          "parameter": "vertical",
+          "requires_alignment": true,
+          "source_asset_ids": [
+            "e-002bf822e696e3f6a1e26686e86d0622"
+          ],
+          "unit": "m"
+        }
+      ]
+    },
+    {
+      "category": "scan_only",
+      "context": {
+        "evidence_ids": [
+          "e-5ceccd794bb3a16fb9968dde1cc9e833",
+          "e-3fcb22561647a82386bfe9b9db666d67",
+          "e-f2004d4f074dc1ed0c0a44bb9a1ce5f0",
+          "e-f0cfd96c88c513ea7f002c21b4323462",
+          "e-d7950da9367b69d7bf08334766085cc2",
+          "e-db7bbbbb028f811eed223846531180f2"
+        ],
+        "ifc_id": null,
+        "location": "",
+        "mismatch_types": [],
+        "object_type": "window",
+        "segment_id": "mesh_window_005"
+      },
+      "case_id": "3168f9c3-efbd-551c-b254-d1e45bc23bcc",
+      "data_requests": [
+        "Report checked IFC scope for windows in this region with GUIDs and search extent.",
+        "Provide metric dimensions and displacement with uncertainty, measured extent and alignment proof.",
+        "Clarify whether mesh_window_005 is a whole window, fragment or duplicate segmentation with boundary correspondence proof.",
+        "Provide observation coverage for listed frame f00bbdbf-fc1f-49a9-828b-12365e0d17b0 and complete target extent."
+      ],
+      "decision_reason": "scan_object_not_matched does not prove an extra built window; dimensions and displacement are null with no measurements; reference_scope_checked is false and expected_region_observed is false; accuracy unverified and boundaries unsupported on all sides; photos show a window but RGB and overlay of same frame are one view and one listed frame has no photo_evidence; no acceptance interval supplied.",
+      "detection_reason": "Scan object was not matched; extra object, fragment or segmentation error requires review.",
+      "evidence_used": [
+        "e-5ceccd794bb3a16fb9968dde1cc9e833",
+        "e-3fcb22561647a82386bfe9b9db666d67",
+        "e-f2004d4f074dc1ed0c0a44bb9a1ce5f0",
+        "e-f0cfd96c88c513ea7f002c21b4323462",
+        "e-d7950da9367b69d7bf08334766085cc2",
+        "e-db7bbbbb028f811eed223846531180f2"
+      ],
+      "limitations": [
+        "Source dimensions height/width and displacement along_wall/normal/vertical are null; no supplied measurements with uncertainty or extent.",
+        "reference_scope_checked false and expected_region_observed false; IFC correspondence and observation coverage unreported.",
+        "absolute_accuracy_verified false and boundary_supported_on_all_sides false with incomplete wall interfaces and unverified boundary correspondence.",
+        "Photo coverage is partial: listed frame f00bbdbf-fc1f-49a9-828b-12365e0d17b0 has no photo_evidence; RGB and overlay of same frame are related views, not independent observations."
+      ],
+      "measurement_ids": [],
+      "status": "needs_more_data",
+      "reviewer_task_id": "80147546-7e57-4c5d-a2cc-b5f5b341c603",
+      "review_sha256": "90b34c71e7e3d543aea65f0f01feff48ea9827c5fc2ac44ffbbf254f77563da2",
+      "package_sha256": "72bc3683de9ce6c52338c6859f3275e9c6881c2d978209542f6aca974866c5bb",
+      "measurements": []
+    },
+    {
+      "category": "geometry_mismatch",
+      "context": {
+        "evidence_ids": [
+          "e-ac2e8182d48957a1fa710343c135bd07"
+        ],
+        "ifc_id": "3dOIgCC$jFZQ4IoXHha5yl",
+        "location": "",
+        "mismatch_types": [
+          "shape_or_dimensions"
+        ],
+        "object_type": "wall",
+        "segment_id": null
+      },
+      "case_id": "74e83fd8-10b8-5c0c-878c-8c76c66c0f7f",
+      "data_requests": [],
+      "decision_reason": "Supplied source reports observed_within_tolerance for the compared area with no dimension-difference measurement and null acceptance tolerance; this does not establish a shape_or_dimensions deviation.",
+      "detection_reason": "Review aggregate observed surface statistics; these do not prove whole-element deviation.",
+      "evidence_used": [
+        "e-ac2e8182d48957a1fa710343c135bd07"
+      ],
+      "limitations": [
+        "No measurements supplied in case measurements array.",
+        "acceptance_tolerance_m is null; 0.1 tolerance is geometry processing parameter only.",
+        "whole_element_verified is false; compared-area statistics do not certify whole wall.",
+        "Upstream IFC parsing, observation coverage and metrology not independently certified."
+      ],
+      "measurement_ids": [],
+      "status": "rejected",
+      "reviewer_task_id": "1f4426af-7718-45b6-a86d-b174f9169c7f",
+      "review_sha256": "da06519b529425f565d05fe983d0535e9ca19e5ee4a5b92c8a1b599e36029ed5",
+      "package_sha256": "60b8ee33d10f64d1c6bb5d3328b1a02df59273c091308b0aa5a7cd5a22fc55ef",
+      "measurements": []
+    },
+    {
+      "category": "geometry_mismatch",
+      "context": {
+        "evidence_ids": [
+          "e-93aeb9c6a104e64cc072511e2debae88"
+        ],
+        "ifc_id": "27lUZ3bEnEAgC2CJo887CV",
+        "location": "",
+        "mismatch_types": [
+          "shape_or_dimensions"
+        ],
+        "object_type": "wall",
+        "segment_id": null
+      },
+      "case_id": "08bdefc9-e529-50d3-9770-9f86a90c6697",
+      "data_requests": [
+        "Provide complete target extent and element-wide observation coverage for wall 27lUZ3bEnEAgC2CJo887CV.",
+        "Provide explicit project acceptance interval for shape_or_dimensions; acceptance_tolerance_m was null.",
+        "Provide metric dimension/shape differences with uncertainty, compared extent and displacement alignment proof."
+      ],
+      "decision_reason": "No metric deviation reported; source reports observed_within_tolerance for compared area only with whole_element_verified=false and null acceptance tolerance, so whole-element deviation is not confirmed.",
+      "detection_reason": "Review aggregate observed surface statistics; these do not prove whole-element deviation.",
+      "evidence_used": [
+        "e-93aeb9c6a104e64cc072511e2debae88"
+      ],
+      "limitations": [
+        "Source status observed_within_tolerance describes only compared_area_m2 14.844097623672699; whole_element_verified=false.",
+        "acceptance_tolerance_m null; comparison tolerance 0.1 is geometry processing parameter, not project acceptance rule.",
+        "No measurements with uncertainty, extent or alignment proof supplied.",
+        "Observation coverage, checked IFC scope and complete target extent unreported."
+      ],
+      "measurement_ids": [],
+      "status": "needs_more_data",
+      "reviewer_task_id": "6af3e47b-b72d-4a4b-b9f4-c4eadc20e9a6",
+      "review_sha256": "4cd6c1edec31f0232acd196f903e9682c5a35886645545ae7f00e75bd1a088aa",
+      "package_sha256": "b7742d21f77112daa976f31e08327daddcf0ff03310123ff5cbad74f65e24911",
+      "measurements": []
+    },
+    {
+      "category": "geometry_mismatch",
+      "context": {
+        "evidence_ids": [
+          "e-dbd7a3043855a8be1f3eb1411bfded68"
+        ],
+        "ifc_id": "2R37STlY1BhuD0Nva7wLvA",
+        "location": "",
+        "mismatch_types": [
+          "shape_or_dimensions"
+        ],
+        "object_type": "wall",
+        "segment_id": null
+      },
+      "case_id": "b6226249-342e-5ccf-8dec-007568062e2d",
+      "data_requests": [
+        "Provide whole-element coverage proof: complete target extent versus compared area 5.170481471510714 m2.",
+        "Provide explicit project acceptance interval for wall shape_or_dimensions; acceptance_tolerance_m is null.",
+        "Provide metric measurements with uncertainty, extent and displacement alignment proof for claimed deviation.",
+        "Provide verified IFC observation scope and coverage for IFC guid 2R37STlY1BhuD0Nva7wLvA."
+      ],
+      "decision_reason": "Supplied source reports observed_within_tolerance for compared area only with area_fraction_outside_tolerance 0.0 and p95 0.030898296504186334 m, whole_element_verified false, no measurements, and acceptance_tolerance_m null; processing tolerance 0.1 is not project acceptance, so whole-element shape deviation can be neither confirmed nor ruled out.",
+      "detection_reason": "Review aggregate observed surface statistics; these do not prove whole-element deviation.",
+      "evidence_used": [
+        "e-dbd7a3043855a8be1f3eb1411bfded68"
+      ],
+      "limitations": [
+        "Compared area only: 5.170481471510714 m2 with whole_element_verified false does not certify entire wall.",
+        "Observation coverage, checked IFC scope and complete target extent unreported; reference_scope_checked false and expected_region_observed false.",
+        "Project acceptance rule unreported: acceptance_tolerance_m null; tolerance 0.1 is geometry processing parameter only.",
+        "No metric measurements supplied; uncertainty, extent and alignment proof unreported.",
+        "Artifact metadata alone does not prove IFC/mesh/cloud bytes were read; algorithm claims uncertified."
+      ],
+      "measurement_ids": [],
+      "status": "needs_more_data",
+      "reviewer_task_id": "d48302fc-e964-4242-9a1f-4987b7b12e6a",
+      "review_sha256": "48a77f7769c37896d7dfe0deaf95ebb4b5e88985a2142a95cd81a5888542c712",
+      "package_sha256": "1bdd46cb78ec94706fd1d32a5aa8011aee92bf23ea8d31de56f016d8a6e0ce5d",
+      "measurements": []
+    },
+    {
+      "category": "geometry_mismatch",
+      "context": {
+        "evidence_ids": [
+          "e-cc6151de9ba990c6c1e5e962e544a7ac"
+        ],
+        "ifc_id": "0wdR86aW10jh252JgaJNZm",
+        "location": "",
+        "mismatch_types": [
+          "shape_or_dimensions"
+        ],
+        "object_type": "wall",
+        "segment_id": null
+      },
+      "case_id": "a76ddd19-6a9c-5198-bebc-d1970c7b3375",
+      "data_requests": [],
+      "decision_reason": "Rejected: source reports observed_within_tolerance with p95 0.09892325559227633 m over 1.4333617612325966 m2 and 0.04557219597636084 outside fraction using 0.1 m processing tolerance; acceptance_tolerance_m is null and whole_element_verified is false with no metric measurements, so deviation not confirmed.",
+      "detection_reason": "Review aggregate observed surface statistics; these do not prove whole-element deviation.",
+      "evidence_used": [
+        "e-cc6151de9ba990c6c1e5e962e544a7ac"
+      ],
+      "limitations": [
+        "No metric measurements supplied; only aggregate compared-area statistics.",
+        "whole_element_verified is false; compared area does not certify entire wall.",
+        "acceptance_tolerance_m is null; 0.1 m tolerance is processing parameter only.",
+        "Upstream method and coverage claims not independently certified."
+      ],
+      "measurement_ids": [],
+      "status": "rejected",
+      "reviewer_task_id": "973b1b74-90fe-4cd1-a734-e8db6c742198",
+      "review_sha256": "dc7597ebf67dca980bbcf7198360032aadc395515862715840644eeaa85f0717",
+      "package_sha256": "52d3227407a550d56fa4f84024a06dfe5ba9377754a0e1e7b1014bcca67ad3fd",
+      "measurements": []
+    },
+    {
+      "category": "geometry_mismatch",
+      "context": {
+        "evidence_ids": [
+          "e-31dc1634b13c6579c484f044657baa6e"
+        ],
+        "ifc_id": "1AxJITo5DCzvqzcvFbFt$Z",
+        "location": "",
+        "mismatch_types": [
+          "shape_or_dimensions"
+        ],
+        "object_type": "floor",
+        "segment_id": null
+      },
+      "case_id": "e20e3f51-fe94-566c-bdbd-0e7fe0daefee",
+      "data_requests": [],
+      "decision_reason": "No deviation confirmed: status observed_within_tolerance with p95 0.05340026686722451 and 0.0 outside-tolerance on 10.215709222606458 m2; whole_element_verified=false, acceptance_tolerance_m=null, no metric measurements supplied.",
+      "detection_reason": "Review aggregate observed surface statistics; these do not prove whole-element deviation.",
+      "evidence_used": [
+        "e-31dc1634b13c6579c484f044657baa6e"
+      ],
+      "limitations": [
+        "Compared area only; whole_element_verified=false does not certify entire floor.",
+        "acceptance_tolerance_m=null; 0.1 tolerance is processing parameter only.",
+        "No metric measurements with uncertainty/extent supplied.",
+        "Artifact metadata alone does not prove IFC/mesh/cloud bytes were read."
+      ],
+      "measurement_ids": [],
+      "status": "rejected",
+      "reviewer_task_id": "cf67ee16-b0b5-4e5c-97ce-4fa062b681f3",
+      "review_sha256": "2dbc8fb462fb951b439cda5b1545dfc9547bf00abe44761071d2e9043fe93381",
+      "package_sha256": "7bcc2237c42776f16d85cb5e13454d7a0a0317c3bfbcb6e07f590ca7f4486ab1",
+      "measurements": []
+    }
+  ]
+}

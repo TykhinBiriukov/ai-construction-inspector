@@ -1,0 +1,74 @@
+{
+  "kind": "reference_dimension_verification",
+  "source_session_id": "2b6b4560-c2d5-482d-880b-21f34502b9f2",
+  "geometry_job_id": "54a47af7-ec32-4275-aee2-d07bd92550b1",
+  "ifc_sha256": "4a618081be81cad4b7bba0eec22486038bc96d37e4778276d2f20a7d8143c51d",
+  "reference_provenance": "IFC constructed from laser measurements, confirmed by project team on 2026-11-04",
+  "checks": [
+    {
+      "object_id": "mesh_door_002",
+      "ifc_guid": "0oE0T2Q6P6px_guRMq_GEr",
+      "dimension": "width",
+      "reference_m": 0.919,
+      "observed_m": 0.8959636654750832,
+      "signed_difference_mm": -23.036334524916825,
+      "absolute_difference_mm": 23.036334524916825,
+      "reference_comparison_verified": true,
+      "boundary_supported_on_all_sides": false,
+      "absolute_accuracy_verified": false,
+      "verification_scope": "IFC identity, retained contour length, reference dimension and delta recomputed; boundary correspondence not independently established"
+    },
+    {
+      "object_id": "mesh_door_002",
+      "ifc_guid": "0oE0T2Q6P6px_guRMq_GEr",
+      "dimension": "height",
+      "reference_m": 2.173,
+      "observed_m": 2.158622425975051,
+      "signed_difference_mm": -14.377574024948991,
+      "absolute_difference_mm": 14.377574024948991,
+      "reference_comparison_verified": true,
+      "boundary_supported_on_all_sides": false,
+      "absolute_accuracy_verified": false,
+      "verification_scope": "IFC identity, retained contour length, reference dimension and delta recomputed; boundary correspondence not independently established"
+    },
+    {
+      "object_id": "mesh_window_004",
+      "ifc_guid": "1q37$RPED5g9Qi8ZTYNzyK",
+      "dimension": "width",
+      "reference_m": 3.331,
+      "observed_m": 3.2289242522390964,
+      "signed_difference_mm": -102.07574776090355,
+      "absolute_difference_mm": 102.07574776090355,
+      "reference_comparison_verified": true,
+      "boundary_supported_on_all_sides": false,
+      "absolute_accuracy_verified": false,
+      "verification_scope": "IFC identity, retained contour length, reference dimension and delta recomputed; boundary correspondence not independently established"
+    },
+    {
+      "object_id": "mesh_window_004",
+      "ifc_guid": "1q37$RPED5g9Qi8ZTYNzyK",
+      "dimension": "height",
+      "reference_m": 1.513,
+      "observed_m": 1.499970130641115,
+      "signed_difference_mm": -13.029869358884838,
+      "absolute_difference_mm": 13.029869358884838,
+      "reference_comparison_verified": true,
+      "boundary_supported_on_all_sides": false,
+      "absolute_accuracy_verified": false,
+      "verification_scope": "IFC identity, retained contour length, reference dimension and delta recomputed; boundary correspondence not independently established"
+    }
+  ],
+  "unmatched_objects": [
+    "mesh_door_000",
+    "mesh_door_001",
+    "mesh_door_003",
+    "mesh_window_005"
+  ],
+  "all_numeric_checks_passed": true,
+  "source_hashes": {
+    "reference.ifc": "4a618081be81cad4b7bba0eec22486038bc96d37e4778276d2f20a7d8143c51d",
+    "reports/mesh_boundaries/objects.json": "a286ac106dc139206ab744c999265fac012d7a2ad60d69e9998043bf614745c1",
+    "demo/geometry-demo/result.json": "d26d0f3de5917b07093a2a44c6d796a85a182fbc9f6a8537942029c61d54a042"
+  },
+  "whole_element_verification": "Not established: retained boundary evidence is partial; no hidden surface is declared verified."
+}
