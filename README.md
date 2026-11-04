@@ -162,6 +162,12 @@ The implementation is accompanied by **real-room processing records, numerical c
 
 **A laser-measured physical reference.** The real-room IFC was constructed from laser measurements of the room, as confirmed by the team. The saved comparison reports reconstructed-surface deviations from this reference after rigid alignment: P95 values of approximately **27, 66, 31, 99 and 53 mm** across five observed surfaces. [Reference provenance and measurement definitions](docs/evidence/2026-11-03/README.md#what-the-result-means).
 
+![Real-room measurements: P95 absolute surface deviations of 26.6, 65.9, 30.9, 98.9 and 53.4 mm across four walls and the floor after rigid alignment to the laser-derived IFC.](demo/readme-figures/real-room-results.png)
+
+**Controlled numerical validation.** Across all **18 generated two-sided-wall cases**, selecting the camera-facing surface reduced signed-offset errors above 1 mm from **9/18 to 0/18**, compared with nearest-surface matching. The known geometry tests the correspondence rule directly; these numerical results are separate from the real-room measurements above. [Protocol and detailed results](docs/evidence/2026-11-03/controlled-comparison.md).
+
+![Controlled wall test: mean absolute signed-offset error falls from 82.22 mm to numerical zero, with errors above 1 mm reduced from 9 of 18 cases to 0 of 18.](demo/readme-figures/controlled-results.png)
+
 **Laser reference dimensions used in the opening checks.** The project owner confirms that the laser measurements match the reference IFC dimensions exactly. The values below are transcribed from that IFC reference, with object identities retained in the [numerical verification record](docs/evidence/2026-11-04/reference-verification.json).
 
 | Reference object | IFC GlobalId | Laser reference width | Laser reference height |
@@ -290,6 +296,10 @@ Their role continues after the initial analysis. Our pipeline gathers the eviden
 
 The distinctive contribution is this combination of perception, coordinated action and verification. The model capabilities that help one agent investigate a construction question also help another review the evidence behind the answer. This gives engineers a clearer basis for trust: they can see what supports a finding and what remains uncertain.
 
+![One real-room door from its RGB-D source frame through the SAM mask and scan-to-IFC overlay to the Inspector–Verifier review and its source-linked next action.](demo/readme-figures/capture-to-review.png)
+
+The same door candidate connects each stage: original frame, semantic mask, numerical comparison and the archived review's targeted evidence requests. [Source identities and figure generation](demo/readme-figures/README.md) · [Completed review](docs/evidence/2026-11-04/completed-review.json).
+
 ## Service details
 
 ### Inspector: a cohesive, capable engineering workspace
@@ -312,11 +322,17 @@ The design combines **semantic understanding with numerical measurement**. The m
 
 **Efficient reuse is engineered into the pipeline.** Exact-input SAM caching reuses unchanged masks across geometry settings and IFC comparisons. Each completed stage publishes a manifest with content hashes, allowing workers to restore verified computations after a restart. Reconstruction, segmentation, comparison and viewer export remain separately traceable.
 
+![Geometry responsibilities: the phone supplies calibrated RGB-D, Meta SAM identifies the element, and numerical code measures the retained 3D contour against IFC. Door contour width is 896 mm against 919 mm; height is 2159 mm against 2173 mm.](demo/readme-figures/geometry-responsibilities.png)
+
+This real-room example preserves the distinction between **semantic perception**, **metric measurement** and **evidence review**. The plotted 3D corners and dimensions come directly from the retained Geometry result. [Numerical reference checks](docs/evidence/2026-11-04/reference-verification.json).
+
 [Service and setup](geometry-engine/README.md) · [Reconstruction](geometry-engine/geometry_engine/reconstruction/service.py) · [Registration](geometry-engine/geometry_engine/comparison/bim_registration.py) · [Mask fusion](geometry-engine/geometry_engine/segmentation/mask_fusion.py) · [Opening contours](geometry-engine/geometry_engine/openings/mesh_boundaries.py) · [Inspector handoff](ai_inspector/docs/capture-to-geometry.md)
 
 ### Drawing/Photo: structured reasoning, reusable requirements and a fresh review
 
 The service compares a drawing or PDF page with a site photograph for the user's inspection task. Its **staged workflow** separates three responsibilities: extract requirements from the drawing, assess the photograph against those fixed requirements, then review the findings in a fresh context with both originals. Stable requirement IDs and source bindings make the checklist reusable for subsequent photographs.
+
+![Drawing/Photo staged workflow: drawing or PDF to fixed checklist, current-photo assessment and fresh-context review with both originals. Compatible replacement photographs reuse the checklist.](demo/readme-figures/drawing-photo-workflow.png)
 
 Requirements cover geometry, material, product, measurement, installation and performance. Evidence regions connect design claims and site observations. Named grid views and server-side crop mapping keep image references tied to the original pixels. The shared-context `legacy` workflow and the staged workflow are both implemented. The checked-in Cloudflare configuration and reproducible setup guide select **`staged`**, bringing checklist-based assessment and fresh-context review into that configuration.
 
