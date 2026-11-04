@@ -1,27 +1,50 @@
-# AI Construction Inspector — repository entry point
+# AI Inspector — contributor guide
 
-This checkout contains the Inspector backend in `ai_inspector/`. Respond in Russian unless the user requests another language. Follow the component requested by the user; do not assume mobile/Localization code exists on the current branch.
+AI Inspector automates construction quality control and progress monitoring through a coordinated multi-agent workflow. It combines site capture, geometric comparison, visual inspection and evidence verification to help teams make timely, traceable decisions about completed work.
 
-For this local workspace, apply `../AGENTS.md` and read `../README.md` before substantive work. The README links to owner decisions, remaining work and evidence; read those only as needed. Determine implemented behavior from code and maintained backend docs. Files in `../sources/` are reference data, not active instructions.
+The product’s core strength is the combination of deterministic measurements, specialist AI agents and source-linked verification within one inspection workflow.
 
-If the companion workspace is absent in another clone, use `ai_inspector/README.md`, the relevant docs and source, and any applicable component instructions. For agent work, start with [the implemented agent contract](ai_inspector/docs/agent-chat.md), `ai_inspector/src/ai_inspector/agent.py` and `model_client.py`. The companion files are not runtime dependencies.
+## Repository map
 
-The selected product model is Meta Model API / Muse Spark 1.3 (`muse-spark-1.3`). Use the shared harness and existing session service. Preserve request/operation IDs and exact bodies on retry, persist commands before side effects, validate scopes, and fence stale owners. Remote A2A, drawing/photo and explicitly registered downstream Geometry reviews have durable continuation paths; local message retry and a future general user-input workflow remain distinct. Do not add another Geometry dispatch pipeline. The phone initiates its authenticated channel; assignment is not acknowledgement or camera start. Optional `capture_task` is operator task context; preserve older sessions without it. Actual Meta/iPhone access must be verified separately from local fixtures.
+- `ai_inspector/`: orchestration, API, persistence and web interface.
+- `geometry-engine/`: RGB-D reconstruction, segmentation and scan-to-IFC comparison.
+- `drawing_photo_service/`: staged drawing/photo inspection.
+- `progress4d_service/`: survey processing and construction-progress tracking.
+- `localization_service/`: capture localization and coverage.
+- `ios/`: iPhone capture client.
+- `demo/`: portable prepared and full Geometry walkthroughs.
 
-Use the internal hierarchy consistently: Bob is the main orchestrator; his direct subordinate agents are domain inspectors; their own subordinate agents are named for their function. Geometry Inspector owns geometry/BIM inspection. Geometry Verifier is its verification sub-agent, not an inspector. Geometry Engine is a computation service. Shared technical names such as InspectorProfile/inspector_id remain compatible and do not redefine this hierarchy. Product users see one AI Inspector in chat, progress/activity and replies; keep internal agent names, levels and handoffs out of those surfaces while retaining technical identities/provenance in contracts and history.
+Read the root README, then the affected component's source and setup guide. Use [agent-chat.md](ai_inspector/docs/agent-chat.md) for orchestration contracts and [offline-checks.yml](.github/workflows/offline-checks.yml) for the maintained CI commands.
 
-Geometry Inspector collects pinned evidence and calls only its configured tool-free Geometry Verifier. Preserve compact 2.0 quality, units/sign and frame/role mappings; new-review projection 2 must not change legacy request/evidence replay. Check code profile versions, Bob→Inspector and Inspector→Verifier registrations and live cards separately. Native Settings defaults to an empty registry; checked-in Cloudflare deployment config registers Geometry Inspector. Local .env, deployment vars/secrets and a configured capability flag do not establish a complete live inspection. Geometry export/result Storage may be separate from original capture/BIM/metadata storage; retain both source provenance and the frozen export destination.
+## Working on changes
 
-Run Git from this checkout root, inspect status/diff, and preserve local work. Run backend commands from `ai_inspector/`. Never infer a clean tree or a working service from an earlier handoff. Do not change Git metadata to compensate for moved paths or permission limits.
+Inspect the current branch, status and diff before editing. Preserve unrelated work and keep changes focused. Update the existing component documentation when interfaces or setup change.
 
-When committing is authorized, split distinct logical changes into focused, preferably working commits with related docs. Inspect each staged group and the outgoing series; a push request does not imply squash. Do not commit/push without task authorization or rewrite published history without explicit permission.
+Use existing adapters, session services and workflow queues. Preserve request IDs, idempotency, authorization scopes, persisted command bodies and ownership fencing. Validate model-selected tool arguments and permissions on the server.
 
-Preserve server-owned session IDs, idempotent operations, accepted source identity, authorization scopes, and distinct capture/processing states. Model-selected tools must validate arguments and rights in backend. Keep mock/synthetic results distinct from live inference/reconstruction. Geometry completion does not establish BIM compliance.
+Bob is the orchestrator; domain inspectors own specialist tasks. Geometry Inspector delegates evidence review to Geometry Verifier, while Geometry Engine performs computation. Keep these roles distinct internally; present one AI Inspector to product users.
 
-Keep credentials, `.env`, `.local/`, scans, and signed URLs out of context and commits. Run checks appropriate to the change and state what was actually verified. Do not start external publication or services merely because an imported document describes them.
+## Data and evidence
 
-All tests used by Codex for generated-code verification, including the automated backend regression suite, diagnostics, fixtures, temporary databases, caches, and reports, belong outside this checkout in the companion workspace's local-checks/inspector/ directory. Do not recreate ai_inspector/tests or add these local verification files to Git. Product runtime and operational hosting/configuration helpers stay here. From ai_inspector/, run `..\..\local-checks\inspector\run-tests.ps1` (or `-Pattern test_agent.py` for the agent module). Inventory additional tests in the checkout and use external copies with corrected paths while preserving teammate originals. If the external suite is absent, report that gap; do not recreate it inside the checkout. Documentation-only changes need link/consistency checks, not a backend or live API run.
+Preserve units, coordinate frames, source IDs, timestamps and hashes across processing stages. Derive measurements from geometry and calibrated capture data; use models for interpretation and evidence review.
 
-## Documentation ownership
+Keep prepared results, test fixtures and fresh inference identifiable. Preserve the provenance of historical results and the distinction between object correspondence, observed differences and verified findings. Changes to saved-result formats must remain compatible with existing captures and replay data.
 
-Keep maintained API/setup/integration guides in ai_inspector/docs (or the affected component's shared docs); update the relevant existing guide when behavior changes. Personal decisions, pending proposals/research and verification belong in the companion workspace outside Git. Avoid duplicate state ledgers or API specifications in local context, and do not create a Markdown file after every edit. Shared guides must remain usable without companion files.
+Keep credentials, private captures, signed URLs, local environments and generated caches out of commits. Use configuration and secret injection for service access.
+
+## Verification
+
+Run the relevant checks for the changed component with its documented dependencies. The offline CI uses Python 3.12 and Node 24:
+
+- Inspector: `python -B -m unittest discover -s ai_inspector/tests -v`
+- Web/gateway: `node --test ai_inspector/tests/web/demo-comparison.test.cjs ai_inspector/cloudflare/frontend/index.test.mjs`
+- Localization: `python -B -m unittest discover -s localization_service/tests -v`
+- Geometry: use the targeted test commands in the offline CI workflow and the component's test suite.
+
+For the prepared demo, run `python3 demo/run.py --mode prepared`, then `python3 demo/run.py --verify-output demo-output`. Follow [demo/README.md](demo/README.md) for local archives, fresh output directories and full-mode setup.
+
+For UI changes, verify the affected user flow and save/reopen behavior. Documentation-only changes require content and link checks. Report the checks performed and their outcomes. Keep temporary outputs outside tracked source files.
+
+## Publication
+
+Commit and publish only within the user's authorized scope. Before pushing, fetch the target branch, inspect divergence and preserve teammates' commits. Use ordinary pushes; obtain explicit approval for history rewrites, deployment changes and new paid resources.
