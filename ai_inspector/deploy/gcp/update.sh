@@ -5,8 +5,23 @@ exec 9>update.lock
 flock -n 9 || exit 0
 git -C source fetch origin main:refs/remotes/origin/main
 revision=$(git -C source rev-parse origin/main)
-if [ -f deployed-revision ] && [ "$(cat deployed-revision)" = "$revision" ]; then exit 0; fi
+deployed=$(cat deployed-revision 2>/dev/null || true)
+if [ "$deployed" = "$revision" ]; then exit 0; fi
 git -C source checkout --detach "$revision"
+# Compare against the running revision, not the last fetched commit: a later
+# docs-only push must not hide an earlier runtime change awaiting deployment.
+# Keep this allowlist narrow; unknown paths still trigger the normal rollout.
+if [ -n "$deployed" ] && git -C source cat-file -e "$deployed^{commit}" 2>/dev/null &&
+  git -C source diff --quiet "$deployed" "$revision" -- . \
+    ':(exclude)demo/**' \
+    ':(exclude)README.md' \
+    ':(exclude).gitignore' \
+    ':(exclude)docs/reproducible-setup.md' \
+    ':(exclude)ai_inspector/deploy/gcp/README.md' \
+    ':(exclude)ai_inspector/deploy/gcp/update.sh'; then
+  echo "Skipping backend rollout: only repository demo/docs/updater changed ($revision); running $deployed"
+  exit 0
+fi
 docker build -f source/ai_inspector/deploy/gcp/Dockerfile -t "inspector-backend:$revision" source
 export INSPECTOR_REVISION="$revision"
 docker-compose -p inspector-backend -f source/ai_inspector/deploy/gcp/compose.yaml up -d

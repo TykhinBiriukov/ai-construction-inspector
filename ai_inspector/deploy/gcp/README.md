@@ -29,6 +29,21 @@ Keep the previous image for rollback. Docker cache is disposable; authoritative
 files/history remain in Supabase. The old Python Worker stays available for
 rollback and must not be auto-deployed by the frontend workflow in native mode.
 
+The updater fetches and checks out new commits but skips build/restart when the
+diff from the **actually deployed revision** contains only `demo/`, root
+`README.md`/`.gitignore`, `docs/reproducible-setup.md`, or this deployment
+README/updater script. It leaves `deployed-revision` unchanged so health continues
+to identify the running image. Runtime code, Docker/Compose configuration,
+bundled input manifests, dependencies and unknown paths still trigger rollout.
+Comparing with the running revision also preserves pending runtime changes when
+a later commit changes documentation only.
+
+When first installing this filter on a host running the old updater, stop only
+`inspector-backend-update.timer`, wait for its oneshot service to be inactive,
+fetch/check out the new main under `/opt/inspector-backend/update.lock`, then start
+the timer again. Do not stop the backend container. Run the updated oneshot and
+verify the skip message, unchanged container ID/start time and deployed revision.
+
 The Docker build also prepares the example inputs in `/opt/inspector-demo-inputs`
 and sets `INSPECTOR_SAVED_DEMO_INPUTS_DIR`. It uses the checked-in Progress4D
 inputs and the Geometry release archive pinned by the evidence manifest. The
