@@ -1,0 +1,140 @@
+{
+  "source_kind": "rendered development surveys",
+  "evaluation_version": "normal-v2-local-export",
+  "historical_runtime_commit": null,
+  "weeks": [
+    {
+      "week": 1,
+      "status": "complete",
+      "registered_photo_fraction": 1.0,
+      "camera_rmse_m": 0.0053841912050592525,
+      "camera_max_m": 0.009207774542658385,
+      "dense_points": 553825,
+      "surface": {
+        "coordinate_frame": "ifc_x_z_minus_y_metres",
+        "bytes": 11850000,
+        "sha256": "0a3fe48639a7c697e3b722bc5d0b91fa5f44ca12db1ed0f9ba3018e6902812d5",
+        "geometries": 1
+      },
+      "visible_products": 44,
+      "visible_recall": 1.0,
+      "present_count": 44,
+      "false_present": [],
+      "hidden_present": [],
+      "present_precision": 1.0,
+      "false_absent": [],
+      "unknown_count": 17
+    },
+    {
+      "week": 2,
+      "status": "complete",
+      "registered_photo_fraction": 1.0,
+      "camera_rmse_m": 0.007172625508163144,
+      "camera_max_m": 0.01056084743484711,
+      "dense_points": 538705,
+      "surface": {
+        "coordinate_frame": "ifc_x_z_minus_y_metres",
+        "bytes": 11803472,
+        "sha256": "41637930145fb3256f5cafe514a79033f3324e97c8977907cd42de6f8125297f",
+        "geometries": 1
+      },
+      "visible_products": 66,
+      "visible_recall": 0.9696969696969697,
+      "present_count": 64,
+      "false_present": [],
+      "hidden_present": [],
+      "present_precision": 1.0,
+      "false_absent": [],
+      "unknown_count": 22
+    },
+    {
+      "week": 3,
+      "status": "complete",
+      "registered_photo_fraction": 1.0,
+      "camera_rmse_m": 0.006248364461567234,
+      "camera_max_m": 0.007713929577154242,
+      "dense_points": 690252,
+      "surface": {
+        "coordinate_frame": "ifc_x_z_minus_y_metres",
+        "bytes": 11809220,
+        "sha256": "07e2ea19eeef139667fc8b154a7430a79dee719033fc19a73dd6beb0c1f2bf3d",
+        "geometries": 1
+      },
+      "visible_products": 48,
+      "visible_recall": 0.8333333333333334,
+      "present_count": 40,
+      "false_present": [],
+      "hidden_present": [],
+      "present_precision": 1.0,
+      "false_absent": [],
+      "unknown_count": 53
+    },
+    {
+      "week": 4,
+      "status": "complete",
+      "registered_photo_fraction": 1.0,
+      "camera_rmse_m": 0.0015659196555620313,
+      "camera_max_m": 0.0032906195586054586,
+      "dense_points": 1010428,
+      "surface": {
+        "coordinate_frame": "ifc_x_z_minus_y_metres",
+        "bytes": 11848168,
+        "sha256": "814036091b30966d7ccf0dc15890071052425b076126b8fa707b64e5fb24a921",
+        "geometries": 1
+      },
+      "visible_products": 50,
+      "visible_recall": 0.22,
+      "present_count": 11,
+      "false_present": [],
+      "hidden_present": [],
+      "present_precision": 1.0,
+      "false_absent": [],
+      "unknown_count": 71
+    },
+    {
+      "week": 5,
+      "status": "complete",
+      "registered_photo_fraction": 1.0,
+      "camera_rmse_m": 0.0024831046571812615,
+      "camera_max_m": 0.006750126360208372,
+      "dense_points": 713024,
+      "surface": {
+        "coordinate_frame": "ifc_x_z_minus_y_metres",
+        "bytes": 11813848,
+        "sha256": "22d5e5e6f4731e4fb037585bcb41880b663f8381cf93f4e620284cf556b6d240",
+        "geometries": 1
+      },
+      "visible_products": 57,
+      "visible_recall": 0.19298245614035087,
+      "present_count": 11,
+      "false_present": [],
+      "hidden_present": [],
+      "present_precision": 1.0,
+      "false_absent": [],
+      "unknown_count": 88
+    },
+    {
+      "week": 6,
+      "status": "complete",
+      "registered_photo_fraction": 0.9722222222222222,
+      "camera_rmse_m": 0.021078791135989816,
+      "camera_max_m": 0.05529412737526229,
+      "dense_points": 254439,
+      "surface": {
+        "coordinate_frame": "ifc_x_z_minus_y_metres",
+        "bytes": 11635616,
+        "sha256": "694352d0db0cce94b8e136536ce711a1a67e557f7ebf65ee3a6f988b3e47d1d5",
+        "geometries": 1
+      },
+      "visible_products": 155,
+      "visible_recall": 0.8193548387096774,
+      "present_count": 127,
+      "false_present": [],
+      "hidden_present": [],
+      "present_precision": 1.0,
+      "false_absent": [],
+      "unknown_count": 83
+    }
+  ],
+  "scope": "Six processed survey dates; not an independent field or held-out evaluation. Week 7 prepared scene excluded."
+}

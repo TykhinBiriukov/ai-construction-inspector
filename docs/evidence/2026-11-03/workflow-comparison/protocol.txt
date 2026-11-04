@@ -1,0 +1,10 @@
+Protocol fixed before metric aggregation, 3 November 2026.
+Question: what changed from direct raw-pose projection to the implemented projection correction/gating stage on the retained real-room run?
+Inputs: all 77 saved projection_alignment/cameras.json rows from Geometry job 54a47af7; same frozen mesh and device depth. Use the stored held_out pixel metrics, not training metrics. They are within-frame reserved pixels; not independent scenes or ground truth because these captures contributed to the mesh.
+Primary comparison: raw vs selected projection on the identical retained set (accepted_raw + accepted_refined). Selected metric uses before for accepted_raw and proposal for accepted_refined, matching service behavior. Weight frames equally; report mean and median of per-frame median residual, mean per-frame p90, mean agreement. Never call mean per-frame p90 a pooled point p90.
+Coverage: retain all 77 rows in published data, report counts and rejection rate; rejected frames have no selected output. Publish raw summaries of all 77 and rejected subset separately. No zero-error imputation for rejected frames.
+Secondary: refined-only subset and all proposal diagnostics, clearly conditional on decision. No frame-level confidence intervals claiming independent site trials. No tuning, best-run selection or new model calls.
+Baseline limitation: saved raw branch represents the earlier projection choice; this is a diagnostic stage comparison, not execution of the complete historical checkout.
+Operational comparison: first vs final segmentation report identity, cache hits/misses, same source selection hash/model/settings, recorded stage wall times. Warm vs cold historical observations, not a controlled algorithm-speed benchmark. Match outputs where available, state exact scope of equality.
+Execution: existing GCP VM, isolated /tmp directory, standard-library Python, no credentials/models/DB writes/service changes. Local Mac only prepares/copies artifacts.
+Publish all metrics whether or not the final workflow wins. Clinical/physical accuracy, end-to-end correctness, and benefit to engineers are outside scope.

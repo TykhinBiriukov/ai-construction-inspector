@@ -2,6 +2,8 @@
 
 Users interact with one **AI Inspector**. The following agent names describe internal implementation, not separate user-facing assistants. The Inspector backend owns chat/agent execution, capture sessions, source validation and Geometry handoff. **Bob** is the main orchestrator; his direct subordinate agents are domain inspectors. **Geometry Inspector** owns the geometry/BIM inspection workflow and has **Geometry Verifier** as its verification sub-agent. Geometry Engine is a computation service. Bob uses Meta Model API / Muse Spark 1.3, predefined tools and registered inspector services. Geometry completion alone is not an inspection verdict. Code and this repository's guides describe implemented behavior; the [team API proposal](../docs/iphone-geometry-bim-inspector-api-v0.1.md) is a draft, not a released contract.
 
+For retained results before starting services, see the [real-room Geometry evidence package and model-run records](../docs/evidence/2026-11-03/README.md). The package separates existing computation, recorded demo viewing and new analysis.
+
 ## Start locally
 
 Python 3.12+ is required. From this directory in PowerShell, create the environment if missing:
